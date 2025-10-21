@@ -1,23 +1,33 @@
-import { useState } from 'react'
-import './index.css'
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Hero from './pages/Hero';
+// import Features from './pages/Features';
+// import AIAssistant from './pages/AIAssistant';
+// import Institutions from './pages/Institutions';
+// import Resources from './pages/Resources';
+// import Contact from './pages/Contact';
+// import Login from './pages/Login';
+// import Signup from './pages/Signup';
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
-    <>
-      <button className="btn btn-neutral">Neutral</button>
-      <button className="btn btn-primary">Primary</button>
-      <button className="btn btn-secondary">Secondary</button>
-      <button className="btn btn-accent">Accent</button>
-      <button className="btn btn-info">Info</button>
-      <button className="btn btn-success">Success</button>
-      <button className="btn btn-warning">Warning</button>
-      <button className="btn btn-error">Error</button>
-
-      <h1 className=''></h1>
-    </>
-  )
+    <BrowserRouter>
+      <div className="">
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<Hero />} />
+          {/* <Route path="/features" element={<Features />} />
+          <Route path="/ai-assistant" element={<AIAssistant />} />
+          <Route path="/institutions" element={<Institutions />} />
+          <Route path="/resources" element={<Resources />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} /> */}
+        </Routes>
+      </div>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
