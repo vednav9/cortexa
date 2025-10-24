@@ -2,10 +2,10 @@ import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
-import About from './pages/About';
-import Features from './pages/Features';
-import Reviews from './pages/Reviews';
-import ContactUs from './pages/ContactUs';
+import About from './components/About';
+import Features from './components/Features';
+import Reviews from './components/Reviews';
+import ContactUs from './components/ContactUs';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 

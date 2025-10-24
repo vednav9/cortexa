@@ -1,125 +1,165 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  FiHome, 
-  FiBook, 
-  FiMessageSquare, 
-  FiPhone,
-  FiMenu,
-  FiX,
-  FiLogIn,
-  FiUserPlus
-} from 'react-icons/fi';
-import { HiSparkles } from 'react-icons/hi';
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { FiMenu, FiX, FiLogIn, FiUserPlus } from "react-icons/fi";
+import { HiSparkles } from "react-icons/hi";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [activeSection, setActiveSection] = useState("hero");
+  const [scrolled, setScrolled] = useState(false);
 
-  // Navigation items
   const navItems = [
-    { name: 'About', path: '/about', icon: FiHome },
-    { name: 'Features', path: '/features', icon: FiBook },
-    { name: 'Reviews', path: '/reviews', icon: FiMessageSquare },
-    { name: 'Contact Us', path: '/contact-us', icon: FiPhone },
+    { name: "Home", path: "hero" },
+    { name: "About", path: "about" },
+    { name: "Features", path: "features" },
+    { name: "Reviews", path: "reviews" },
+    { name: "Contact Us", path: "contact" },
   ];
 
-  // Check if current path matches
-  const isActive = (path) => location.pathname === path;
+  // Scroll spy and navbar background change
+  useEffect(() => {
+    const handleScroll = () => {
+      // Change navbar background on scroll
+      setScrolled(window.scrollY > 50);
+
+      // Scroll spy logic
+      const sections = navItems.map((item) =>
+        document.getElementById(item.path)
+      );
+      const scrollPosition = window.scrollY + 100;
+
+      sections.forEach((section, index) => {
+        if (section) {
+          const sectionTop = section.offsetTop;
+          const sectionBottom = sectionTop + section.offsetHeight;
+
+          if (scrollPosition >= sectionTop && scrollPosition < sectionBottom) {
+            setActiveSection(navItems[index].path);
+          }
+        }
+      });
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToSection = (sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offset = 80;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+      });
+    }
+    setIsOpen(false);
+  };
 
   return (
     <>
-      {/* Main Navbar */}
       <motion.nav
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.5 }}
-        className="fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-xl border-b border-gray-800 shadow-2xl"
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+          scrolled
+            ? "bg-black/95 backdrop-blur-xl border-b border-emerald-500/30 shadow-lg shadow-emerald-500/20"
+            : "bg-gradient-to-r from-emerald-950/80 via-green-950/80 to-emerald-950/80 backdrop-blur-md border-b border-emerald-500/20"
+        }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
-            
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-3 group">
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="flex items-center space-x-3 cursor-pointer"
+              onClick={() => scrollToSection("hero")}
+            >
               <motion.div
-                whileHover={{ scale: 1.1, rotate: 360 }}
-                transition={{ duration: 0.6, ease: "easeInOut" }}
-                className="w-12 h-12 bg-gradient-to-br from-gray-700 via-gray-600 to-gray-800 rounded-xl flex items-center justify-center shadow-lg"
+                whileHover={{ scale: 1.1 }}
+                transition={{ duration: 0.3 }}
+                className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-green-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/50"
               >
                 <HiSparkles className="w-7 h-7 text-white" />
               </motion.div>
-              <div className="flex flex-col">
-                <span className="text-3xl font-bold text-white tracking-tight">
-                  Cortexa
-                </span>
-              </div>
-            </Link>
+
+              <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 via-green-400 to-emerald-500 bg-clip-text text-transparent">
+                Cortexa
+              </span>
+            </motion.div>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-8">
+            <div className="hidden md:flex items-center space-x-2">
               {navItems.map((item, index) => (
-                <Link
+                <button
                   key={index}
-                  to={item.path}
-                  className="group relative"
+                  onClick={() => scrollToSection(item.path)}
+                  className="group relative px-4 py-2"
                 >
                   <motion.div
                     whileHover={{ y: -2 }}
                     transition={{ duration: 0.2 }}
-                    className={`flex items-center space-x-2 px-1 py-2 ${
-                      isActive(item.path) 
-                        ? 'text-white' 
-                        : 'text-gray-400 hover:text-white'
-                    } transition-colors duration-300`}
+                    className={`text-sm font-medium tracking-wide transition-colors duration-300 ${
+                      activeSection === item.path
+                        ? "text-emerald-400"
+                        : "text-gray-300 hover:text-emerald-400"
+                    }`}
                   >
-                    <item.icon className="w-4 h-4" />
-                    <span className="text-sm font-medium tracking-wide">{item.name}</span>
+                    {item.name}
                   </motion.div>
-                  
-                  {/* Active Underline Indicator */}
+
+                  {/* Active indicator - glowing underline */}
                   <motion.div
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full"
                     initial={false}
                     animate={{
-                      scaleX: isActive(item.path) ? 1 : 0,
-                      opacity: isActive(item.path) ? 1 : 0
+                      scaleX: activeSection === item.path ? 1 : 0,
+                      opacity: activeSection === item.path ? 1 : 0,
                     }}
                     transition={{ duration: 0.3 }}
                   />
-                  
-                  {/* Hover Underline */}
-                  {!isActive(item.path) && (
+
+                  {/* Glow effect for active item */}
+                  {activeSection === item.path && (
                     <motion.div
-                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-500 rounded-full"
-                      initial={{ scaleX: 0 }}
-                      whileHover={{ scaleX: 1 }}
-                      transition={{ duration: 0.3 }}
+                      layoutId="activeGlow"
+                      className="absolute inset-0 bg-emerald-500/10 rounded-lg -z-10"
+                      transition={{
+                        type: "spring",
+                        bounce: 0.2,
+                        duration: 0.6,
+                      }}
                     />
                   )}
-                </Link>
+                </button>
               ))}
             </div>
 
-            {/* Right Section - Login & Sign Up Buttons */}
+            {/* Right Section - Auth Buttons */}
             <div className="hidden md:flex items-center space-x-3">
-              {/* Login Button */}
               <motion.button
-                whileHover={{ scale: 1.05 }}
+                whileHover={{
+                  scale: 1.05,
+                  boxShadow: "0 0 20px rgba(52, 211, 153, 0.3)",
+                }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/login')}
-                className="px-6 py-2.5 rounded-lg text-white border border-gray-700 hover:border-gray-500 hover:bg-gray-900/50 transition-all duration-300 font-medium text-sm"
+                className="px-6 py-2.5 rounded-lg text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 font-medium text-sm"
               >
                 Login
               </motion.button>
 
-              {/* Sign Up Button */}
               <motion.button
-                whileHover={{ scale: 1.05, boxShadow: "0 0 20px rgba(255, 255, 255, 0.3)" }}
+                whileHover={{
+                  scale: 1.05,
+                  boxShadow: "0 0 30px rgba(52, 211, 153, 0.6)",
+                }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/signup')}
-                className="px-6 py-2.5 rounded-lg bg-white text-black hover:bg-gray-200 transition-all duration-300 font-semibold text-sm shadow-lg"
+                className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all duration-300 font-semibold text-sm shadow-lg shadow-emerald-500/30"
               >
                 Sign Up
               </motion.button>
@@ -129,69 +169,60 @@ const Navbar = () => {
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsOpen(!isOpen)}
-              className="md:hidden p-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-300 hover:text-white hover:border-gray-700 transition-all"
+              className="md:hidden p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all"
             >
-              {isOpen ? <FiX className="w-6 h-6" /> : <FiMenu className="w-6 h-6" />}
+              {isOpen ? (
+                <FiX className="w-6 h-6" />
+              ) : (
+                <FiMenu className="w-6 h-6" />
+              )}
             </motion.button>
           </div>
         </div>
 
         {/* Mobile Menu */}
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="md:hidden bg-black border-t border-gray-800"
-          >
-            <div className="px-4 py-6 space-y-1">
-              {navItems.map((item, index) => (
-                <Link
-                  key={index}
-                  to={item.path}
-                  onClick={() => setIsOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
-                    isActive(item.path)
-                      ? 'bg-gray-900 text-white border-l-4 border-white'
-                      : 'text-gray-400 hover:bg-gray-900/50 hover:text-white'
-                  }`}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span className="font-medium">{item.name}</span>
-                </Link>
-              ))}
-              
-              {/* Mobile Auth Buttons */}
-              <div className="pt-4 border-t border-gray-800 space-y-3">
-                <button
-                  onClick={() => {
-                    navigate('/login');
-                    setIsOpen(false);
-                  }}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg text-white border border-gray-700 hover:bg-gray-900/50 transition-all"
-                >
-                  <FiLogIn className="w-5 h-5" />
-                  <span className="font-medium">Login</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    navigate('/signup');
-                    setIsOpen(false);
-                  }}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg bg-white text-black hover:bg-gray-200 transition-all font-semibold"
-                >
-                  <FiUserPlus className="w-5 h-5" />
-                  <span className="font-medium">Sign Up</span>
-                </button>
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="md:hidden bg-black/98 border-t border-emerald-500/20"
+            >
+              <div className="px-4 py-6 space-y-1">
+                {navItems.map((item, index) => (
+                  <motion.button
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    onClick={() => scrollToSection(item.path)}
+                    className={`w-full text-left px-4 py-3 rounded-lg transition-all ${
+                      activeSection === item.path
+                        ? "bg-emerald-500/20 text-emerald-400 border-l-4 border-emerald-400"
+                        : "text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+                    }`}
+                  >
+                    <span className="font-medium">{item.name}</span>
+                  </motion.button>
+                ))}
+
+                <div className="pt-4 border-t border-emerald-500/20 space-y-3">
+                  <button className="w-full px-4 py-3 rounded-lg text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-all font-medium">
+                    Login
+                  </button>
+
+                  <button className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all font-semibold">
+                    Sign Up
+                  </button>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.nav>
 
-      {/* Spacer to prevent content overlap */}
       <div className="h-20" />
     </>
   );
