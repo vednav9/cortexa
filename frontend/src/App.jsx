@@ -7,7 +7,7 @@ import Features from './components/Features';
 import Reviews from './components/Reviews';
 import ContactUs from './components/ContactUs';
 import Login from './pages/Login';
-import Signup from './pages/Signup';
+import Signup from './pages/SignUp';
 
 function App() {
   return (

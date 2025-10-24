@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiMenu, FiX, FiLogIn, FiUserPlus } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
+import { useNavigate } from "react-router-dom";
 
 const Navbar = () => {
+  const navigate=useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("hero");
   const [scrolled, setScrolled] = useState(false);
@@ -149,6 +151,7 @@ const Navbar = () => {
                 }}
                 whileTap={{ scale: 0.95 }}
                 className="px-6 py-2.5 rounded-lg text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 font-medium text-sm"
+                onClick={() => navigate('/login')}
               >
                 Login
               </motion.button>
@@ -160,6 +163,7 @@ const Navbar = () => {
                 }}
                 whileTap={{ scale: 0.95 }}
                 className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all duration-300 font-semibold text-sm shadow-lg shadow-emerald-500/30"
+                onClick={() => navigate('/signup')}
               >
                 Sign Up
               </motion.button>
