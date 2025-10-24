@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiArrowRight, FiPlay, FiCheck, FiCpu, FiBookOpen, FiUsers } from 'react-icons/fi';
 
-const Hero = () => {
+const Home = () => {
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-black">
       {/* Animated Gradient Background */}
@@ -102,4 +102,4 @@ const Hero = () => {
   );
 };
 
-export default Hero;
+export default Home;
