@@ -1,0 +1,44 @@
+name: 🔄 Sync main to dev branches
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # allows the bot to push changes
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge main into dev branches
+        run: |
+          set -e
+          BRANCHES=("dev" "dev-vedant" "dev-jay" "dev-varun")
+
+          for BRANCH in "${BRANCHES[@]}"; do
+            echo "---------------------------------------------"
+            echo "🔄 Updating branch: $BRANCH"
+            echo "---------------------------------------------"
+            git fetch origin $BRANCH
+            git checkout $BRANCH
+            if git merge origin/main --no-edit; then
+              git push origin $BRANCH
+              echo "✅ Successfully merged main into $BRANCH"
+            else
+              echo "⚠️ Merge conflict in $BRANCH — skipping this branch."
+              git merge --abort || true
+            fi
+          done
+
+          echo "🎉 All branches processed!"
