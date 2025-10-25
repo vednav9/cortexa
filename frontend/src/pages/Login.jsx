@@ -15,7 +15,6 @@ const Login = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Add your login logic here
     console.log('Login Data:', formData);
   };
 
@@ -112,6 +111,7 @@ const Login = () => {
                 >
                   <option value="student" className="bg-gray-900 text-white">Student</option>
                   <option value="teacher" className="bg-gray-900 text-white">Teacher</option>
+                  <option value="admin" className="bg-gray-900 text-white">Admin</option>
                 </select>
               </div>
             </div>
@@ -140,42 +140,34 @@ const Login = () => {
             </motion.button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-emerald-500/20"></div>
+          {/* Bottom Links - Clean & Compact */}
+          <div className="mt-6 text-center space-y-3">
+            <p className="text-sm text-gray-400">
+              Don't have an account?{' '}
+              <Link to="/signup" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors">
+                Sign Up
+              </Link>
+            </p>
+            
+            {/* <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-emerald-500/10"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-3 bg-gradient-to-br from-emerald-500/5 to-green-500/10 text-gray-500">
+                  or
+                </span>
+              </div>
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-gradient-to-br from-emerald-500/5 to-green-500/10 text-gray-400">
-                Don't have an account?
-              </span>
-            </div>
+            
+            <p className="text-sm text-gray-400">
+              Institution login?{' '}
+              <Link to="/institution-login" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors">
+                Click here →
+              </Link>
+            </p> */}
           </div>
-
-          {/* Sign Up Link */}
-          <Link to="/signup">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              className="w-full py-3 border-2 border-emerald-500/30 text-emerald-400 font-semibold rounded-lg hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all"
-            >
-              Create New Account
-            </motion.button>
-          </Link>
         </div>
-
-        {/* Additional Info */}
-        <p className="text-center text-gray-500 text-sm mt-6">
-          By signing in, you agree to our{' '}
-          <Link to="/terms" className="text-emerald-400 hover:text-emerald-300 transition-colors">
-            Terms of Service
-          </Link>
-          {' '}and{' '}
-          <Link to="/privacy" className="text-emerald-400 hover:text-emerald-300 transition-colors">
-            Privacy Policy
-          </Link>
-        </p>
       </motion.div>
     </div>
   );
