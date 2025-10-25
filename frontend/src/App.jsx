@@ -7,7 +7,8 @@ import Features from './components/Features';
 import Reviews from './components/Reviews';
 import ContactUs from './components/ContactUs';
 import Login from './pages/Login';
-import Signup from './pages/SignUp';
+import SignUp from './pages/SignUp';
+import InstituteSignUp from './pages/InstituteSignUp';
 
 function App() {
   return (
@@ -21,7 +22,8 @@ function App() {
           <Route path="/reviews" element={<Reviews />} />
           <Route path="/contact-us" element={<ContactUs />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="/institute-signup" element={<InstituteSignUp />} />
         </Routes>
       </div>
     </BrowserRouter>
