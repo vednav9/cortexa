@@ -1,63 +1,75 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { FiMenu, FiX, FiLogIn, FiUserPlus } from "react-icons/fi";
-import { HiSparkles } from "react-icons/hi";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  FiHome, 
+  FiBook, 
+  FiMessageSquare, 
+  FiPhone,
+  FiMenu,
+  FiX,
+  FiLogIn,
+  FiUserPlus
+} from 'react-icons/fi';
+import { HiSparkles } from 'react-icons/hi';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Navbar = () => {
-  const navigate=useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState("hero");
+  const [activeSection, setActiveSection] = useState('hero');
   const [scrolled, setScrolled] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const navItems = [
-    { name: "Home", path: "hero" },
-    { name: "About", path: "about" },
-    { name: "Features", path: "features" },
-    { name: "Reviews", path: "reviews" },
-    { name: "Contact Us", path: "contact" },
+    { name: 'About', path: 'about', icon: FiHome },
+    { name: 'Features', path: 'features', icon: FiBook },
+    { name: 'Reviews', path: 'reviews', icon: FiMessageSquare },
+    { name: 'Contact Us', path: 'contact', icon: FiPhone },
   ];
 
-  // Scroll spy and navbar background change
+  // Scroll spy + navbar background change
   useEffect(() => {
     const handleScroll = () => {
-      // Change navbar background on scroll
       setScrolled(window.scrollY > 50);
 
-      // Scroll spy logic
-      const sections = navItems.map((item) =>
-        document.getElementById(item.path)
-      );
+      const sections = ['hero', ...navItems.map(item => item.path)];
       const scrollPosition = window.scrollY + 100;
 
-      sections.forEach((section, index) => {
+      sections.forEach((sectionId) => {
+        const section = document.getElementById(sectionId);
         if (section) {
           const sectionTop = section.offsetTop;
           const sectionBottom = sectionTop + section.offsetHeight;
-
+          
           if (scrollPosition >= sectionTop && scrollPosition < sectionBottom) {
-            setActiveSection(navItems[index].path);
+            setActiveSection(sectionId);
           }
         }
       });
     };
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    if (location.pathname === '/') {
+      window.addEventListener('scroll', handleScroll);
+      return () => window.removeEventListener('scroll', handleScroll);
+    }
+  }, [location.pathname]);
 
+  // Smart scroll that handles route changes
   const scrollToSection = (sectionId) => {
+    // if not on home page, go to home and pass section info
+    if (location.pathname !== '/') {
+      navigate('/', { state: { scrollTo: sectionId } });
+      setIsOpen(false);
+      return;
+    }
+
+    // if already on home, scroll smoothly
     const element = document.getElementById(sectionId);
     if (element) {
       const offset = 80;
       const elementPosition = element.getBoundingClientRect().top;
       const offsetPosition = elementPosition + window.pageYOffset - offset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth",
-      });
+      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
     }
     setIsOpen(false);
   };
@@ -69,18 +81,19 @@ const Navbar = () => {
         animate={{ y: 0 }}
         transition={{ duration: 0.5 }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-          scrolled
-            ? "bg-black/95 backdrop-blur-xl border-b border-emerald-500/30 shadow-lg shadow-emerald-500/20"
-            : "bg-gradient-to-r from-emerald-950/80 via-green-950/80 to-emerald-950/80 backdrop-blur-md border-b border-emerald-500/20"
+          scrolled 
+            ? 'bg-black/95 backdrop-blur-xl border-b border-emerald-500/30 shadow-lg shadow-emerald-500/20' 
+            : 'bg-gradient-to-r from-emerald-950/80 via-green-950/80 to-emerald-950/80 backdrop-blur-md border-b border-emerald-500/20'
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
+            
             {/* Logo */}
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="flex items-center space-x-3 cursor-pointer"
-              onClick={() => scrollToSection("hero")}
+              onClick={() => scrollToSection('hero')}
             >
               <motion.div
                 whileHover={{ scale: 1.1 }}
@@ -89,7 +102,6 @@ const Navbar = () => {
               >
                 <HiSparkles className="w-7 h-7 text-white" />
               </motion.div>
-
               <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 via-green-400 to-emerald-500 bg-clip-text text-transparent">
                 Cortexa
               </span>
@@ -106,36 +118,33 @@ const Navbar = () => {
                   <motion.div
                     whileHover={{ y: -2 }}
                     transition={{ duration: 0.2 }}
-                    className={`text-sm font-medium tracking-wide transition-colors duration-300 ${
-                      activeSection === item.path
-                        ? "text-emerald-400"
-                        : "text-gray-300 hover:text-emerald-400"
+                    className={`flex items-center space-x-2 text-sm font-medium tracking-wide transition-colors duration-300 ${
+                      activeSection === item.path 
+                        ? 'text-emerald-400' 
+                        : 'text-gray-300 hover:text-emerald-400'
                     }`}
                   >
-                    {item.name}
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.name}</span>
                   </motion.div>
 
-                  {/* Active indicator - glowing underline */}
+                  {/* Active underline */}
                   <motion.div
                     className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full"
                     initial={false}
                     animate={{
                       scaleX: activeSection === item.path ? 1 : 0,
-                      opacity: activeSection === item.path ? 1 : 0,
+                      opacity: activeSection === item.path ? 1 : 0
                     }}
                     transition={{ duration: 0.3 }}
                   />
-
-                  {/* Glow effect for active item */}
+                  
+                  {/* Glow for active item */}
                   {activeSection === item.path && (
                     <motion.div
                       layoutId="activeGlow"
                       className="absolute inset-0 bg-emerald-500/10 rounded-lg -z-10"
-                      transition={{
-                        type: "spring",
-                        bounce: 0.2,
-                        duration: 0.6,
-                      }}
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                     />
                   )}
                 </button>
@@ -144,42 +153,39 @@ const Navbar = () => {
 
             {/* Right Section - Auth Buttons */}
             <div className="hidden md:flex items-center space-x-3">
+              {/* Login Button */}
               <motion.button
-                whileHover={{
-                  scale: 1.05,
-                  boxShadow: "0 0 20px rgba(52, 211, 153, 0.3)",
-                }}
+                whileHover={{ scale: 1.05, boxShadow: "0 0 20px rgba(52, 211, 153, 0.3)" }}
                 whileTap={{ scale: 0.95 }}
-                className="px-6 py-2.5 rounded-lg text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 font-medium text-sm"
                 onClick={() => navigate('/login')}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 font-medium text-sm"
               >
-                Login
+                <FiLogIn className="w-4 h-4" />
+                <span>Login</span>
               </motion.button>
 
+              {/* Sign Up Button */}
               <motion.button
-                whileHover={{
-                  scale: 1.05,
-                  boxShadow: "0 0 30px rgba(52, 211, 153, 0.6)",
+                whileHover={{ 
+                  scale: 1.05, 
+                  boxShadow: "0 0 30px rgba(52, 211, 153, 0.6)" 
                 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all duration-300 font-semibold text-sm shadow-lg shadow-emerald-500/30"
                 onClick={() => navigate('/signup')}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all duration-300 font-semibold text-sm shadow-lg shadow-emerald-500/30"
               >
-                Sign Up
+                <FiUserPlus className="w-4 h-4" />
+                <span>Sign Up</span>
               </motion.button>
             </div>
 
-            {/* Mobile Menu Button */}
+            {/* Mobile Menu Toggle */}
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsOpen(!isOpen)}
               className="md:hidden p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all"
             >
-              {isOpen ? (
-                <FiX className="w-6 h-6" />
-              ) : (
-                <FiMenu className="w-6 h-6" />
-              )}
+              {isOpen ? <FiX className="w-6 h-6" /> : <FiMenu className="w-6 h-6" />}
             </motion.button>
           </div>
         </div>
@@ -189,7 +195,7 @@ const Navbar = () => {
           {isOpen && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
+              animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
               className="md:hidden bg-black/98 border-t border-emerald-500/20"
@@ -202,23 +208,39 @@ const Navbar = () => {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
                     onClick={() => scrollToSection(item.path)}
-                    className={`w-full text-left px-4 py-3 rounded-lg transition-all ${
+                    className={`w-full text-left flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
                       activeSection === item.path
-                        ? "bg-emerald-500/20 text-emerald-400 border-l-4 border-emerald-400"
-                        : "text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+                        ? 'bg-emerald-500/20 text-emerald-400 border-l-4 border-emerald-400'
+                        : 'text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400'
                     }`}
                   >
+                    <item.icon className="w-5 h-5" />
                     <span className="font-medium">{item.name}</span>
                   </motion.button>
                 ))}
-
+                
+                {/* Mobile Auth Buttons */}
                 <div className="pt-4 border-t border-emerald-500/20 space-y-3">
-                  <button className="w-full px-4 py-3 rounded-lg text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10 transition-all font-medium">
-                    Login
+                  <button
+                    onClick={() => {
+                      navigate('/login');
+                      setIsOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                  >
+                    <FiLogIn className="w-5 h-5" />
+                    <span className="font-medium">Login</span>
                   </button>
 
-                  <button className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all font-semibold">
-                    Sign Up
+                  <button
+                    onClick={() => {
+                      navigate('/signup');
+                      setIsOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-500/30 transition-all"
+                  >
+                    <FiUserPlus className="w-5 h-5" />
+                    <span className="font-medium">Sign Up</span>
                   </button>
                 </div>
               </div>
