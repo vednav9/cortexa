@@ -50,7 +50,7 @@ const StudentDashboard = () => {
   });
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 pt-0 sticky top-0">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
         <div className="space-y-6">
