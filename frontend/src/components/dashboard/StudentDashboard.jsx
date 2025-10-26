@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FiMenu, FiSearch, FiFilter, FiUser, FiBell, FiLogOut } from 'react-icons/fi';
 import Sidebar from './Sidebar';
+import BrowseCollegesTab from './BrowseCollegesTab';
+import MyInstitutions from './MyInstitutions';
 import InvitationCard from './InvitationCard';
-import JoinAccessTab from './JoinAccessTab';
 
 const StudentDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,62 +17,29 @@ const StudentDashboard = () => {
   });
 
   // Mock data
-  const invitations = [
-    {
-      id: 1,
-      institutionName: 'Harvard University',
-      logo: 'H',
-      email: 'admissions@harvard.edu',
-      type: 'university',
-      date: '2 days ago',
-      status: 'pending'
-    },
-    {
-      id: 2,
-      institutionName: 'MIT',
-      logo: 'M',
-      email: 'info@mit.edu',
-      type: 'university',
-      date: '5 days ago',
-      status: 'pending'
-    },
-    {
-      id: 3,
-      institutionName: 'Stanford University',
-      logo: 'S',
-      email: 'admissions@stanford.edu',
-      type: 'university',
-      date: '1 week ago',
-      status: 'pending'
-    }
+  const myInstitutions = [
+    { id: 1, name: 'MIT', logo: 'M', role: 'Student', status: 'active' },
+    { id: 2, name: 'Harvard', logo: 'H', role: 'Student', status: 'active' },
   ];
 
-  const requests = [
-    {
-      id: 1,
-      institutionName: 'Yale University',
-      logo: 'Y',
-      email: 'admissions@yale.edu',
-      type: 'university',
-      status: 'pending',
-      date: '3 days ago'
-    }
+  const invitations = [
+    { id: 1, institutionName: 'Harvard University', logo: 'H', email: 'admissions@harvard.edu', type: 'university', date: '2 days ago', status: 'pending' },
+    { id: 2, institutionName: 'MIT', logo: 'M', email: 'info@mit.edu', type: 'university', date: '5 days ago', status: 'pending' },
+    { id: 3, institutionName: 'Stanford University', logo: 'S', email: 'admissions@stanford.edu', type: 'university', date: '1 week ago', status: 'pending' }
   ];
 
   const tabs = [
-    { id: 'access', label: 'Join / Access', count: 5 },
+    { id: 'access', label: 'Browse Colleges', count: 5 },
+    { id: 'institutions', label: 'My Institutions', count: myInstitutions.length },
     { id: 'invitations', label: 'Invitations', count: invitations.length },
-    { id: 'requests', label: 'Requests', count: requests.length },
   ];
 
   const handleAcceptInvitation = (id) => {
     console.log('Accepted invitation:', id);
-    // Add your logic here
   };
 
   const handleRejectInvitation = (id) => {
     console.log('Rejected invitation:', id);
-    // Add your logic here
   };
 
   const filteredInvitations = invitations.filter(inv => {
@@ -82,7 +50,7 @@ const StudentDashboard = () => {
   });
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
         <div className="space-y-6">
@@ -111,7 +79,7 @@ const StudentDashboard = () => {
           </div>
 
           {/* Status Filter */}
-          <div>
+          {/* <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
             <select
               value={filters.status}
@@ -123,7 +91,7 @@ const StudentDashboard = () => {
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
             </select>
-          </div>
+          </div> */}
 
           {/* Sort By */}
           <div>
@@ -152,9 +120,9 @@ const StudentDashboard = () => {
       </Sidebar>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-screen">
         {/* Top Bar */}
-        <header className="bg-white border-b border-emerald-100 px-6 py-4 shadow-sm">
+        <header className="bg-white border-b border-emerald-100 px-6 py-4 shadow-sm sticky top-0 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
@@ -171,7 +139,7 @@ const StudentDashboard = () => {
 
             <div className="flex items-center space-x-4">
               {/* Search */}
-              <div className="relative hidden md:block">
+              {/* <div className="relative hidden md:block">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
@@ -180,7 +148,7 @@ const StudentDashboard = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 pr-4 py-2 w-64 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
                 />
-              </div>
+              </div> */}
 
               {/* Notifications */}
               <motion.button
@@ -193,29 +161,29 @@ const StudentDashboard = () => {
               </motion.button>
 
               {/* Profile */}
-              <motion.button
+              {/* <motion.button
                 whileHover={{ scale: 1.05 }}
                 className="flex items-center space-x-3 p-2 hover:bg-emerald-50 rounded-lg transition-colors"
               >
                 <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-bold">
                   JS
                 </div>
-              </motion.button>
+              </motion.button> */}
 
               {/* Logout */}
-              <motion.button
+              {/* <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               >
                 <FiLogOut className="w-5 h-5" />
-              </motion.button>
+              </motion.button> */}
             </div>
           </div>
         </header>
 
         {/* Tabs */}
-        <div className="bg-white border-b border-emerald-100 px-6 shadow-sm">
+        <div className="bg-white border-b border-emerald-100 px-6 shadow-sm sticky top-[73px] z-10">
           <div className="flex space-x-8">
             {tabs.map((tab) => (
               <button
@@ -249,8 +217,11 @@ const StudentDashboard = () => {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
-          {/* Join/Access Tab */}
-          {activeTab === 'access' && <JoinAccessTab />}
+          {/* Browse Colleges Tab */}
+          {activeTab === 'access' && <BrowseCollegesTab />}
+
+          {/* My Institutions Tab */}
+          {activeTab === 'institutions' && <MyInstitutions institutions={myInstitutions} />}
 
           {/* Invitations Tab */}
           {activeTab === 'invitations' && (
@@ -279,39 +250,6 @@ const StudentDashboard = () => {
                   <p className="text-gray-400 text-sm mt-2">Try adjusting your filters</p>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Requests Tab */}
-          {activeTab === 'requests' && (
-            <div className="space-y-4">
-              {requests.map((request, index) => (
-                <motion.div
-                  key={request.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-white border border-emerald-100 rounded-lg p-6 hover:shadow-lg transition-shadow"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-green-500 rounded-lg flex items-center justify-center text-white font-bold text-2xl">
-                        {request.logo}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-800">
-                          {request.institutionName}
-                        </h3>
-                        <p className="text-sm text-gray-500">{request.email}</p>
-                        <p className="text-xs text-gray-400 mt-1">Requested {request.date}</p>
-                      </div>
-                    </div>
-                    <span className="px-4 py-2 bg-yellow-50 text-yellow-600 rounded-full text-sm font-medium">
-                      {request.status}
-                    </span>
-                  </div>
-                </motion.div>
-              ))}
             </div>
           )}
         </main>
