@@ -5,7 +5,7 @@ import AdminDashboard from '../components/dashboard/AdminDashboard';
 
 const Dashboard = () => {
   // This should come from your authentication context
-  const [userRole] = useState('student'); // Change to 'teacher' or 'admin' to test
+  const [userRole] = useState('admin'); // Change to 'teacher' or 'admin' to test
 
   const renderDashboard = () => {
     switch (userRole) {
