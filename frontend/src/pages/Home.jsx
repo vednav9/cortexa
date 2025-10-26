@@ -35,7 +35,6 @@ const Home = () => {
       <Features />
       <Reviews />
       <ContactUs />
-      <Footer />
     </div>
   );
 };
