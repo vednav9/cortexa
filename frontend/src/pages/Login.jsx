@@ -135,6 +135,7 @@ const Login = () => {
               whileTap={{ scale: 0.98 }}
               type="submit"
               className="w-full py-3 bg-gradient-to-r from-emerald-400 to-green-500 text-black font-bold rounded-lg shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all"
+              onClick={()=>{navigate('/dashboard')}}
             >
               Sign In
             </motion.button>
