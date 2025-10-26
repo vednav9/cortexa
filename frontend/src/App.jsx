@@ -20,6 +20,7 @@ import Contact from './components/ContactUs';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import InstitutionNavbar from './components/InstitutionNavbar';
+import Sidebar from './components/dashboard/Sidebar';
 
 export const InstitutionContext = createContext(null);
 export const AuthContext = createContext(null);
@@ -34,16 +35,51 @@ function PublicLayout({ children }) {
   );
 }
 
+// In InstitutionRouter, update the InstitutionLayout to include sidebar
+
+// In your InstitutionRouter component, update InstitutionLayout:
+
 function InstitutionLayout({ children, institution, institutionSlug }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
-    <>
-      <Navbar/>
-      <InstitutionNavbar institution={institution} institutionSlug={institutionSlug} />
-      {children}
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      {/* ✅ Cortexa Navbar at Top */}
+      <Navbar />
+      
+      {/* Main Content with Sidebar */}
+      <div className="flex flex-1">
+        {/* Sidebar */}
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          onClose={() => setSidebarOpen(false)} 
+          isInstitution={true} 
+        />
+        
+        {/* Content Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Institution Navbar (Below Cortexa Navbar) */}
+          <InstitutionNavbar 
+            institution={institution} 
+            institutionSlug={institutionSlug}
+            onMenuClick={() => setSidebarOpen(true)} 
+          />
+          
+          {/* Page Content */}
+          <main className="flex-1 overflow-y-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+      
+      {/* ✅ Footer Below Everything (spans full width) */}
       <Footer />
-    </>
+    </div>
   );
 }
+
+
+
 
 // Institution Router with Access Control
 function InstitutionRouter() {
