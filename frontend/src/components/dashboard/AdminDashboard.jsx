@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiMenu, FiSearch, FiUsers, FiSettings, FiBarChart, FiBell, FiLogOut, FiFilter } from 'react-icons/fi';
+import { FiMenu, FiSearch, FiUsers, FiSettings, FiBarChart, FiBell, FiLogOut, FiFilter, FiUserPlus } from 'react-icons/fi';
 import Sidebar from './Sidebar';
 import UserCard from './UserCard';
+import AddUsersTab from './AddUsersTab';
 
 const AdminDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -35,6 +36,7 @@ const AdminDashboard = () => {
   const tabs = [
     { id: 'students', label: 'Students', count: students.length },
     { id: 'teachers', label: 'Teachers', count: teachers.length },
+    { id: 'addUsers', label: 'Add Users', icon: FiUserPlus }
   ];
 
   const handleDeleteUser = (id) => {
@@ -85,7 +87,7 @@ const AdminDashboard = () => {
           </div>
 
           {/* Total Count */}
-          <div className="pt-6 border-t border-emerald-100">
+          {/* <div className="pt-6 border-t border-emerald-100">
             <div className="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-6">
               <p className="text-sm text-gray-600 mb-2 flex items-center space-x-2">
                 <FiUsers className="w-4 h-4" />
@@ -105,7 +107,7 @@ const AdminDashboard = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
       </Sidebar>
 
@@ -126,7 +128,7 @@ const AdminDashboard = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-              <div className="relative hidden md:block">
+              {/* <div className="relative hidden md:block">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
@@ -135,7 +137,7 @@ const AdminDashboard = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 pr-4 py-2 w-64 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                 />
-              </div>
+              </div> */}
 
               <motion.button
                 whileHover={{ scale: 1.1 }}
@@ -145,7 +147,7 @@ const AdminDashboard = () => {
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
               </motion.button>
 
-              <motion.button
+              {/* <motion.button
                 whileHover={{ scale: 1.05 }}
                 className="flex items-center space-x-3 p-2 hover:bg-emerald-50 rounded-lg"
               >
@@ -159,12 +161,12 @@ const AdminDashboard = () => {
                 className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg"
               >
                 <FiLogOut className="w-5 h-5" />
-              </motion.button>
+              </motion.button> */}
             </div>
           </div>
         </header>
 
-        <div className="bg-white border-b border-emerald-100 px-6 shadow-sm">
+        <div className="bg-white border-b border-emerald-100 px-6 shadow-sm sticky top-[73px] z-10">
           <div className="flex justify-between items-center">
             <div className="flex space-x-8">
               {tabs.map((tab) => (
@@ -172,19 +174,23 @@ const AdminDashboard = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`relative py-4 px-2 font-medium transition-colors flex items-center space-x-2 ${
-                    activeTab === tab.id ? 'text-emerald-600' : 'text-gray-600'
+                    activeTab === tab.id ? 'text-emerald-600' : 'text-gray-600 hover:text-emerald-600'
                   }`}
                 >
+                  {tab.icon && <tab.icon className="w-5 h-5" />}
                   <span>{tab.label}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    activeTab === tab.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {tab.count}
-                  </span>
+                  {tab.count !== undefined && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      activeTab === tab.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  )}
                   {activeTab === tab.id && (
                     <motion.div
                       layoutId="adminActiveTab"
                       className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600"
+                      transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
                     />
                   )}
                 </button>
@@ -194,27 +200,35 @@ const AdminDashboard = () => {
         </div>
 
         <main className="flex-1 overflow-y-auto p-6">
-          {filteredUsers.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredUsers.map((user, index) => (
-                <motion.div
-                  key={user.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <UserCard user={user} onDelete={handleDeleteUser} />
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FiUsers className="w-10 h-10 text-emerald-400" />
-              </div>
-              <p className="text-gray-500 text-lg">No users found</p>
-              <p className="text-gray-400 text-sm mt-2">Try adjusting your search</p>
-            </div>
+          {/* Add Users Tab */}
+          {activeTab === 'addUsers' && <AddUsersTab />}
+
+          {/* Students/Teachers Tab */}
+          {activeTab !== 'addUsers' && (
+            <>
+              {filteredUsers.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {filteredUsers.map((user, index) => (
+                    <motion.div
+                      key={user.id}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <UserCard user={user} onDelete={handleDeleteUser} />
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FiUsers className="w-10 h-10 text-emerald-400" />
+                  </div>
+                  <p className="text-gray-500 text-lg">No users found</p>
+                  <p className="text-gray-400 text-sm mt-2">Try adjusting your search</p>
+                </div>
+              )}
+            </>
           )}
         </main>
       </div>
