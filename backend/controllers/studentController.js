@@ -1,4 +1,5 @@
 import Student from "../models/student.js";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 // Generate JWT Token
@@ -48,52 +49,50 @@ export const registerStudent = async (req, res) => {
 // loginStudent controller - Updated
 export const loginStudent = async (req, res) => {
     try {
-        const { email, password, userType } = req.body;
+        const { email, password } = req.body;
 
-        if (!email || !password || !userType) {
-            return res.status(400).json({ message: "Email, password and role are required" });
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Email and password are required" });
         }
 
-        const student = await Student.findOne({ email, role: userType }).select("+password");
-
+        const student = await Student.findOne({ email });
         if (!student) {
-            return res.status(400).json({ message: "Invalid email, password or role" });
+            return res.status(404).json({ success: false, message: "Student not found" });
         }
 
-        const isMatch = await student.comparePassword(password);
-
+        // ✅ Compare hashed password
+        const isMatch = await bcrypt.compare(password, student.password);
         if (!isMatch) {
-            return res.status(400).json({ message: "Invalid email, password or role" });
+            return res.status(401).json({ success: false, message: "Invalid credentials" });
         }
 
-        // Generate token
         const token = jwt.sign(
             { id: student._id, role: student.role },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
 
-        // ✅ Set token in httpOnly cookie
+        // ✅ Set cookie properly
         res.cookie("token", token, {
-            httpOnly: true,        // Prevents JavaScript access (XSS protection)
-            secure: process.env.NODE_ENV === "production",  // HTTPS only in production
-            sameSite: "strict",    // CSRF protection
-            maxAge: 7 * 24 * 60 * 60 * 1000  // 7 days in milliseconds
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            path: "/",
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         });
 
         res.status(200).json({
             success: true,
             message: "Login successful",
             user: {
-                id: student._id,
-                fullName: student.fullName,
+                name: student.fullName,
                 email: student.email,
                 role: student.role,
-            }
+            },
         });
     } catch (error) {
-        console.error("Login Error:", error);
-        res.status(500).json({ message: "Server error", error: error.message });
+        console.error("Login error:", error);
+        res.status(500).json({ success: false, message: "Server error during login" });
     }
 };
 
@@ -125,6 +124,39 @@ export const getUserProfile = async (req, res) => {
         res.status(401).json({ success: false, message: "Invalid or expired token" });
     }
 };
+
+//logout student
+export const logoutStudent = (req, res) => {
+    try {
+        res.clearCookie("token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production" ? true : false,
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            path: "/", // must match login
+        });
+
+        res.cookie("token", "", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production" ? true : false,
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            expires: new Date(0),
+            path: "/",
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Logged out successfully and cookie cleared",
+        });
+    } catch (error) {
+        console.error("Logout error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error during logout",
+        });
+    }
+};
+
+
 
 
 

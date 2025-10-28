@@ -51,13 +51,22 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:5000/api/logout', {}, { withCredentials: true });
-    } catch {
-      // Even if logout API not implemented, clear locally
+      await axios.post("http://localhost:5000/api/student/logout", {}, { withCredentials: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      // 🧹 Remove all local data
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      // Optional: clear everything if needed
+      // localStorage.clear();
+
+      navigate("/");
+      window.location.reload(); // optional: ensures navbar updates instantly
     }
-    setUser(null);
-    navigate('/');
   };
+
 
   // Scroll and active section highlight for landing page
   useEffect(() => {
@@ -130,32 +139,12 @@ const Navbar = () => {
             </motion.div>
 
             {/* 🌍 Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-2">
-              {isLandingPage && navItems.map((item, index) => (
-                <button
-                  key={index}
-                  onClick={() => scrollToSection(item.path)}
-                  className="group relative px-4 py-2"
-                >
-                  <motion.div
-                    whileHover={{ y: -2 }}
-                    transition={{ duration: 0.2 }}
-                    className={`flex items-center space-x-2 text-sm font-medium tracking-wide transition-colors duration-300 ${activeSection === item.path
-                      ? 'text-emerald-400'
-                      : 'text-gray-300 hover:text-emerald-400'
-                      }`}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    <span>{item.name}</span>
-                  </motion.div>
-                </button>
-              ))}
-            </div>
+            <div className="hidden md:flex items-center space-x-2"></div>
 
             {/* 🔐 Right Section */}
             <div className="hidden md:flex items-center space-x-4">
-              {/* Show only for logged in user (Dashboard, etc.) */}
-              {user && isDashboard && (
+              {/* 🟢 If on Dashboard and logged in */}
+              {isDashboard && user && (
                 <>
                   <motion.div
                     whileHover={{ scale: 1.03 }}
@@ -181,9 +170,30 @@ const Navbar = () => {
                 </>
               )}
 
-              {/* Always show login/signup on landing page */}
+              {/* 🟢 If on Landing Page (/) */}
               {isLandingPage && (
                 <>
+                  {navItems.map((item, index) => (
+                    <button
+                      key={index}
+                      onClick={() => scrollToSection(item.path)}
+                      className="group relative px-4 py-2"
+                    >
+                      <motion.div
+                        whileHover={{ y: -2 }}
+                        transition={{ duration: 0.2 }}
+                        className={`flex items-center space-x-2 text-sm font-medium tracking-wide transition-colors duration-300 ${activeSection === item.path
+                          ? 'text-emerald-400'
+                          : 'text-gray-300 hover:text-emerald-400'
+                          }`}
+                      >
+                        <item.icon className="w-4 h-4" />
+                        <span>{item.name}</span>
+                      </motion.div>
+                    </button>
+                  ))}
+
+                  {/* Always show login/signup even if cookie exists */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     onClick={() => navigate('/login')}
@@ -202,8 +212,8 @@ const Navbar = () => {
                   </motion.button>
                 </>
               )}
-
             </div>
+
 
             {/* 📱 Mobile Menu Toggle */}
             <motion.button

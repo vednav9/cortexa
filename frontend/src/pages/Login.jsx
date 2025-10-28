@@ -16,15 +16,23 @@ const Login = () => {
   });
   const navigate = useNavigate();
 
-  // ✅ Auto-login if already authenticated
+  // ✅ Auto-login if cookie already exists
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const user = localStorage.getItem("user");
-    if (token && user) {
-      navigate("/dashboard");
-    }
+    const checkAuth = async () => {
+      try {
+        const res = await axios.get("http://localhost:5000/api/student/me", { withCredentials: true });
+        if (res.data.success) {
+          navigate("/dashboard");
+        }
+      } catch {
+        // no cookie, remain on login
+      }
+    };
+    checkAuth();
   }, [navigate]);
 
+
+  // ✅ Handle form submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -38,10 +46,6 @@ const Login = () => {
       );
 
       if (res.data.success) {
-        // Save session
-        localStorage.setItem("token", res.data.token);
-        localStorage.setItem("user", JSON.stringify(res.data.user));
-
         navigate("/dashboard");
       }
     } catch (err) {
@@ -54,7 +58,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20">
+    <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20 relative">
       {/* Background effects */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-500/30 rounded-full blur-3xl animate-pulse" />

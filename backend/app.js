@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import studentrouter from "./routes/studentRoutes.js"
+import teacherrouter from "./routes/teacherRoutes.js"
 //testing
 // Load environment variables
 dotenv.config();
@@ -27,6 +28,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/student", studentrouter);
+app.use("/api/teacher", teacherrouter);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
