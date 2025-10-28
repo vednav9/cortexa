@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiMenu, FiSearch, FiFilter, FiUser, FiBell, FiLogOut } from 'react-icons/fi';
-import Sidebar from './Sidebar';
+import { FiMenu, FiSearch, FiBell, FiLogOut } from 'react-icons/fi';
+import MainSidebar from './Sidebar';
 import BrowseCollegesTab from './BrowseCollegesTab';
 import MyInstitutions from './MyInstitutions';
 import InvitationCard from './InvitationCard';
@@ -10,11 +10,6 @@ const StudentDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('access');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState({
-    institutionType: 'all',
-    status: 'all',
-    sortBy: 'recent'
-  });
 
   // Mock data
   const myInstitutions = [
@@ -25,7 +20,6 @@ const StudentDashboard = () => {
   const invitations = [
     { id: 1, institutionName: 'Harvard University', logo: 'H', email: 'admissions@harvard.edu', type: 'university', date: '2 days ago', status: 'pending' },
     { id: 2, institutionName: 'MIT', logo: 'M', email: 'info@mit.edu', type: 'university', date: '5 days ago', status: 'pending' },
-    { id: 3, institutionName: 'Stanford University', logo: 'S', email: 'admissions@stanford.edu', type: 'university', date: '1 week ago', status: 'pending' }
   ];
 
   const tabs = [
@@ -34,95 +28,23 @@ const StudentDashboard = () => {
     { id: 'invitations', label: 'Invitations', count: invitations.length },
   ];
 
-  const handleAcceptInvitation = (id) => {
-    console.log('Accepted invitation:', id);
-  };
-
-  const handleRejectInvitation = (id) => {
-    console.log('Rejected invitation:', id);
-  };
-
-  const filteredInvitations = invitations.filter(inv => {
-    const matchesSearch = inv.institutionName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = filters.institutionType === 'all' || inv.type === filters.institutionType;
-    const matchesStatus = filters.status === 'all' || inv.status === filters.status;
-    return matchesSearch && matchesType && matchesStatus;
-  });
+  const handleAcceptInvitation = (id) => console.log('Accepted:', id);
+  const handleRejectInvitation = (id) => console.log('Rejected:', id);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 pt-0 sticky top-0">
+    // ✅ Removed min-h-screen, changed to flex w-full
+    <div className="flex w-full bg-gray-50 pt-0 sticky top-0">
       {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
-        <div className="space-y-6">
-          {/* Filter Header */}
-          <div className="flex items-center space-x-2 text-emerald-600">
-            <FiFilter className="w-5 h-5" />
-            <span className="font-semibold text-lg">Filters</span>
-          </div>
-
-          {/* Institution Type Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Institution Type
-            </label>
-            <select
-              value={filters.institutionType}
-              onChange={(e) => setFilters({ ...filters, institutionType: e.target.value })}
-              className="w-full px-4 py-3 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white text-gray-700 transition-all"
-            >
-              <option value="all">All Types</option>
-              <option value="university">University</option>
-              <option value="college">College</option>
-              <option value="school">School</option>
-              <option value="training">Training Center</option>
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          {/* <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="w-full px-4 py-3 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white text-gray-700 transition-all"
-            >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div> */}
-
-          {/* Sort By */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-            <select
-              value={filters.sortBy}
-              onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
-              className="w-full px-4 py-3 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white text-gray-700 transition-all"
-            >
-              <option value="recent">Most Recent</option>
-              <option value="oldest">Oldest First</option>
-              <option value="name">Name (A-Z)</option>
-            </select>
-          </div>
-
-          {/* Reset Filters */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setFilters({ institutionType: 'all', status: 'all', sortBy: 'recent' })}
-            className="w-full py-2 px-4 border border-emerald-200 text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors"
-          >
-            Reset Filters
-          </motion.button>
-        </div>
-      </Sidebar>
+      <MainSidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+        isInstitution={false} 
+      />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <header className="bg-white border-b border-emerald-100 px-6 py-4 shadow-sm sticky top-0 z-10">
+        <header className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
@@ -138,68 +60,39 @@ const StudentDashboard = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* Search */}
-              {/* <div className="relative hidden md:block">
+              <div className="relative hidden md:block">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
-                  placeholder="Search institutions..."
+                  placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
+                  className="pl-10 pr-4 py-2 w-64 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                 />
-              </div> */}
+              </div>
 
-              {/* Notifications */}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="relative p-2 text-gray-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-              >
+              <button className="relative p-2 text-gray-600 hover:text-emerald-600 hover:bg-gray-100 rounded-lg">
                 <FiBell className="w-6 h-6" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </motion.button>
-
-              {/* Profile */}
-              {/* <motion.button
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center space-x-3 p-2 hover:bg-emerald-50 rounded-lg transition-colors"
-              >
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-bold">
-                  JS
-                </div>
-              </motion.button> */}
-
-              {/* Logout */}
-              {/* <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <FiLogOut className="w-5 h-5" />
-              </motion.button> */}
+              </button>
             </div>
           </div>
         </header>
 
         {/* Tabs */}
-        <div className="bg-white border-b border-emerald-100 px-6 shadow-sm sticky top-[73px] z-10">
+        <div className="bg-white border-b border-gray-200 px-6 shadow-sm">
           <div className="flex space-x-8">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative py-4 px-2 font-medium transition-colors flex items-center space-x-2 ${
-                  activeTab === tab.id
-                    ? 'text-emerald-600'
-                    : 'text-gray-600 hover:text-emerald-600'
+                  activeTab === tab.id ? 'text-emerald-600' : 'text-gray-600 hover:text-emerald-600'
                 }`}
               >
                 <span>{tab.label}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  activeTab === tab.id 
-                    ? 'bg-emerald-100 text-emerald-700' 
-                    : 'bg-gray-100 text-gray-600'
+                  activeTab === tab.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
                 }`}>
                   {tab.count}
                 </span>
@@ -217,39 +110,15 @@ const StudentDashboard = () => {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
-          {/* Browse Colleges Tab */}
           {activeTab === 'access' && <BrowseCollegesTab />}
-
-          {/* My Institutions Tab */}
           {activeTab === 'institutions' && <MyInstitutions institutions={myInstitutions} />}
-
-          {/* Invitations Tab */}
           {activeTab === 'invitations' && (
             <div className="space-y-4">
-              {filteredInvitations.length > 0 ? (
-                filteredInvitations.map((invitation, index) => (
-                  <motion.div
-                    key={invitation.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <InvitationCard
-                      invitation={invitation}
-                      onAccept={handleAcceptInvitation}
-                      onReject={handleRejectInvitation}
-                    />
-                  </motion.div>
-                ))
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FiUser className="w-10 h-10 text-emerald-400" />
-                  </div>
-                  <p className="text-gray-500 text-lg">No invitations found</p>
-                  <p className="text-gray-400 text-sm mt-2">Try adjusting your filters</p>
-                </div>
-              )}
+              {invitations.map((invitation, index) => (
+                <motion.div key={invitation.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
+                  <InvitationCard invitation={invitation} onAccept={handleAcceptInvitation} onReject={handleRejectInvitation} />
+                </motion.div>
+              ))}
             </div>
           )}
         </main>
