@@ -39,13 +39,18 @@ const Login = () => {
     setLoading(true);
 
     try {
+      // Dynamic API endpoint based on user type
+      const apiEndpoint = `http://localhost:5000/api/${formData.userType}/login`;
+      
       const res = await axios.post(
-        "http://localhost:5000/api/student/login",
-        formData,
+        apiEndpoint,
+        { email: formData.email, password: formData.password },
         { withCredentials: true }
       );
 
       if (res.data.success) {
+        // Store user info in localStorage
+        localStorage.setItem('user', JSON.stringify(res.data.user));
         navigate("/dashboard");
       }
     } catch (err) {
@@ -163,18 +168,24 @@ const Login = () => {
                 I am a
               </label>
               <div className="relative">
-                <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none z-10" />
                 <select
                   value={formData.userType}
                   onChange={(e) =>
                     setFormData({ ...formData, userType: e.target.value })
                   }
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 text-white appearance-none cursor-pointer"
+                  className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white transition-all appearance-none cursor-pointer"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2334d399' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 0.75rem center",
+                    backgroundSize: "1.25rem",
+                  }}
                 >
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
-                  <option value="admin">Admin</option>
+                  <option value="student" className="bg-gray-900 text-whit">Student</option>
+                  <option value="teacher" className="bg-gray-900 text-whit">Teacher</option>
+                  <option value="admin" className="bg-gray-900 text-whit">Admin</option>
                 </select>
               </div>
             </div>
