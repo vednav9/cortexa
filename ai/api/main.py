@@ -4,7 +4,7 @@ FastAPI server for RAG system
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 import shutil
 
 from config import DOCUMENTS_DIR
@@ -12,6 +12,8 @@ from vectordb.document_processor import DocumentProcessor
 from vectordb.json_store import get_json_store  # Changed from chroma_store
 from rag.retriever import get_retriever
 from rag.generator import get_generator
+from mcq.generator import get_mcq_generator
+from mcq.validator import MCQValidator
 
 app = FastAPI(title="Cortexa RAG API", version="1.0.0")
 
@@ -39,10 +41,23 @@ class DocumentUploadResponse(BaseModel):
     chunks_added: int
     status: str
 
+class MCQGenerateRequest(BaseModel):
+    source_type: str  # "text", "document", "topic"
+    source: str  # text content, document name, or topic
+    num_questions: int = 5
+    difficulty: str = "medium"
+
+class MCQScoreRequest(BaseModel):
+    mcqs: List[dict]
+    user_answers: Dict[int, str]
+
+
 doc_processor = DocumentProcessor()
 vector_store = get_json_store()
 retriever = get_retriever()
 generator = get_generator()
+mcq_generator = get_mcq_generator()
+mcq_validator = MCQValidator()
 
 @app.get("/")
 def root():
@@ -134,6 +149,57 @@ def export_chunks():
     try:
         vector_store.export_chunks_only()
         return {"status": "success", "message": "Chunks exported to chunks_only.json"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# MCQ
+@app.post("/mcq/generate")
+async def generate_mcqs(request: MCQGenerateRequest):
+    """Generate MCQs from text, document, or topic"""
+    try:
+        if request.source_type == "text":
+            mcqs = mcq_generator.generate_from_text(
+                text=request.source,
+                num_questions=request.num_questions,
+                difficulty=request.difficulty
+            )
+        elif request.source_type == "document":
+            mcqs = mcq_generator.generate_from_document(
+                document_name=request.source,
+                num_questions=request.num_questions,
+                difficulty=request.difficulty
+            )
+        elif request.source_type == "topic":
+            mcqs = mcq_generator.generate_from_topic(
+                topic=request.source,
+                num_questions=request.num_questions,
+                difficulty=request.difficulty
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Invalid source_type")
+        
+        # Filter valid MCQs
+        valid_mcqs = [mcq for mcq in mcqs if mcq_validator.validate_mcq(mcq)]
+        
+        return {
+            "status": "success",
+            "total_generated": len(mcqs),
+            "valid_mcqs": len(valid_mcqs),
+            "mcqs": valid_mcqs
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/mcq/score")
+async def score_mcqs(request: MCQScoreRequest):
+    """Score user answers"""
+    try:
+        result = mcq_validator.score_answers(
+            mcqs=request.mcqs,
+            user_answers=request.user_answers
+        )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
