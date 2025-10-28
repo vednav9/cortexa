@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FiMenu, FiSearch, FiFilter, FiBell, FiLogOut, FiUser } from 'react-icons/fi';
 import Sidebar from './Sidebar';
-import InvitationCard from './InvitationCard';
-import MyInstitutions from './MyInstitutions';
-import BrowseCollegesTab from './BrowseCollegesTab';
+import InvitationCard from './InvitationTab';
+import MyInstitutions from './MyInstitutionsTab';
+import BrowseCollegesTab from './BrowseInstitutionsTab';
 
 const TeacherDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);

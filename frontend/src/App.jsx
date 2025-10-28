@@ -21,24 +21,11 @@ import CourseDetails from './components/institution/CourseDetails';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import InstitutionNavbar from './components/InstitutionNavbar';
-import MainSidebar from './components/dashboard/Sidebar';
+import Sidebar from './components/dashboard/Sidebar';
 
 // Context
 export const InstitutionContext = createContext(null);
 export const AuthContext = createContext(null);
-
-// ============================================
-// PUBLIC LAYOUT (Home, Login, SignUp)
-// ============================================
-function PublicLayout({ children }) {
-  return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar />
-      <main className="flex-1">{children}</main>
-      <Footer />
-    </div>
-  );
-}
 
 // ============================================
 // INSTITUTION LAYOUT (Institution Pages)
@@ -51,7 +38,7 @@ function InstitutionLayout({ children, institution, institutionSlug }) {
       <Navbar />
       
       <div className="flex flex-1">
-        <MainSidebar 
+        <Sidebar 
           isOpen={sidebarOpen} 
           onClose={() => setSidebarOpen(false)} 
           isInstitution={true} 
@@ -143,23 +130,21 @@ function App() {
   return (
     <AuthContext.Provider value={{ user, setUser }}>
       <Router>
+        <Navbar />
         <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
-          <Route path="/login" element={<PublicLayout><Login /></PublicLayout>} />
-          <Route path="/signup" element={<PublicLayout><SignUp /></PublicLayout>} />
-          <Route path="/institute-signup" element={<PublicLayout><InstituteSignUp /></PublicLayout>} />
-          
-          {/* Dashboard Route */}
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="/institute-signup" element={<InstituteSignUp />} />
+
           <Route path="/dashboard" element={<Dashboard />} />
-          
-          {/* Institution Routes */}
+
           <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
-          
-          {/* 404 */}
+
           <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<Navigate to="/404" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
+        <Footer />
       </Router>
     </AuthContext.Provider>
   );
