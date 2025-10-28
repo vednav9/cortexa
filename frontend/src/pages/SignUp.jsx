@@ -11,6 +11,8 @@ import {
 } from "react-icons/fi";
 import { FaLongArrowAltRight } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi";
+import axios from "axios";
+import toast, { Toaster } from "react-hot-toast";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -23,28 +25,63 @@ const SignUp = () => {
     userType: "student",
   });
   const [passwordMatch, setPasswordMatch] = useState(true);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (formData.password !== formData.confirmPassword) {
-      setPasswordMatch(false);
-      return;
-    }
-
-    setPasswordMatch(true);
-    console.log("Sign Up Data:", formData);
+  // ✅ Handle input change
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // ✅ Confirm password match live check
   const handleConfirmPasswordChange = (e) => {
     const value = e.target.value;
     setFormData({ ...formData, confirmPassword: value });
     setPasswordMatch(value === formData.password || value === "");
   };
 
+  // ✅ Submit form
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (formData.password !== formData.confirmPassword) {
+      setPasswordMatch(false);
+      toast.error("Passwords do not match!");
+      return;
+    }
+
+    setPasswordMatch(true);
+    setLoading(true);
+
+    try {
+      const response = await axios.post("http://localhost:5000/api/student/register", {
+        fullName: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        role: formData.userType,
+      });
+
+      toast.success("Account created successfully!");
+      localStorage.setItem("token", response.data.token);
+
+      setTimeout(() => navigate("/login"), 1500);
+    } catch (error) {
+      console.error("Signup Error:", error);
+      if (error.response && error.response.data.message) {
+        toast.error(error.response.data.message);
+      } else {
+        toast.error("Server error. Please try again later.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20">
+      <Toaster position="top-center" reverseOrder={false} />
+
       {/* Background Effects */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-500/30 rounded-full blur-3xl animate-pulse" />
@@ -96,11 +133,10 @@ const SignUp = () => {
                 <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
+                  name="fullName"
                   placeholder="John Doe"
                   value={formData.fullName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, fullName: e.target.value })
-                  }
+                  onChange={handleChange}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white placeholder-gray-500 transition-all"
                 />
@@ -116,11 +152,10 @@ const SignUp = () => {
                 <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="email"
+                  name="email"
                   placeholder="you@example.com"
                   value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
+                  onChange={handleChange}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white placeholder-gray-500 transition-all"
                 />
@@ -136,11 +171,10 @@ const SignUp = () => {
                 <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type={showPassword ? "text" : "password"}
+                  name="password"
                   placeholder="••••••••"
                   value={formData.password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
+                  onChange={handleChange}
                   required
                   minLength={8}
                   className="w-full pl-10 pr-12 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white placeholder-gray-500 transition-all"
@@ -171,19 +205,21 @@ const SignUp = () => {
                 <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type={showConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
                   placeholder="••••••••"
                   value={formData.confirmPassword}
                   onChange={handleConfirmPasswordChange}
                   required
-                  className={`w-full pl-10 pr-12 py-3 bg-emerald-500/5 border rounded-lg focus:outline-none text-white placeholder-gray-500 transition-all ${
-                    !passwordMatch
-                      ? "border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-                      : "border-emerald-500/20 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
-                  }`}
+                  className={`w-full pl-10 pr-12 py-3 bg-emerald-500/5 border rounded-lg focus:outline-none text-white placeholder-gray-500 transition-all ${!passwordMatch
+                    ? "border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                    : "border-emerald-500/20 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                    }`}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  onClick={() =>
+                    setShowConfirmPassword(!showConfirmPassword)
+                  }
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-400 transition-colors"
                 >
                   {showConfirmPassword ? (
@@ -203,7 +239,7 @@ const SignUp = () => {
               )}
             </div>
 
-            {/* User Type Dropdown */}
+            {/* User Type */}
             <div>
               <label className="block text-sm font-medium text-emerald-400 mb-2">
                 I am a
@@ -211,10 +247,9 @@ const SignUp = () => {
               <div className="relative">
                 <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none z-10" />
                 <select
+                  name="userType"
                   value={formData.userType}
-                  onChange={(e) =>
-                    setFormData({ ...formData, userType: e.target.value })
-                  }
+                  onChange={handleChange}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white transition-all appearance-none cursor-pointer"
                   style={{
@@ -234,7 +269,7 @@ const SignUp = () => {
               </div>
             </div>
 
-            {/* Terms Agreement */}
+            {/* Terms */}
             <div className="flex items-start space-x-2 pt-2">
               <input
                 type="checkbox"
@@ -260,7 +295,7 @@ const SignUp = () => {
               </label>
             </div>
 
-            {/* Submit Button */}
+            {/* Submit */}
             <motion.button
               whileHover={{
                 scale: 1.02,
@@ -268,13 +303,14 @@ const SignUp = () => {
               }}
               whileTap={{ scale: 0.98 }}
               type="submit"
-              className="w-full py-3 bg-gradient-to-r from-emerald-400 to-green-500 text-black font-bold rounded-lg shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all"
+              disabled={loading}
+              className="w-full py-3 bg-gradient-to-r from-emerald-400 to-green-500 text-black font-bold rounded-lg shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all disabled:opacity-50"
             >
-              Create Account
+              {loading ? "Creating Account..." : "Create Account"}
             </motion.button>
           </form>
 
-          {/* Bottom Links - Clean & Compact */}
+          {/* Bottom Links */}
           <div className="mt-6 text-center space-y-3">
             <p className="text-sm text-gray-400">
               Already have an account?{" "}

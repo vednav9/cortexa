@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiMail, FiLock, FiEye, FiEyeOff, FiUser } from 'react-icons/fi';
@@ -6,16 +7,42 @@ import { HiSparkles } from 'react-icons/hi';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({ 
-    email: '', 
-    password: '', 
-    userType: 'student' 
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    userType: 'student',
   });
+
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Login Data:', formData);
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/student/login', formData);
+
+      if (res.data.success) {
+        // Save token to localStorage
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+
+        // Navigate to dashboard
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      console.error('Login Error:', error);
+      if (error.response) {
+        setErrorMsg(error.response.data.message || 'Invalid credentials');
+      } else {
+        setErrorMsg('Server not responding');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -32,12 +59,10 @@ const Login = () => {
         transition={{ duration: 0.6 }}
         className="relative w-full max-w-md"
       >
-        {/* Card */}
         <div className="bg-gradient-to-br from-emerald-500/5 to-green-500/10 border border-emerald-500/20 rounded-2xl p-8 backdrop-blur-xl shadow-2xl">
-          
-          {/* Logo */}
+
           <Link to="/" className="flex items-center justify-center space-x-3 mb-8">
-            <motion.div 
+            <motion.div
               whileHover={{ scale: 1.1 }}
               transition={{ duration: 0.3 }}
               className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-green-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/50"
@@ -50,7 +75,14 @@ const Login = () => {
           </Link>
 
           <h2 className="text-3xl font-bold text-white text-center mb-2">Welcome Back</h2>
-          <p className="text-gray-400 text-center mb-8">Sign in to continue your learning journey</p>
+          <p className="text-gray-400 text-center mb-6">Sign in to continue your learning journey</p>
+
+          {/* 🔥 Error Message */}
+          {errorMsg && (
+            <p className="text-red-400 text-center mb-4 bg-red-500/10 border border-red-500/30 py-2 rounded-lg">
+              {errorMsg}
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email */}
@@ -116,10 +148,9 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Forgot Password Link */}
             <div className="flex justify-end">
-              <Link 
-                to="/forgot-password" 
+              <Link
+                to="/forgot-password"
                 className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
               >
                 Forgot password?
@@ -128,20 +159,19 @@ const Login = () => {
 
             {/* Submit Button */}
             <motion.button
-              whileHover={{ 
-                scale: 1.02, 
-                boxShadow: "0 0 30px rgba(52, 211, 153, 0.5)" 
-              }}
+              whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(52, 211, 153, 0.5)" }}
               whileTap={{ scale: 0.98 }}
               type="submit"
-              className="w-full py-3 bg-gradient-to-r from-emerald-400 to-green-500 text-black font-bold rounded-lg shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all"
-              onClick={()=>{navigate('/dashboard')}}
+              disabled={loading}
+              className={`w-full py-3 ${loading
+                ? "bg-gray-600 cursor-not-allowed"
+                : "bg-gradient-to-r from-emerald-400 to-green-500"
+                } text-black font-bold rounded-lg shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all`}
             >
-              Sign In
+              {loading ? "Signing In..." : "Sign In"}
             </motion.button>
           </form>
 
-          {/* Bottom Links - Clean & Compact */}
           <div className="mt-6 text-center space-y-3">
             <p className="text-sm text-gray-400">
               Don't have an account?{' '}
@@ -149,24 +179,6 @@ const Login = () => {
                 Sign Up
               </Link>
             </p>
-            
-            {/* <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-emerald-500/10"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-3 bg-gradient-to-br from-emerald-500/5 to-green-500/10 text-gray-500">
-                  or
-                </span>
-              </div>
-            </div>
-            
-            <p className="text-sm text-gray-400">
-              Institution login?{' '}
-              <Link to="/institution-login" className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors">
-                Click here →
-              </Link>
-            </p> */}
           </div>
         </div>
       </motion.div>
