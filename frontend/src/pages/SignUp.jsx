@@ -28,19 +28,19 @@ const SignUp = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // ✅ Handle input change
+  // ✅ Handle input changes
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ✅ Confirm password match live check
+  // ✅ Confirm password live check
   const handleConfirmPasswordChange = (e) => {
     const value = e.target.value;
     setFormData({ ...formData, confirmPassword: value });
     setPasswordMatch(value === formData.password || value === "");
   };
 
-  // ✅ Submit form
+  // ✅ Submit form with JWT session cookie
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -54,18 +54,23 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:5000/api/student/register", {
-        fullName: formData.fullName,
-        email: formData.email,
-        password: formData.password,
-        confirmPassword: formData.confirmPassword,
-        role: formData.userType,
-      });
+      const response = await axios.post(
+        "http://localhost:5000/api/student/register",
+        {
+          fullName: formData.fullName,
+          email: formData.email,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+          role: formData.userType,
+        },
+        {
+          withCredentials: true, // ✅ Important: allows server to set JWT cookie
+        }
+      );
 
       toast.success("Account created successfully!");
-      localStorage.setItem("token", response.data.token);
-
-      setTimeout(() => navigate("/login"), 1500);
+      // No need for localStorage — session persists with cookie
+      setTimeout(() => navigate("/dashboard"), 1500);
     } catch (error) {
       console.error("Signup Error:", error);
       if (error.response && error.response.data.message) {
@@ -82,7 +87,7 @@ const SignUp = () => {
     <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20">
       <Toaster position="top-center" reverseOrder={false} />
 
-      {/* Background Effects */}
+      {/* Background Glow */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-500/30 rounded-full blur-3xl animate-pulse" />
         <div
@@ -97,9 +102,7 @@ const SignUp = () => {
         transition={{ duration: 0.6 }}
         className="relative w-full max-w-md"
       >
-        {/* Card */}
         <div className="bg-gradient-to-br from-emerald-500/5 to-green-500/10 border border-emerald-500/20 rounded-2xl p-8 backdrop-blur-xl shadow-2xl">
-          {/* Logo */}
           <Link
             to="/"
             className="flex items-center justify-center space-x-3 mb-8"
@@ -184,11 +187,7 @@ const SignUp = () => {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-400 transition-colors"
                 >
-                  {showPassword ? (
-                    <FiEyeOff className="w-5 h-5" />
-                  ) : (
-                    <FiEye className="w-5 h-5" />
-                  )}
+                  {showPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
@@ -222,11 +221,7 @@ const SignUp = () => {
                   }
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-400 transition-colors"
                 >
-                  {showConfirmPassword ? (
-                    <FiEyeOff className="w-5 h-5" />
-                  ) : (
-                    <FiEye className="w-5 h-5" />
-                  )}
+                  {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
                 {formData.confirmPassword && passwordMatch && (
                   <FiCheckCircle className="absolute right-10 top-1/2 -translate-y-1/2 text-emerald-400 w-5 h-5" />
@@ -239,7 +234,7 @@ const SignUp = () => {
               )}
             </div>
 
-            {/* User Type */}
+            {/* User Type Dropdown */}
             <div>
               <label className="block text-sm font-medium text-emerald-400 mb-2">
                 I am a
@@ -310,7 +305,7 @@ const SignUp = () => {
             </motion.button>
           </form>
 
-          {/* Bottom Links */}
+          {/* Footer Links */}
           <div className="mt-6 text-center space-y-3">
             <p className="text-sm text-gray-400">
               Already have an account?{" "}
