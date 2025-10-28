@@ -1,225 +1,152 @@
+import React, { createContext, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams, Navigate } from 'react-router-dom';
-import { useEffect, useState, createContext } from 'react';
+
+// Data
 import { getInstitutionBySlug } from './data/institutionsData';
 
+// Pages
 import Home from './pages/Home';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import InstituteSignUp from './pages/InstituteSignUp';
-import NotFound from './pages/NotFound';
 import Dashboard from './pages/Dashboard';
+import NotFound from './pages/NotFound';
 
+// Institution Components
 import InstitutionHome from './components/institution/InstitutionHome';
 import CourseCatalog from './components/institution/CourseCatalog';
 import CourseDetails from './components/institution/CourseDetails';
 
-import About from './components/About';
-import Features from './components/Features';
-import Reviews from './components/Reviews';
-import Contact from './components/ContactUs';
+// Layout Components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import InstitutionNavbar from './components/InstitutionNavbar';
 import Sidebar from './components/dashboard/Sidebar';
 
+// Context
 export const InstitutionContext = createContext(null);
 export const AuthContext = createContext(null);
 
-function PublicLayout({ children }) {
-  return (
-    <>
-      <Navbar />
-      {children}
-      <Footer />
-    </>
-  );
-}
-
-// In InstitutionRouter, update the InstitutionLayout to include sidebar
-
-// In your InstitutionRouter component, update InstitutionLayout:
-
+// ============================================
+// INSTITUTION LAYOUT (Institution Pages)
+// ============================================
 function InstitutionLayout({ children, institution, institutionSlug }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* ✅ Cortexa Navbar at Top */}
       <Navbar />
       
-      {/* Main Content with Sidebar */}
       <div className="flex flex-1">
-        {/* Sidebar */}
         <Sidebar 
           isOpen={sidebarOpen} 
           onClose={() => setSidebarOpen(false)} 
           isInstitution={true} 
         />
         
-        {/* Content Area */}
         <div className="flex-1 flex flex-col">
-          {/* Institution Navbar (Below Cortexa Navbar) */}
           <InstitutionNavbar 
             institution={institution} 
             institutionSlug={institutionSlug}
             onMenuClick={() => setSidebarOpen(true)} 
           />
           
-          {/* Page Content */}
           <main className="flex-1 overflow-y-auto">
             {children}
           </main>
         </div>
       </div>
       
-      {/* ✅ Footer Below Everything (spans full width) */}
       <Footer />
     </div>
   );
 }
 
-
-
-
-// Institution Router with Access Control
+// ============================================
+// INSTITUTION ROUTER (Handle Dynamic Slugs)
+// ============================================
 function InstitutionRouter() {
   const { institutionSlug } = useParams();
-  const [institutionData, setInstitutionData] = useState(null);
+  const [institution, setInstitution] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  // Mock user - Replace with real auth
-  const [user] = useState({
-    id: 1,
-    isAuthenticated: true,
-    institutionAccess: {
-      [institutionSlug]: {
-        hasAccess: true,
-        role: 'student',
-        status: 'active'
-      }
-    }
-  });
 
   useEffect(() => {
-    const fetchInstitution = async () => {
-      try {
-        const data = getInstitutionBySlug(institutionSlug);
-        
-        if (data) {
-          setInstitutionData(data);
-          setLoading(false);
-        } else {
-          setError(true);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Error fetching institution:', err);
-        setError(true);
-        setLoading(false);
-      }
-    };
-    
-    fetchInstitution();
+    const inst = getInstitutionBySlug(institutionSlug);
+    setInstitution(inst);
+    setLoading(false);
   }, [institutionSlug]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading {institutionSlug}...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-white text-xl">Loading...</div>
       </div>
     );
   }
 
-  if (error || !institutionData) {
-    return <NotFound />;
+  if (!institution) {
+    return <Navigate to="/404" replace />;
   }
 
-  const userAccess = user.institutionAccess?.[institutionSlug];
-  const hasAccess = userAccess?.hasAccess && userAccess?.status === 'active';
-
   return (
-    <InstitutionContext.Provider value={{ 
-      institution: institutionData, 
-      userAccess: userAccess || null,
-      hasAccess 
-    }}>
-      <AuthContext.Provider value={{ user }}>
-        <Routes>
-          {/* Public Institution Pages */}
-          <Route 
-            path="/" 
-            element={
-              <InstitutionLayout institution={institutionData} institutionSlug={institutionSlug}>
-                <InstitutionHome />
-              </InstitutionLayout>
-            } 
-          />
-          <Route 
-            path="/courses" 
-            element={
-              <InstitutionLayout institution={institutionData} institutionSlug={institutionSlug}>
-                <CourseCatalog hasAccess={hasAccess} />
-              </InstitutionLayout>
-            } 
-          />
-          <Route 
-            path="/courses/:courseId" 
-            element={
-              <InstitutionLayout institution={institutionData} institutionSlug={institutionSlug}>
-                <CourseDetails hasAccess={hasAccess} />
-              </InstitutionLayout>
-            } 
-          />
-          
-          <Route 
-            path="/login" 
-            element={
-              <InstitutionLayout institution={institutionData} institutionSlug={institutionSlug}>
-                <Login institutionSlug={institutionSlug} />
-              </InstitutionLayout>
-            } 
-          />
-          <Route 
-            path="/signup" 
-            element={
-              <InstitutionLayout institution={institutionData} institutionSlug={institutionSlug}>
-                <SignUp institutionSlug={institutionSlug} />
-              </InstitutionLayout>
-            } 
-          />
-
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </AuthContext.Provider>
+    <InstitutionContext.Provider value={{ institution }}>
+      <Routes>
+        <Route 
+          path="/" 
+          element={
+            <InstitutionLayout institution={institution} institutionSlug={institutionSlug}>
+              <InstitutionHome />
+            </InstitutionLayout>
+          } 
+        />
+        <Route 
+          path="/courses" 
+          element={
+            <InstitutionLayout institution={institution} institutionSlug={institutionSlug}>
+              <CourseCatalog />
+            </InstitutionLayout>
+          } 
+        />
+        <Route 
+          path="/courses/:courseId" 
+          element={
+            <InstitutionLayout institution={institution} institutionSlug={institutionSlug}>
+              <CourseDetails />
+            </InstitutionLayout>
+          } 
+        />
+        <Route path="*" element={<Navigate to="/404" replace />} />
+      </Routes>
     </InstitutionContext.Provider>
   );
 }
 
+// ============================================
+// MAIN APP COMPONENT
+// ============================================
 function App() {
+  const [user, setUser] = useState(null);
+
   return (
-    <Router>
-      <Routes>
-        {/* Main Platform Routes */}
-        <Route path="/" element={<PublicLayout><Home /></PublicLayout>} />
-        <Route path="/about" element={<PublicLayout><About /></PublicLayout>} />
-        <Route path="/features" element={<PublicLayout><Features /></PublicLayout>} />
-        <Route path="/reviews" element={<PublicLayout><Reviews /></PublicLayout>} />
-        <Route path="/contact" element={<PublicLayout><Contact /></PublicLayout>} />
-        <Route path="/login" element={<PublicLayout><Login /></PublicLayout>} />
-        <Route path="/signup" element={<PublicLayout><SignUp /></PublicLayout>} />
-        <Route path="/institute-signup" element={<PublicLayout><InstituteSignUp /></PublicLayout>} />
+    <AuthContext.Provider value={{ user, setUser }}>
+      <Router>
+        <Navbar />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="/institute-signup" element={<InstituteSignUp />} />
 
-        <Route path="/dashboard" element={<PublicLayout><Dashboard /></PublicLayout>} />
+          <Route path="/dashboard" element={<Dashboard />} />
 
-        <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
+          <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Router>
+          <Route path="/404" element={<NotFound />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        <Footer />
+      </Router>
+    </AuthContext.Provider>
   );
 }
 
