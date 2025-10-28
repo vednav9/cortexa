@@ -14,7 +14,6 @@ export default function InstitutionNavbar({ institution, institutionSlug, onMenu
   const navLinks = [
     { path: `/${institutionSlug}`, label: 'Home', icon: FiHome },
     { path: `/${institutionSlug}/courses`, label: 'Courses', icon: FiBook },
-    { path: `/${institutionSlug}/faculty`, label: 'Faculty', icon: FiUsers },
   ];
 
   return (
