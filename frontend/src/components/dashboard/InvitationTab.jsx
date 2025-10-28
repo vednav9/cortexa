@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { FiCheck, FiX, FiClock } from 'react-icons/fi';
 
-const InvitationCard = ({ invitation, onAccept, onReject }) => {
+const InvitationTab = ({ invitation, onAccept, onReject }) => {
   return (
     <motion.div
       whileHover={{ scale: 1.01 }}
@@ -63,4 +63,4 @@ const InvitationCard = ({ invitation, onAccept, onReject }) => {
   );
 };
 
-export default InvitationCard;
+export default InvitationTab;
