@@ -33,47 +33,6 @@ export default function InstitutionHome() {
         </div>
       </div>
 
-      {/* Stats Section */}
-      {/* <div className="max-w-7xl mx-auto px-4 -mt-16 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${brandColor}20` }}>
-                <FiBook className="w-6 h-6" style={{ color: brandColor }} />
-              </div>
-              <div>
-                <p className="text-3xl font-bold" style={{ color: brandColor }}>{institution.stats.totalCourses}</p>
-                <p className="text-gray-600">Courses</p>
-              </div>
-            </div>
-          </div> */}
-
-          {/* <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${brandColor}20` }}>
-                <FiUsers className="w-6 h-6" style={{ color: brandColor }} />
-              </div>
-              <div>
-                <p className="text-3xl font-bold" style={{ color: brandColor }}>{institution.stats.totalStudents}</p>
-                <p className="text-gray-600">Students</p>
-              </div>
-            </div>
-          </div> */}
-
-          {/* <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${brandColor}20` }}>
-                <FiTrendingUp className="w-6 h-6" style={{ color: brandColor }} />
-              </div>
-              <div>
-                <p className="text-3xl font-bold" style={{ color: brandColor }}>{institution.stats.totalFaculty}</p>
-                <p className="text-gray-600">Faculty</p>
-              </div>
-            </div>
-          </div> */}
-        {/* </div> */}
-      {/* </div> */}
-
       {/* Content Section */}
       <div className="max-w-7xl mx-auto px-4 py-12">
         <h3 className="text-2xl font-bold text-gray-800 mb-4">Departments</h3>
