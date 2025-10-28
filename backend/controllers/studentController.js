@@ -97,5 +97,35 @@ export const loginStudent = async (req, res) => {
     }
 };
 
+// Get user info from cookie token
+export const getUserProfile = async (req, res) => {
+    try {
+        const token = req.cookies.token;
+        if (!token) {
+            return res.status(401).json({ success: false, message: "No token found" });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const student = await Student.findById(decoded.id).select("fullName email role");
+
+        if (!student) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            user: {
+                name: student.fullName,
+                email: student.email,
+                role: student.role,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(401).json({ success: false, message: "Invalid or expired token" });
+    }
+};
+
+
 
 

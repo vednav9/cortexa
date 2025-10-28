@@ -13,15 +13,17 @@ import {
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
 import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
   const [scrolled, setScrolled] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Nav items shown only on landing page
   const navItems = [
     { name: 'About', path: 'about', icon: FiHome },
     { name: 'Features', path: 'features', icon: FiBook },
@@ -29,26 +31,43 @@ const Navbar = () => {
     { name: 'Contact Us', path: 'contact', icon: FiPhone },
   ];
 
-  // Show public nav links only on landing page
-  const showPublicLinks = location.pathname === '/';
+  const isLandingPage = location.pathname === '/';
+  const isDashboard = location.pathname.startsWith('/dashboard');
 
-  // Check if JWT is present
+  // ✅ Fetch user from backend using cookie
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
+    const fetchUser = async () => {
+      try {
+        const res = await axios.get('http://localhost:5000/api/student/me', { withCredentials: true });
+        if (res.data.success) {
+          setUser(res.data.user);
+        }
+      } catch {
+        setUser(null);
+      }
+    };
+    fetchUser();
   }, [location.pathname]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setIsLoggedIn(false);
+  const handleLogout = async () => {
+    try {
+      await axios.post('http://localhost:5000/api/logout', {}, { withCredentials: true });
+    } catch {
+      // Even if logout API not implemented, clear locally
+    }
+    setUser(null);
     navigate('/');
   };
 
+  // Scroll and active section highlight for landing page
   useEffect(() => {
+    if (!isLandingPage) return;
+
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
       const sections = ['hero', ...navItems.map(item => item.path)];
       const scrollPosition = window.scrollY + 100;
+
       sections.forEach((sectionId) => {
         const section = document.getElementById(sectionId);
         if (section) {
@@ -61,14 +80,12 @@ const Navbar = () => {
       });
     };
 
-    if (location.pathname === '/') {
-      window.addEventListener('scroll', handleScroll);
-      return () => window.removeEventListener('scroll', handleScroll);
-    }
-  }, [location.pathname]);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [isLandingPage]);
 
   const scrollToSection = (sectionId) => {
-    if (location.pathname !== '/') {
+    if (!isLandingPage) {
       navigate('/', { state: { scrollTo: sectionId } });
       setIsOpen(false);
       return;
@@ -112,9 +129,9 @@ const Navbar = () => {
               </span>
             </motion.div>
 
-            {/* Desktop Navigation */}
+            {/* 🌍 Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-2">
-              {showPublicLinks && navItems.map((item, index) => (
+              {isLandingPage && navItems.map((item, index) => (
                 <button
                   key={index}
                   onClick={() => scrollToSection(item.path)}
@@ -135,26 +152,42 @@ const Navbar = () => {
               ))}
             </div>
 
-            {/* Right Section - Auth Buttons */}
+            {/* 🔐 Right Section */}
+            <div className="hidden md:flex items-center space-x-4">
+              {/* Show only for logged in user (Dashboard, etc.) */}
+              {user && isDashboard && (
+                <>
+                  <motion.div
+                    whileHover={{ scale: 1.03 }}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl bg-black/30 shadow-inner border border-emerald-500/30"
+                  >
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm bg-gradient-to-br from-emerald-400 to-green-500 shadow-md">
+                      {user.name?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                    <div className="flex flex-col leading-tight">
+                      <p className="text-sm font-semibold text-gray-100">{user.name}</p>
+                      <p className="text-xs text-gray-400">{user.role}</p>
+                    </div>
+                  </motion.div>
 
-            <div className="hidden md:flex items-center space-x-3">
-              {isLoggedIn && location.pathname === "/dashboard" ? (
-                // ✅ Show only Logout on dashboard
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  onClick={handleLogout}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-red-400 border border-red-500/40 hover:bg-red-500/10 transition-all duration-300 font-medium text-sm"
-                >
-                  <FiLogOut className="w-4 h-4" />
-                  <span>Logout</span>
-                </motion.button>
-              ) : (
-                // ✅ On all other pages (logged in or not)
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-5 py-2 rounded-lg text-red-400 border border-red-500/40 hover:bg-red-500/10 transition-all duration-300 font-medium text-sm"
+                  >
+                    <FiLogOut className="w-4 h-4" />
+                    <span>Logout</span>
+                  </motion.button>
+                </>
+              )}
+
+              {/* Always show login/signup on landing page */}
+              {isLandingPage && (
                 <>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     onClick={() => navigate('/login')}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 font-medium text-sm"
+                    className="flex items-center gap-2 px-5 py-2 rounded-lg text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all duration-300 font-medium text-sm"
                   >
                     <FiLogIn className="w-4 h-4" />
                     <span>Login</span>
@@ -162,17 +195,17 @@ const Navbar = () => {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     onClick={() => navigate('/signup')}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all duration-300 font-semibold text-sm shadow-lg shadow-emerald-500/30"
+                    className="flex items-center gap-2 px-5 py-2 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black hover:from-emerald-500 hover:to-green-600 transition-all duration-300 font-semibold text-sm shadow-lg shadow-emerald-500/30"
                   >
                     <FiUserPlus className="w-4 h-4" />
                     <span>Sign Up</span>
                   </motion.button>
                 </>
               )}
+
             </div>
 
-
-            {/* Mobile Menu Toggle */}
+            {/* 📱 Mobile Menu Toggle */}
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsOpen(!isOpen)}
@@ -183,9 +216,9 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* Mobile Menu */}
+        {/* 📱 Mobile Menu */}
         <AnimatePresence>
-          {isOpen && (
+          {isOpen && isLandingPage && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -194,7 +227,7 @@ const Navbar = () => {
               className="md:hidden bg-black/98 border-t border-emerald-500/20"
             >
               <div className="px-4 py-6 space-y-1">
-                {showPublicLinks && navItems.map((item, index) => (
+                {navItems.map((item, index) => (
                   <motion.button
                     key={index}
                     onClick={() => scrollToSection(item.path)}
@@ -209,32 +242,20 @@ const Navbar = () => {
                 ))}
 
                 <div className="pt-4 border-t border-emerald-500/20 space-y-3">
-                  {isLoggedIn ? (
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-red-400 border border-red-500/40 hover:bg-red-500/10 transition-all"
-                    >
-                      <FiLogOut className="w-5 h-5" />
-                      <span>Logout</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => { navigate('/login'); setIsOpen(false); }}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-all"
-                      >
-                        <FiLogIn className="w-5 h-5" />
-                        <span>Login</span>
-                      </button>
-                      <button
-                        onClick={() => { navigate('/signup'); setIsOpen(false); }}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-500/30 transition-all"
-                      >
-                        <FiUserPlus className="w-5 h-5" />
-                        <span>Sign Up</span>
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => { navigate('/login'); setIsOpen(false); }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                  >
+                    <FiLogIn className="w-5 h-5" />
+                    <span>Login</span>
+                  </button>
+                  <button
+                    onClick={() => { navigate('/signup'); setIsOpen(false); }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-500/30 transition-all"
+                  >
+                    <FiUserPlus className="w-5 h-5" />
+                    <span>Sign Up</span>
+                  </button>
                 </div>
               </div>
             </motion.div>
