@@ -12,10 +12,22 @@ class MockAuthRepository {
   final EmailService _emailService;
   final _uuid = const Uuid();
   
-  // Mock users database (simulating backend)
+  // Mock users database (simulating backend) - now loaded from Hive
   final List<Map<String, dynamic>> _mockUsers = [];
   
-  MockAuthRepository(this._storage, this._emailService);
+  MockAuthRepository(this._storage, this._emailService) {
+    // Load existing registered users from Hive on initialization
+    _loadRegisteredUsers();
+  }
+
+  /// Load registered users from persistent storage
+  void _loadRegisteredUsers() {
+    print('🔄 [MockAuthRepository] Loading registered users from Hive...');
+    final registeredUsers = _storage.getAllRegisteredUsers();
+    _mockUsers.clear();
+    _mockUsers.addAll(registeredUsers);
+    print('✅ [MockAuthRepository] Loaded ${_mockUsers.length} registered users');
+  }
   
   /// Simulate login with delay
   Future<Map<String, dynamic>> login({
@@ -26,6 +38,12 @@ class MockAuthRepository {
     // Simulate network delay
     await Future.delayed(const Duration(seconds: 2));
     
+    print('🔍 [MockAuthRepository] Login attempt - User: $usernameOrEmail, Role: $role');
+    print('🔍 [MockAuthRepository] Current users in memory: ${_mockUsers.length}');
+    
+    // Reload users from Hive to ensure we have the latest data
+    _loadRegisteredUsers();
+    
     // First, find user by username/email and password regardless of role
     final userAnyRole = _mockUsers.firstWhere(
       (u) =>
@@ -35,6 +53,7 @@ class MockAuthRepository {
     );
 
     if (userAnyRole.isEmpty) {
+      print('❌ [MockAuthRepository] Invalid credentials');
       throw ServerException(
         message: 'Invalid email/username or password',
         statusCode: 401,
@@ -43,6 +62,7 @@ class MockAuthRepository {
 
     // Now check role match for clearer UX
     if (userAnyRole['role'] != role) {
+      print('❌ [MockAuthRepository] Role mismatch - Expected: $role, Got: ${userAnyRole['role']}');
       throw ServerException(
         message:
             'Role mismatch: Your account is registered as "${userAnyRole['role']}". Please select that role to sign in.',
@@ -50,6 +70,8 @@ class MockAuthRepository {
       );
     }
     final user = userAnyRole;
+    
+    print('✅ [MockAuthRepository] Login successful - User: ${user['username']}, Role: ${user['role']}');
     
     // Generate mock tokens
     final accessToken = _generateToken();
@@ -95,12 +117,31 @@ class MockAuthRepository {
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
 
-    // Check if already exists
-    final usernameExists = _mockUsers.any((u) => u['username'] == username);
-    final emailExists = _mockUsers.any((u) => u['email'] == email);
-    if (usernameExists || emailExists) {
-      // If already exists, do nothing (idempotent for demo)
-      return;
+    print('🔍 [MockAuthRepository] Checking for duplicate admin registration...');
+    
+    // Reload from Hive to ensure we have latest data
+    _loadRegisteredUsers();
+    
+    // Check if already exists in memory or Hive
+    final usernameExists = _mockUsers.any((u) => u['username'] == username) || 
+                          _storage.isUsernameRegistered(username);
+    final emailExists = _mockUsers.any((u) => u['email'] == email) || 
+                       _storage.isEmailRegistered(email);
+    
+    if (usernameExists) {
+      print('⚠️ [MockAuthRepository] Username already exists: $username');
+      throw ServerException(
+        message: 'Username already exists',
+        statusCode: 400,
+      );
+    }
+    
+    if (emailExists) {
+      print('⚠️ [MockAuthRepository] Email already exists: $email');
+      throw ServerException(
+        message: 'Email already exists',
+        statusCode: 400,
+      );
     }
 
     final userId = _uuid.v4();
@@ -114,7 +155,14 @@ class MockAuthRepository {
       'role': 'admin',
       'created_at': DateTime.now().toIso8601String(),
     };
+    
+    // Add to in-memory list
     _mockUsers.add(newUser);
+    
+    // ✅ Persist to Hive so it survives app restarts
+    await _storage.saveRegisteredUser(newUser);
+    
+    print('✅ [MockAuthRepository] Admin user registered and persisted: $username');
   }
   
   /// Simulate signup with delay
@@ -128,18 +176,27 @@ class MockAuthRepository {
     // Simulate network delay
     await Future.delayed(const Duration(seconds: 2));
     
-    // Check if username exists
-    final usernameExists = _mockUsers.any((u) => u['username'] == username);
+    print('🔍 [MockAuthRepository] Signup attempt - Username: $username, Email: $email, Role: $role');
+    
+    // Reload from Hive to ensure we have latest data
+    _loadRegisteredUsers();
+    
+    // Check if username exists (both in-memory and Hive for double safety)
+    final usernameExists = _mockUsers.any((u) => u['username'] == username) || 
+                          _storage.isUsernameRegistered(username);
     if (usernameExists) {
+      print('❌ [MockAuthRepository] Username already exists: $username');
       throw ServerException(
         message: 'Username already exists',
         statusCode: 400,
       );
     }
     
-    // Check if email exists
-    final emailExists = _mockUsers.any((u) => u['email'] == email);
+    // Check if email exists (both in-memory and Hive for double safety)
+    final emailExists = _mockUsers.any((u) => u['email'] == email) || 
+                       _storage.isEmailRegistered(email);
     if (emailExists) {
+      print('❌ [MockAuthRepository] Email already exists: $email');
       throw ServerException(
         message: 'Email already exists',
         statusCode: 400,
@@ -159,8 +216,13 @@ class MockAuthRepository {
       'created_at': DateTime.now().toIso8601String(),
     };
     
-    // Add to mock database
+    // Add to mock database (in-memory)
     _mockUsers.add(newUser);
+    
+    // ✅ Persist to Hive so it survives app restarts
+    await _storage.saveRegisteredUser(newUser);
+    
+    print('✅ [MockAuthRepository] User registered and persisted: $username');
     
     // Generate mock tokens
     final accessToken = _generateToken();
@@ -185,7 +247,7 @@ class MockAuthRepository {
       createdAt: DateTime.now(),
     );
     
-    // Save to local storage
+    // Save to local storage (current user session)
     await _storage.saveUser(userModel);
     await _storage.saveToken(tokenModel);
     
