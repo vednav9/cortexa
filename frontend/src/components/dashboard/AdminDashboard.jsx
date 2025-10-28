@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { FiMenu, FiSearch, FiUsers, FiSettings, FiBarChart, FiBell, FiLogOut, FiFilter, FiUserPlus } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiMenu, FiUsers, FiSettings, FiBarChart, FiUserPlus, FiX, FiMail, FiUser } from 'react-icons/fi';
 import Sidebar from './Sidebar';
-import UserCard from './UserCard';
 import AddUsersTab from './AddUsersTab';
 
 const AdminDashboard = () => {
@@ -126,43 +125,6 @@ const AdminDashboard = () => {
                 <p className="text-sm text-gray-500">Manage users and institution settings</p>
               </div>
             </div>
-
-            <div className="flex items-center space-x-4">
-              {/* <div className="relative hidden md:block">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                />
-              </div> */}
-
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                className="relative p-2 text-gray-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg"
-              >
-                <FiBell className="w-6 h-6" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </motion.button>
-
-              {/* <motion.button
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center space-x-3 p-2 hover:bg-emerald-50 rounded-lg"
-              >
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-bold">
-                  AD
-                </div>
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg"
-              >
-                <FiLogOut className="w-5 h-5" />
-              </motion.button> */}
-            </div>
           </div>
         </header>
 
@@ -233,6 +195,98 @@ const AdminDashboard = () => {
         </main>
       </div>
     </div>
+  );
+};
+
+const UserCard = ({ user, onDelete }) => {
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleDelete = () => {
+    onDelete(user.id);
+    setShowConfirm(false);
+  };
+
+  return (
+    <motion.div
+      whileHover={{ y: -5 }}
+      className="relative bg-white border border-emerald-100 rounded-xl p-6 hover:shadow-2xl transition-all group"
+    >
+      {/* Delete Button */}
+      <motion.button
+        whileHover={{ scale: 1.2 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setShowConfirm(true)}
+        className="absolute top-3 right-3 w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+      >
+        <FiX className="w-4 h-4" />
+      </motion.button>
+
+      {/* User Info */}
+      <div className="flex flex-col items-center text-center">
+        <motion.div
+          whileHover={{ scale: 1.1, rotate: 5 }}
+          className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-bold text-2xl mb-4 shadow-lg"
+        >
+          {user.logo}
+        </motion.div>
+        <h3 className="text-lg font-bold text-gray-800 mb-1">{user.name}</h3>
+        <p className="text-sm text-gray-500 mb-3 flex items-center space-x-1">
+          <FiMail className="w-3 h-3" />
+          <span>{user.email}</span>
+        </p>
+        <div className="flex items-center space-x-2">
+          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-medium flex items-center space-x-1">
+            <FiUser className="w-3 h-3" />
+            <span>{user.role}</span>
+          </span>
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+            user.status === 'active' 
+              ? 'bg-green-50 text-green-600' 
+              : 'bg-gray-100 text-gray-600'
+          }`}>
+            {user.status}
+          </span>
+        </div>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm rounded-xl flex items-center justify-center p-4 z-20"
+          >
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.8 }}
+              className="bg-white rounded-lg p-6 max-w-xs w-full"
+            >
+              <h4 className="text-lg font-bold text-gray-800 mb-2">Delete User?</h4>
+              <p className="text-sm text-gray-600 mb-4">
+                Are you sure you want to delete {user.name}? This action cannot be undone.
+              </p>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setShowConfirm(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 

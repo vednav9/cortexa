@@ -2,7 +2,7 @@ import React from "react";
 import { motion } from 'framer-motion';
 import { FiCheck } from 'react-icons/fi';
 
-export default function MyInstitutions({ institutions = [] }) {
+export default function MyInstitutionsTab({ institutions = [] }) {
   return (
     <div className="space-y-6">
       <h3 className="text-xl font-bold text-gray-800">My Institutions</h3>

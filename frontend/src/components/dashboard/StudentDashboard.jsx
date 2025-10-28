@@ -1,25 +1,23 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiMenu, FiSearch, FiBell, FiLogOut } from 'react-icons/fi';
-import MainSidebar from './Sidebar';
-import BrowseCollegesTab from './BrowseCollegesTab';
-import MyInstitutions from './MyInstitutions';
-import InvitationCard from './InvitationCard';
+import { FiMenu } from 'react-icons/fi';
+import Sidebar from './Sidebar';
+import BrowseInstitutionsTab from './BrowseInstitutionsTab';
+import MyInstitutionsTab from './MyInstitutionsTab';
+import InvitationTab from './InvitationTab';
 
 const StudentDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('access');
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Mock data
   const myInstitutions = [
     { id: 1, name: 'MIT', logo: 'M', role: 'Student', status: 'active' },
-    { id: 2, name: 'Harvard', logo: 'H', role: 'Student', status: 'active' },
   ];
 
   const invitations = [
     { id: 1, institutionName: 'Harvard University', logo: 'H', email: 'admissions@harvard.edu', type: 'university', date: '2 days ago', status: 'pending' },
-    { id: 2, institutionName: 'MIT', logo: 'M', email: 'info@mit.edu', type: 'university', date: '5 days ago', status: 'pending' },
+    { id: 2, institutionName: 'IIT', logo: 'M', email: 'info@iit.edu', type: 'university', date: '5 days ago', status: 'pending' },
   ];
 
   const tabs = [
@@ -32,10 +30,9 @@ const StudentDashboard = () => {
   const handleRejectInvitation = (id) => console.log('Rejected:', id);
 
   return (
-    // ✅ Removed min-h-screen, changed to flex w-full
     <div className="flex w-full bg-gray-50 pt-0 sticky top-0">
       {/* Sidebar */}
-      <MainSidebar 
+      <Sidebar 
         isOpen={sidebarOpen} 
         onClose={() => setSidebarOpen(false)} 
         isInstitution={false} 
@@ -43,9 +40,10 @@ const StudentDashboard = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Top Bar */}
+        {/* Top Bar with Tabs */}
         <header className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm">
           <div className="flex items-center justify-between">
+            {/* Left side - Title */}
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -55,68 +53,54 @@ const StudentDashboard = () => {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-800">Student Dashboard</h1>
-                <p className="text-sm text-gray-500">Manage your institution connections</p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="relative hidden md:block">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 w-64 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                />
-              </div>
-
-              <button className="relative p-2 text-gray-600 hover:text-emerald-600 hover:bg-gray-100 rounded-lg">
-                <FiBell className="w-6 h-6" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
+            {/* Right side - Tabs */}
+            <div className="flex space-x-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`relative px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
+                    activeTab === tab.id 
+                      ? 'bg-emerald-50 text-emerald-600 shadow-sm' 
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'
+                  }`}
+                >
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    activeTab === tab.id 
+                      ? 'bg-emerald-100 text-emerald-700' 
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </header>
 
-        {/* Tabs */}
-        <div className="bg-white border-b border-gray-200 px-6 shadow-sm">
-          <div className="flex space-x-8">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative py-4 px-2 font-medium transition-colors flex items-center space-x-2 ${
-                  activeTab === tab.id ? 'text-emerald-600' : 'text-gray-600 hover:text-emerald-600'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  activeTab === tab.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {tab.count}
-                </span>
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="studentActiveTab"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-600"
-                    transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'access' && <BrowseCollegesTab />}
-          {activeTab === 'institutions' && <MyInstitutions institutions={myInstitutions} />}
+          {activeTab === 'access' && <BrowseInstitutionsTab />}
+          {activeTab === 'institutions' && <MyInstitutionsTab institutions={myInstitutions} />}
           {activeTab === 'invitations' && (
             <div className="space-y-4">
               {invitations.map((invitation, index) => (
-                <motion.div key={invitation.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
-                  <InvitationCard invitation={invitation} onAccept={handleAcceptInvitation} onReject={handleRejectInvitation} />
+                <motion.div 
+                  key={invitation.id} 
+                  initial={{ opacity: 0, y: 20 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <InvitationTab 
+                    invitation={invitation} 
+                    onAccept={handleAcceptInvitation} 
+                    onReject={handleRejectInvitation} 
+                  />
                 </motion.div>
               ))}
             </div>

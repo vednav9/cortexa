@@ -14,6 +14,7 @@ from rag.retriever import get_retriever
 from rag.generator import get_generator
 from mcq.generator import get_mcq_generator
 from mcq.validator import MCQValidator
+from hybrid.assistant import get_hybrid_assistant
 
 app = FastAPI(title="Cortexa RAG API", version="1.0.0")
 
@@ -51,6 +52,9 @@ class MCQScoreRequest(BaseModel):
     mcqs: List[dict]
     user_answers: Dict[int, str]
 
+class HybridQueryRequest(BaseModel):
+    query: str
+    use_web_fallback: bool = True
 
 doc_processor = DocumentProcessor()
 vector_store = get_json_store()
@@ -58,6 +62,7 @@ retriever = get_retriever()
 generator = get_generator()
 mcq_generator = get_mcq_generator()
 mcq_validator = MCQValidator()
+hybrid_assistant = get_hybrid_assistant()
 
 @app.get("/")
 def root():
@@ -198,6 +203,20 @@ async def score_mcqs(request: MCQScoreRequest):
         result = mcq_validator.score_answers(
             mcqs=request.mcqs,
             user_answers=request.user_answers
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/assistant/query")
+async def hybrid_query(request: HybridQueryRequest):
+    """
+    Hybrid AI Assistant - Searches documents first, then web if needed
+    """
+    try:
+        result = hybrid_assistant.answer(
+            query=request.query,
+            use_web=request.use_web_fallback
         )
         return result
     except Exception as e:
