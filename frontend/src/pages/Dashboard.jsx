@@ -4,7 +4,7 @@ import TeacherDashboard from '../components/dashboard/TeacherDashboard';
 import AdminDashboard from '../components/dashboard/AdminDashboard';
 
 const Dashboard = () => {
-  const [userRole] = useState('admin'); // Change to 'teacher' or 'admin' to test
+  const [userRole] = useState('student'); // Change to 'teacher' or 'admin' to test
 
   const renderDashboard = () => {
     switch (userRole) {
