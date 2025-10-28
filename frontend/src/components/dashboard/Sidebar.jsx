@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -12,10 +12,12 @@ import {
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
 import { InstitutionContext } from '../../App';
+import AIChat from '../ai/AIChat';
 
 export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
   const { institution } = useContext(InstitutionContext) || {};
   const location = useLocation();
+  const [aiChatOpen, setAiChatOpen] = useState(false);
   
   // Theme colors
   const defaultColor = '#10b981'; // Emerald
@@ -37,8 +39,9 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
       id: 'chatbot', 
       label: 'AI Assistant', 
       icon: FiMessageCircle, 
-      path: isInstitution ? `/${institution?.slug}/chatbot` : '/chatbot',
-      disabled: false
+      path: '#',
+      disabled: false,
+      isAIChat: true
     },
     { 
       id: 'notifications', 
@@ -72,6 +75,19 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
       disabled: false
     },
   ];
+
+  const handleItemClick = (item, e) => {
+    if (item.disabled) {
+      e.preventDefault();
+      return;
+    }
+
+    if (item.isAIChat) {
+      e.preventDefault();
+      setAiChatOpen(true);
+      onClose(); // Close sidebar on mobile
+    }
+  };
 
   return (
     <>
@@ -143,13 +159,13 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
         <nav className="p-4 space-y-2">
           {menuItems.map((item) => {
             const ItemIcon = item.icon;
-            const active = isActive(item.path);
+            const active = isActive(item.path) && !item.isAIChat;
             const disabled = item.disabled;
 
             return (
               <Link
                 key={item.id}
-                to={disabled ? '#' : item.path}
+                to={item.isAIChat ? '#' : (disabled ? '#' : item.path)}
                 className={`
                   relative flex items-center space-x-3 px-4 py-3 rounded-xl transition-all group
                   ${disabled 
@@ -167,7 +183,7 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
                       }
                     : {}
                 }
-                onClick={disabled ? (e) => e.preventDefault() : undefined}
+                onClick={(e) => handleItemClick(item, e)}
               >
                 {/* Icon */}
                 <div className="relative">
@@ -179,6 +195,11 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
                     >
                       {item.badge}
                     </span>
+                  )}
+                  {item.isAIChat && (
+                    <HiSparkles 
+                      className="absolute -top-1 -right-1 w-4 h-4 text-emerald-500 animate-pulse" 
+                    />
                   )}
                 </div>  
 
@@ -229,6 +250,12 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
           </div>
         </div>
       </aside>
+      <AIChat 
+        isOpen={aiChatOpen} 
+        onClose={() => setAiChatOpen(false)}
+        institutionId={institution?.id}
+        brandColor={brandColor}
+      />
     </>
   );
 }
