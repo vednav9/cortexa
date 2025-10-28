@@ -7,6 +7,7 @@ class HiveStorageService {
   static const String _userBoxName = 'userBox';
   static const String _tokenBoxName = 'tokenBox';
   static const String _settingsBoxName = 'settingsBox';
+  static const String _registeredUsersBoxName = 'registeredUsersBox';
 
   // Keys
   static const String _currentUserKey = 'current_user';
@@ -15,6 +16,7 @@ class HiveStorageService {
   late Box<UserHiveModel> _userBox;
   late Box<AuthTokenModel> _tokenBox;
   late Box<dynamic> _settingsBox;
+  late Box<Map<dynamic, dynamic>> _registeredUsersBox;
 
   /// Initialize Hive and open boxes
   Future<void> init() async {
@@ -42,6 +44,8 @@ class HiveStorageService {
     print('✅ Token box opened');
     _settingsBox = await Hive.openBox(_settingsBoxName);
     print('✅ Settings box opened');
+    _registeredUsersBox = await Hive.openBox<Map<dynamic, dynamic>>(_registeredUsersBoxName);
+    print('✅ Registered users box opened');
 
     print('🎉 HiveStorageService initialized successfully');
   }
@@ -138,5 +142,59 @@ class HiveStorageService {
     await _userBox.close();
     await _tokenBox.close();
     await _settingsBox.close();
+    await _registeredUsersBox.close();
+  }
+
+  // ===== Registered Users Methods (for MockAuthRepository persistence) =====
+
+  /// Save a registered user (for auth validation across app restarts)
+  Future<void> saveRegisteredUser(Map<String, dynamic> userData) async {
+    final key = userData['id'] as String;
+    await _registeredUsersBox.put(key, userData);
+  }
+
+  /// Get all registered users
+  List<Map<String, dynamic>> getAllRegisteredUsers() {
+    return _registeredUsersBox.values
+        .map((user) => Map<String, dynamic>.from(user))
+        .toList();
+  }
+
+  /// Check if a username exists
+  bool isUsernameRegistered(String username) {
+    return _registeredUsersBox.values.any(
+      (user) => user['username'] == username,
+    );
+  }
+
+  /// Check if an email exists
+  bool isEmailRegistered(String email) {
+    return _registeredUsersBox.values.any(
+      (user) => user['email'] == email,
+    );
+  }
+
+  /// Find a registered user by username or email
+  Map<String, dynamic>? findRegisteredUser({
+    String? username,
+    String? email,
+  }) {
+    try {
+      final user = _registeredUsersBox.values.firstWhere(
+        (user) {
+          if (username != null && user['username'] == username) return true;
+          if (email != null && user['email'] == email) return true;
+          return false;
+        },
+      );
+      return Map<String, dynamic>.from(user);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Clear all registered users (for testing)
+  Future<void> clearRegisteredUsers() async {
+    await _registeredUsersBox.clear();
   }
 }
