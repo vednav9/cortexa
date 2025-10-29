@@ -1,86 +1,89 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FiMail, FiLock, FiUser, FiEye, FiEyeOff, FiCheckCircle, 
-  FiPhone, FiGlobe, FiMapPin, FiFileText, FiImage, FiCheck 
-} from 'react-icons/fi';
-import { HiSparkles } from 'react-icons/hi';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import axios from "axios";
+import {
+  FiMail,
+  FiLock,
+  FiUser,
+  FiEye,
+  FiEyeOff,
+  FiPhone,
+  FiGlobe,
+  FiMapPin,
+  FiFileText,
+  FiCheckCircle,
+} from "react-icons/fi";
+import { FaLongArrowAltRight } from "react-icons/fa";
 
-const InstituteSignUp = () => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordMatch, setPasswordMatch] = useState(true);
-  
-  const [formData, setFormData] = useState({
-    // Step 1 - Main
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    jobTitle: 'principal',
-    phone: '',
-    authorized: false,
-    
-    // Step 2 - Institution Details
-    institutionName: '',
-    institutionType: 'university',
-    website: '',
-    address1: '',
-    city: '',
-    state: '',
-    country: '',
-    postalCode: '',
-    description: '',
-    
-    // Step 3 - Branding
-    logo: null,
-    customURL: '',
-    brandColor: '#34d399'
-  });
-  
+const Signup = () => {
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleConfirmPasswordChange = (e) => {
-    const value = e.target.value;
-    setFormData({ ...formData, confirmPassword: value });
-    setPasswordMatch(value === formData.password || value === '');
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    jobTitle: "",
+    phone: "",
+    authorized: true,
+    institutionName: "",
+    institutionType: "",
+    website: "",
+    address1: "",
+    city: "",
+    state: "",
+    country: "",
+    postalCode: "",
+    description: "",
+    customURL: "",
+    brandColor: "#1e3a8a",
+  });
+
+  // Handle form change
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  const handleNext = () => {
-    if (currentStep < 3) setCurrentStep(currentStep + 1);
-  };
-
-  const handleBack = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
-  };
-
-  const handleSubmit = (e) => {
+  // Submit form data as JSON
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Institution Registration:', formData);
-    // Add your submission logic here
+
+    if (formData.password !== confirmPassword) {
+      alert("Passwords do not match!");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await axios.post(
+        "http://localhost:5000/api/admin/register",
+        formData,
+        {
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+
+      if (response.status === 201 || response.status === 200) {
+        alert("Institution registered successfully!");
+        navigate("/login");
+      }
+    } catch (error) {
+      console.error("Signup failed:", error);
+      alert(
+        error.response?.data?.message ||
+        "Something went wrong during registration."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const institutionTypes = [
-    'University',
-    'College',
-    'Community College',
-    'Technical Institute',
-    'High School',
-    'Middle School',
-    'Elementary School',
-    'Kindergarten',
-    'Training Center',
-    'Online Institution',
-    'Other'
-  ];
-
-  const jobTitles = [
-    { value: 'principal', label: 'Principal' },
-    { value: 'dean', label: 'Dean' },
-    { value: 'coworker', label: 'Co-worker' }
-  ];
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20">
@@ -98,10 +101,10 @@ const InstituteSignUp = () => {
       >
         {/* Card */}
         <div className="bg-gradient-to-br from-emerald-500/5 to-green-500/10 border border-emerald-500/20 rounded-2xl p-8 backdrop-blur-xl shadow-2xl">
-          
+
           {/* Logo */}
           <Link to="/" className="flex items-center justify-center space-x-3 mb-6">
-            <motion.div 
+            <motion.div
               whileHover={{ scale: 1.1 }}
               transition={{ duration: 0.3 }}
               className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-green-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/50"
@@ -133,13 +136,12 @@ const InstituteSignUp = () => {
               {[1, 2, 3].map((step) => (
                 <div key={step} className="relative z-10">
                   <motion.div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
-                      step < currentStep
-                        ? 'bg-gradient-to-r from-emerald-400 to-green-500 text-black'
-                        : step === currentStep
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${step < currentStep
+                      ? 'bg-gradient-to-r from-emerald-400 to-green-500 text-black'
+                      : step === currentStep
                         ? 'bg-gradient-to-r from-emerald-400 to-green-500 text-black'
                         : 'bg-emerald-500/10 text-gray-400 border border-emerald-500/20'
-                    }`}
+                      }`}
                     animate={{ scale: step === currentStep ? 1.1 : 1 }}
                   >
                     {step < currentStep ? <FiCheck className="w-5 h-5" /> : step}
@@ -234,11 +236,10 @@ const InstituteSignUp = () => {
                           value={formData.confirmPassword}
                           onChange={handleConfirmPasswordChange}
                           required
-                          className={`w-full pl-10 pr-12 py-3 bg-emerald-500/5 border rounded-lg focus:outline-none text-white placeholder-gray-500 transition-all ${
-                            !passwordMatch 
-                              ? 'border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' 
-                              : 'border-emerald-500/20 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20'
-                          }`}
+                          className={`w-full pl-10 pr-12 py-3 bg-emerald-500/5 border rounded-lg focus:outline-none text-white placeholder-gray-500 transition-all ${!passwordMatch
+                            ? 'border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+                            : 'border-emerald-500/20 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20'
+                            }`}
                         />
                         <button
                           type="button"
@@ -542,7 +543,7 @@ const InstituteSignUp = () => {
                   <div className="p-6 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
                     <p className="text-sm text-emerald-400 mb-3 font-medium">Brand Preview</p>
                     <div className="flex items-center space-x-4">
-                      <div 
+                      <div
                         className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-xl"
                         style={{ backgroundColor: formData.brandColor }}
                       >
@@ -566,11 +567,10 @@ const InstituteSignUp = () => {
                 type="button"
                 onClick={handleBack}
                 disabled={currentStep === 1}
-                className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                  currentStep === 1
-                    ? 'bg-gray-500/10 text-gray-500 cursor-not-allowed'
-                    : 'border-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/50'
-                }`}
+                className={`px-6 py-3 rounded-lg font-semibold transition-all ${currentStep === 1
+                  ? 'bg-gray-500/10 text-gray-500 cursor-not-allowed'
+                  : 'border-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/50'
+                  }`}
               >
                 Back
               </motion.button>

@@ -38,34 +38,62 @@ const Navbar = () => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/student/me', { withCredentials: true });
-        if (res.data.success) {
-          setUser(res.data.user);
+        // Try each endpoint one by one
+        const endpoints = [
+          "http://localhost:5000/api/student/me",
+          "http://localhost:5000/api/teacher/me",
+          "http://localhost:5000/api/admin/me",
+        ];
+
+        for (const endpoint of endpoints) {
+          try {
+            const res = await axios.get(endpoint, { withCredentials: true });
+            if (res.data.success && res.data.user) {
+              setUser(res.data.user);
+              return; // ✅ Stop once user is found
+            }
+          } catch {
+            // Continue checking next type
+          }
         }
-      } catch {
+
+        // ❌ If none succeeded, clear user
+        setUser(null);
+      } catch (error) {
+        console.error("Error fetching user:", error);
         setUser(null);
       }
     };
+
     fetchUser();
   }, [location.pathname]);
 
+
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/api/student/logout", {}, { withCredentials: true });
+      const logoutEndpoints = [
+        "http://localhost:5000/api/student/logout",
+        "http://localhost:5000/api/teacher/logout",
+        "http://localhost:5000/api/admin/logout",
+      ];
+
+      for (const endpoint of logoutEndpoints) {
+        try {
+          await axios.post(endpoint, {}, { withCredentials: true });
+        } catch {
+          // try next logout
+        }
+      }
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      // 🧹 Remove all local data
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-
-      // Optional: clear everything if needed
-      // localStorage.clear();
-
       navigate("/");
-      window.location.reload(); // optional: ensures navbar updates instantly
+      window.location.reload();
     }
   };
+
 
 
   // Scroll and active section highlight for landing page
