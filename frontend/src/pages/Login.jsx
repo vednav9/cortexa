@@ -41,7 +41,7 @@ const Login = () => {
     try {
       // Dynamic API endpoint based on user type
       const apiEndpoint = `http://localhost:5000/api/${formData.userType}/login`;
-      
+
       const res = await axios.post(
         apiEndpoint,
         { email: formData.email, password: formData.password },
