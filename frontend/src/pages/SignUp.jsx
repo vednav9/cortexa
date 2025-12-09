@@ -54,8 +54,21 @@ const SignUp = () => {
     setLoading(true);
 
     try {
+      // Dynamically choose API endpoint
+      let apiUrl = "";
+      if (formData.userType === "student") {
+        apiUrl = "http://localhost:5000/api/student/register";
+      } else if (formData.userType === "teacher") {
+        apiUrl = "http://localhost:5000/api/teacher/register";
+      } else {
+        toast.error("Please select a valid user type.");
+        setLoading(false);
+        return;
+      }
+
+      // Send signup request
       const response = await axios.post(
-        "http://localhost:5000/api/student/register",
+        apiUrl,
         {
           fullName: formData.fullName,
           email: formData.email,
@@ -64,16 +77,19 @@ const SignUp = () => {
           role: formData.userType,
         },
         {
-          withCredentials: true, // ✅ Important: allows server to set JWT cookie
+          withCredentials: true, // ✅ for cookie-based auth
         }
       );
 
-      toast.success("Account created successfully!");
-      // No need for localStorage — session persists with cookie
-      setTimeout(() => navigate("/dashboard"), 1500);
+      if (response.data.success) {
+        toast.success("Account created successfully!");
+        setTimeout(() => navigate("/dashboard"), 1500);
+      } else {
+        toast.error(response.data.message || "Signup failed. Try again.");
+      }
     } catch (error) {
       console.error("Signup Error:", error);
-      if (error.response && error.response.data.message) {
+      if (error.response?.data?.message) {
         toast.error(error.response.data.message);
       } else {
         toast.error("Server error. Please try again later.");
@@ -82,6 +98,7 @@ const SignUp = () => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20">
