@@ -11,6 +11,8 @@ const generateToken = (id) => {
 export const registerStudent = async (req, res) => {
     try {
         // ... existing validation code ...
+        const { fullName, email, password, role } = req.body;
+
 
         const newStudent = await Student.create({
             fullName,

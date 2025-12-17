@@ -8,11 +8,12 @@ import {
   FiEye,
   FiEyeOff,
   FiCheckCircle,
+  FiArrowRight,
 } from "react-icons/fi";
-import { FaLongArrowAltRight } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi";
 import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
+import GreenParticles from "../ui/GreenParticles";
 
 const SignUp = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -54,7 +55,6 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      // Dynamically choose API endpoint
       let apiUrl = "";
       if (formData.userType === "student") {
         apiUrl = "http://localhost:5000/api/student/register";
@@ -66,7 +66,6 @@ const SignUp = () => {
         return;
       }
 
-      // Send signup request
       const response = await axios.post(
         apiUrl,
         {
@@ -77,7 +76,7 @@ const SignUp = () => {
           role: formData.userType,
         },
         {
-          withCredentials: true, // ✅ for cookie-based auth
+          withCredentials: true,
         }
       );
 
@@ -99,58 +98,68 @@ const SignUp = () => {
     }
   };
 
-
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20">
+    <div className="min-h-screen bg-black flex items-center justify-center px-4 relative overflow-hidden">
       <Toaster position="top-center" reverseOrder={false} />
 
-      {/* Background Glow */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-500/30 rounded-full blur-3xl animate-pulse" />
-        <div
-          className="absolute bottom-20 right-10 w-96 h-96 bg-green-500/30 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "1s" }}
-        />
-      </div>
+      <GreenParticles />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="relative w-full max-w-md"
+        transition={{ duration: 0.5 }}
+        className="relative w-full max-w-md z-10"
       >
-        <div className="bg-gradient-to-br from-emerald-500/5 to-green-500/10 border border-emerald-500/20 rounded-2xl p-8 backdrop-blur-xl shadow-2xl">
-          <Link
-            to="/"
-            className="flex items-center justify-center space-x-3 mb-8"
-          >
-            <motion.div
-              whileHover={{ scale: 1.1 }}
-              transition={{ duration: 0.3 }}
-              className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-green-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/50"
-            >
-              <HiSparkles className="w-7 h-7 text-white" />
-            </motion.div>
-            <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-green-500 bg-clip-text text-transparent">
-              Cortexa
-            </span>
-          </Link>
+        {/* Card Container */}
+        <div className="bg-gray-900/40 backdrop-blur-2xl border border-emerald-500/10 rounded-3xl p-8 shadow-2xl">
 
-          <h2 className="text-3xl font-bold text-white text-center mb-2">
-            Create Account
-          </h2>
-          <p className="text-gray-400 text-center mb-8">
-            Join Cortexa and start your learning journey
-          </p>
+          {/* Logo & Title Section */}
+          <div className="text-center mb-8">
+            <Link to="/" className="inline-flex items-center justify-center space-x-3 mb-6 group">
+              <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-emerald-500/50 transition-shadow">
+                <HiSparkles className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-green-500 bg-clip-text text-transparent">
+                Cortexa
+              </span>
+            </Link>
 
+            <h2 className="text-3xl font-bold text-white mb-2">Create Account</h2>
+            <p className="text-gray-400 text-sm">Join Cortexa and start your learning journey</p>
+          </div>
+
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Full Name */}
+
+            {/* User Type Selector */}
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">
+              <label className="text-gray-300 text-sm font-medium mb-3 block">
+                I am a
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {["student", "teacher"].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, userType: type })}
+                    className={`py-2.5 px-4 rounded-lg text-sm font-medium capitalize transition-all ${formData.userType === type
+                      ? "bg-gradient-to-r from-emerald-400 to-green-500 text-black shadow-lg"
+                      : "bg-gray-800/50 text-gray-400 hover:bg-gray-800 border border-gray-700/50"
+                      }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Full Name Input */}
+            <div>
+              <label className="text-gray-300 text-sm font-medium mb-2 block">
                 Full Name
               </label>
               <div className="relative">
-                <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                 <input
                   type="text"
                   name="fullName"
@@ -158,18 +167,18 @@ const SignUp = () => {
                   value={formData.fullName}
                   onChange={handleChange}
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white placeholder-gray-500 transition-all"
+                  className="w-full pl-12 pr-4 py-3.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
               </div>
             </div>
 
-            {/* Email */}
+            {/* Email Input */}
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">
+              <label className="text-gray-300 text-sm font-medium mb-2 block">
                 Email Address
               </label>
               <div className="relative">
-                <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                 <input
                   type="email"
                   name="email"
@@ -177,119 +186,87 @@ const SignUp = () => {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white placeholder-gray-500 transition-all"
+                  className="w-full pl-12 pr-4 py-3.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
               </div>
             </div>
 
-            {/* Password */}
+            {/* Password Input */}
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">
+              <label className="text-gray-300 text-sm font-medium mb-2 block">
                 Password
               </label>
               <div className="relative">
-                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                 <input
                   type={showPassword ? "text" : "password"}
                   name="password"
-                  placeholder="••••••••"
+                  placeholder="Create a strong password"
                   value={formData.password}
                   onChange={handleChange}
                   required
                   minLength={8}
-                  className="w-full pl-10 pr-12 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white placeholder-gray-500 transition-all"
+                  className="w-full pl-12 pr-12 py-3.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-400 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-emerald-400 transition-colors"
                 >
-                  {showPassword ? <FiEyeOff /> : <FiEye />}
+                  {showPassword ? <FiEyeOff className="w-5 h-5" /> : <FiEye className="w-5 h-5" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-1.5">
                 Must be at least 8 characters
               </p>
             </div>
 
-            {/* Confirm Password */}
+            {/* Confirm Password Input */}
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">
+              <label className="text-gray-300 text-sm font-medium mb-2 block">
                 Confirm Password
               </label>
               <div className="relative">
-                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   name="confirmPassword"
-                  placeholder="••••••••"
+                  placeholder="Confirm your password"
                   value={formData.confirmPassword}
                   onChange={handleConfirmPasswordChange}
                   required
-                  className={`w-full pl-10 pr-12 py-3 bg-emerald-500/5 border rounded-lg focus:outline-none text-white placeholder-gray-500 transition-all ${!passwordMatch
-                    ? "border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-                    : "border-emerald-500/20 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
+                  className={`w-full pl-12 pr-12 py-3.5 rounded-xl text-white placeholder:text-gray-500 focus:outline-none transition-all ${!passwordMatch
+                    ? "bg-red-500/5 border border-red-500/50 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                    : "bg-gray-800/50 border border-gray-700/50 focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20"
                     }`}
                 />
                 <button
                   type="button"
-                  onClick={() =>
-                    setShowConfirmPassword(!showConfirmPassword)
-                  }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-emerald-400 transition-colors"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-emerald-400 transition-colors"
                 >
-                  {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                  {showConfirmPassword ? <FiEyeOff className="w-5 h-5" /> : <FiEye className="w-5 h-5" />}
                 </button>
-                {formData.confirmPassword && passwordMatch && (
-                  <FiCheckCircle className="absolute right-10 top-1/2 -translate-y-1/2 text-emerald-400 w-5 h-5" />
+                {formData.confirmPassword && passwordMatch && formData.confirmPassword.length >= 8 && (
+                  <FiCheckCircle className="absolute right-12 top-1/2 -translate-y-1/2 text-emerald-400 w-5 h-5" />
                 )}
               </div>
               {!passwordMatch && formData.confirmPassword && (
-                <p className="text-xs text-red-400 mt-1">
+                <p className="text-xs text-red-400 mt-1.5">
                   Passwords do not match
                 </p>
               )}
             </div>
 
-            {/* User Type Dropdown */}
-            <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">
-                I am a
-              </label>
-              <div className="relative">
-                <FiUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none z-10" />
-                <select
-                  name="userType"
-                  value={formData.userType}
-                  onChange={handleChange}
-                  required
-                  className="w-full pl-10 pr-4 py-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white transition-all appearance-none cursor-pointer"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2334d399' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "right 0.75rem center",
-                    backgroundSize: "1.25rem",
-                  }}
-                >
-                  <option value="student" className="bg-gray-900 text-white">
-                    Student
-                  </option>
-                  <option value="teacher" className="bg-gray-900 text-white">
-                    Teacher
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            {/* Terms */}
-            <div className="flex items-start space-x-2 pt-2">
+            {/* Terms Checkbox */}
+            <div className="flex items-start space-x-3 pt-1">
               <input
                 type="checkbox"
                 id="terms"
                 required
-                className="mt-1 w-4 h-4 rounded border-emerald-500/30 bg-emerald-500/5 text-emerald-500 focus:ring-emerald-400 focus:ring-2 cursor-pointer"
+                className="mt-0.5 w-4 h-4 rounded border-gray-700 bg-gray-800/50 text-emerald-500 focus:ring-emerald-500 focus:ring-2 cursor-pointer"
               />
-              <label htmlFor="terms" className="text-sm text-gray-400">
+              <label htmlFor="terms" className="text-xs text-gray-400 leading-relaxed">
                 I agree to the{" "}
                 <Link
                   to="/terms"
@@ -307,55 +284,58 @@ const SignUp = () => {
               </label>
             </div>
 
-            {/* Submit */}
-            <motion.button
-              whileHover={{
-                scale: 1.02,
-                boxShadow: "0 0 30px rgba(52, 211, 153, 0.5)",
-              }}
-              whileTap={{ scale: 0.98 }}
+            {/* Submit Button */}
+            <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-emerald-400 to-green-500 text-black font-bold rounded-lg shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all disabled:opacity-50"
+              className="w-full py-3.5 bg-gradient-to-r from-emerald-400 to-green-500 text-black font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 group"
             >
-              {loading ? "Creating Account..." : "Create Account"}
-            </motion.button>
+              <span>{loading ? "Creating Account..." : "Create Account"}</span>
+              {!loading && (
+                <FiArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              )}
+            </button>
           </form>
 
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700/50"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-gray-900/40 text-gray-500">or</span>
+            </div>
+          </div>
+
           {/* Footer Links */}
-          <div className="mt-6 text-center space-y-3">
-            <p className="text-sm text-gray-400">
+          <div className="space-y-3 text-center">
+            <p className="text-gray-400 text-sm">
               Already have an account?{" "}
               <Link
                 to="/login"
-                className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors"
+                className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
               >
                 Sign In
               </Link>
             </p>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-emerald-500/10"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-3 bg-gradient-to-br from-emerald-500/5 to-green-500/10 text-gray-500">
-                  or
-                </span>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-400">
+            <p className="text-gray-400 text-sm">
               Registering as an institution?{" "}
               <Link
                 to="/institute-signup"
-                className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors inline-flex items-center"
+                className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors inline-flex items-center gap-1"
               >
-                Click here <FaLongArrowAltRight className="ml-1" />
+                Click here
+                <FiArrowRight className="w-3.5 h-3.5" />
               </Link>
             </p>
           </div>
         </div>
+
+        {/* Footer Note */}
+        <p className="text-center text-gray-600 text-xs mt-6">
+          Protected by enterprise-grade security
+        </p>
       </motion.div>
     </div>
   );
