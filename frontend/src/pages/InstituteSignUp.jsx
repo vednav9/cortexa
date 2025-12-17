@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
@@ -44,6 +44,7 @@ const institutionTypes = [
   "Other",
 ];
 
+
 const InstituteSignUp = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
@@ -51,6 +52,8 @@ const InstituteSignUp = () => {
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
+  const [logoFile, setLogoFile] = useState(null);
+
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -86,6 +89,15 @@ const InstituteSignUp = () => {
       [name]: type === "checkbox" ? checked : value,
     }));
   };
+
+  //handle logo file change
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setLogoFile(file);
+    }
+  };
+
 
   // Handle confirm password change
   const handleConfirmPasswordChange = (e) => {
@@ -181,12 +193,12 @@ const InstituteSignUp = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (currentStep !== 3) {
-      return;
-    }
+    // Only allow submit on last step
+    if (currentStep !== 3) return;
 
     setError("");
 
+    // Password match check
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match!");
       return;
@@ -195,29 +207,68 @@ const InstituteSignUp = () => {
     try {
       setLoading(true);
 
+      // 🔹 Create FormData
+      const formPayload = new FormData();
+
+      // 🔹 Append all text fields
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key !== "confirmPassword") {
+          formPayload.append(key, value);
+        }
+      });
+
+
+      // 🔹 Append logo if selected
+      if (logoFile) {
+        formPayload.append("logo", logoFile);
+      }
+
+      // 🔹 API call (IMPORTANT: store response)
       const response = await axios.post(
         "http://localhost:5000/api/admin/register",
-        formData,
+        formPayload,
         {
-          headers: { "Content-Type": "application/json" },
+          withCredentials: true,
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         }
       );
 
+      // ✅ Success
       if (response.status === 201 || response.status === 200) {
-        alert("Institution registered successfully! Please login with your credentials.");
+        alert(
+          "Institution registered successfully! Please login with your credentials."
+        );
         navigate("/login");
       }
     } catch (error) {
       console.error("❌ Signup failed:", error);
-      const errorMsg = error.response?.data?.message ||
+
+      const errorMsg =
+        error.response?.data?.message ||
         error.response?.data?.error ||
         "Something went wrong during registration.";
+
       setError(errorMsg);
       alert(errorMsg);
     } finally {
       setLoading(false);
     }
   };
+
+  //logo
+  const logoPreview = logoFile ? URL.createObjectURL(logoFile) : null;
+  useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
+
+
+
+
+
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4 py-20 relative overflow-hidden">
@@ -691,13 +742,24 @@ const InstituteSignUp = () => {
                     <label className="text-gray-300 text-sm font-medium mb-2 block">
                       Institution Logo (Optional)
                     </label>
-                    <div className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center hover:border-emerald-500/50 transition-colors cursor-pointer bg-gray-800/20">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoChange}
+                      className="hidden"
+                      id="logoUpload"
+                    />
+
+                    <label
+                      htmlFor="logoUpload"
+                      className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center hover:border-emerald-500/50 transition-colors cursor-pointer bg-gray-800/20 block"
+                    >
                       <FiImage className="w-12 h-12 text-gray-500 mx-auto mb-3" />
                       <p className="text-gray-400 text-sm">
-                        Click to upload logo
+                        {logoFile ? logoFile.name : "Click to upload logo"}
                       </p>
-                      <p className="text-gray-600 text-xs mt-1">(Coming soon)</p>
-                    </div>
+                    </label>
+
                   </div>
 
                   {/* Preview */}
@@ -707,11 +769,20 @@ const InstituteSignUp = () => {
                     </h3>
                     <div className="flex items-center gap-4">
                       <div
-                        className="w-16 h-16 rounded-xl flex items-center justify-center shadow-lg"
+                        className="w-16 h-16 rounded-xl flex items-center justify-center shadow-lg overflow-hidden"
                         style={{ backgroundColor: formData.brandColor }}
                       >
-                        <HiSparkles className="w-8 h-8 text-white" />
+                        {logoPreview ? (
+                          <img
+                            src={logoPreview}
+                            alt="Institution Logo Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <HiSparkles className="w-8 h-8 text-white" />
+                        )}
                       </div>
+
                       <div>
                         <p className="text-white font-semibold text-lg">
                           {formData.institutionName || "Your Institution"}
