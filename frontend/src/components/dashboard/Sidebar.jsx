@@ -125,11 +125,12 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
       {/* Sidebar */}
       <aside
         className={`
-          w-80 bg-white border-r shadow-xl lg:shadow-none
-          overflow-y-auto transition-transform duration-300
-          fixed lg:relative inset-y-0 left-0 z-50
-          ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-        `}
+    w-80 bg-white border-r shadow-xl
+    fixed inset-y-0 left-0 z-50
+    h-screen flex flex-col
+    transition-transform duration-300
+    ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+  `}
         style={{
           borderRightColor: `${brandColor}20`,
           borderRightWidth: "2px",
@@ -163,7 +164,7 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
         </div>
 
         {/* Menu */}
-        <nav className="p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {filteredMenuItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
@@ -214,24 +215,7 @@ export default function Sidebar({ isOpen, onClose, isInstitution = false }) {
           })}
         </nav>
 
-        {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50">
-          <div
-            className="flex items-center space-x-3 px-4 py-3 rounded-xl"
-            style={{ backgroundColor: `${brandColor}08` }}
-          >
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-              style={{ backgroundColor: brandColor }}
-            >
-              {user?.fullName?.charAt(0) || "U"}
-            </div>
-            <div>
-              <p className="font-semibold text-sm">{user?.fullName}</p>
-              <p className="text-xs text-gray-500 capitalize">{userRole}</p>
-            </div>
-          </div>
-        </div>
+
       </aside>
 
       {/* AI Chat */}
