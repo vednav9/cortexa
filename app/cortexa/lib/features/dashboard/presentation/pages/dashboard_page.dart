@@ -66,7 +66,7 @@ class DashboardPage extends StatelessWidget {
                         width: 100,
                         height: 100,
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.2),
+                          color: AppColors.primary.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -101,7 +101,7 @@ class DashboardPage extends StatelessWidget {
                           color: AppColors.cardBackground,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppColors.borderDark.withOpacity(0.3),
+                            color: AppColors.borderDark.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Column(

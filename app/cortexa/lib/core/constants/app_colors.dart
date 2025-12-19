@@ -63,6 +63,6 @@ class AppColors {
   static const Color glow = Color(0x4D10B981); // 30% opacity emerald
   
   // Shadow Colors
-  static Color shadow = const Color(0xFF000000).withOpacity(0.3);
-  static Color shadowLight = const Color(0xFF000000).withOpacity(0.1);
+  static Color shadow = const Color(0xFF000000).withValues(alpha: 0.3);
+  static Color shadowLight = const Color(0xFF000000).withValues(alpha: 0.1);
 }
