@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -61,7 +61,13 @@ class _LoginPageState extends State<LoginPage> {
               ),
             );
           } else if (state is AuthAuthenticated) {
-            context.go('/dashboard');
+            // Navigate to role-specific dashboard
+            final userRole = state.user.role.toLowerCase();
+            if (userRole == 'admin') {
+              context.go('/admin-dashboard');
+            } else {
+              context.go('/user-dashboard');
+            }
           }
         },
         builder: (context, state) {
@@ -96,7 +102,7 @@ class _LoginPageState extends State<LoginPage> {
                                 borderRadius: BorderRadius.circular(screenWidth * 0.045),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary.withOpacity(0.5),
+                                    color: AppColors.primary.withValues(alpha: 0.5),
                                     blurRadius: 20,
                                     spreadRadius: 2,
                                   ),
@@ -204,7 +210,7 @@ class _LoginPageState extends State<LoginPage> {
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.primary.withOpacity(0.1),
+                                  color: AppColors.primary.withValues(alpha: 0.1),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -212,10 +218,10 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0F2A1F).withOpacity(0.6),
+                                color: const Color(0xFF0F2A1F).withValues(alpha: 0.6),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: AppColors.primary.withOpacity(0.2),
+                                  color: AppColors.primary.withValues(alpha: 0.2),
                                   width: 1.5,
                                 ),
                               ),
@@ -272,7 +278,7 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withOpacity(0.4),
+                              color: AppColors.primary.withValues(alpha: 0.4),
                               blurRadius: 20,
                               spreadRadius: 0,
                               offset: const Offset(0, 4),
