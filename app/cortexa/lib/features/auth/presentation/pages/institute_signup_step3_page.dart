@@ -257,7 +257,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                         decoration: BoxDecoration(
                           color: AppColors.cardBackground,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.borderDark.withOpacity(0.3)),
+                          border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -265,7 +265,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                               width: 60,
                               height: 60,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.2),
+                                color: AppColors.primary.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(8),
                                 image: _logoFile != null
                                     ? DecorationImage(
@@ -339,7 +339,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                         decoration: BoxDecoration(
                           color: AppColors.cardBackground,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.borderDark.withOpacity(0.3)),
+                          border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -400,7 +400,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                     decoration: BoxDecoration(
                       color: AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.borderDark.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

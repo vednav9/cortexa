@@ -262,7 +262,7 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                       decoration: BoxDecoration(
                         color: AppColors.cardBackground,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.borderDark.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
                       ),
                       child: DropdownButtonFormField<JobTitle>(
                         value: _selectedJobTitle,

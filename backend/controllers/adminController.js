@@ -25,11 +25,11 @@ export const registerAdmin = async (req, res) => {
       brandColor,
     } = req.body;
 
-    console.log("📝 Registration attempt for:", email);
+    // console.log("📝 Registration attempt for:", email);
 
     // Validate required fields
     if (!fullName || !email || !password) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Missing required fields",
         details: {
           fullName: !fullName ? "required" : "ok",
@@ -43,15 +43,11 @@ export const registerAdmin = async (req, res) => {
     const existing = await Admin.findOne({ email });
     if (existing) {
       console.log("❌ Email already exists:", email);
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Admin already exists with this email.",
-        email: email 
+        email: email
       });
     }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("🔒 Password hashed successfully");
 
     // Handle logo upload (optional)
     let logo = "";
@@ -63,7 +59,7 @@ export const registerAdmin = async (req, res) => {
     const newAdmin = new Admin({
       fullName,
       email,
-      password: hashedPassword,
+      password,
       jobTitle,
       phone,
       authorized,
@@ -97,8 +93,8 @@ export const registerAdmin = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Admin Registration Error:", error);
-    res.status(500).json({ 
-      message: "Server error during registration", 
+    res.status(500).json({
+      message: "Server error during registration",
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -110,12 +106,12 @@ export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log("🔐 Login attempt for:", email);
-    
+    // console.log("🔐 Login attempt for:", email);
+
     // Validate input
     if (!email || !password) {
       console.log("❌ Missing credentials");
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "Email and password are required",
         details: {
           email: !email ? "missing" : "provided",
@@ -126,51 +122,51 @@ export const loginAdmin = async (req, res) => {
 
     // ✅ CRITICAL: Must use .select('+password') because schema has select: false
     const admin = await Admin.findOne({ email }).select('+password');
-    
+
     if (!admin) {
       console.log("❌ No admin found with email:", email);
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: "No account found with this email",
         email: email
       });
     }
 
-    console.log("✅ Admin found:", {
-      id: admin._id,
-      email: admin.email,
-      hasPassword: !!admin.password,
-      passwordLength: admin.password ? admin.password.length : 0,
-      jobTitle: admin.jobTitle,
-      institutionName: admin.institutionName
-    });
+    // console.log("✅ Admin found:", {
+    //   id: admin._id,
+    //   email: admin.email,
+    //   hasPassword: !!admin.password,
+    //   passwordLength: admin.password ? admin.password.length : 0,
+    //   jobTitle: admin.jobTitle,
+    //   institutionName: admin.institutionName
+    // });
 
     // Check if password exists
     if (!admin.password) {
       console.log("❌ Password field is undefined in database");
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Account configuration error. Please contact support.",
         debug: "Password field missing from database"
       });
     }
 
     // Compare passwords
-    console.log("🔍 Comparing passwords...");
+    // console.log("🔍 Comparing passwords...");
     const isMatch = await bcrypt.compare(password, admin.password);
-    
+
     if (!isMatch) {
       console.log("❌ Password mismatch for:", email);
-      return res.status(401).json({ 
+      return res.status(401).json({
         message: "Incorrect password",
         hint: "Please check your password and try again"
       });
     }
 
-    console.log("✅ Password matched!");
+    // console.log("✅ Password matched!");
 
     // Check JWT_SECRET
     if (!process.env.JWT_SECRET) {
       console.error("❌ JWT_SECRET not found in environment variables");
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: "Server configuration error",
         debug: "JWT_SECRET not configured"
       });
@@ -178,8 +174,8 @@ export const loginAdmin = async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { 
-        id: admin._id, 
+      {
+        id: admin._id,
         email: admin.email,
         role: admin.role || 'admin'
       },
@@ -187,7 +183,7 @@ export const loginAdmin = async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    console.log("🎫 JWT token generated");
+    // console.log("🎫 JWT token generated");
 
     // Set HTTP-only cookie
     res.cookie("token", token, {
@@ -198,7 +194,7 @@ export const loginAdmin = async (req, res) => {
       path: "/",
     });
 
-    console.log("🍪 Cookie set successfully");
+    // console.log("🍪 Cookie set successfully");
 
     res.status(200).json({
       success: true,
@@ -218,8 +214,8 @@ export const loginAdmin = async (req, res) => {
 
   } catch (error) {
     console.error("❌ Admin Login Error:", error);
-    res.status(500).json({ 
-      message: "Server error during login", 
+    res.status(500).json({
+      message: "Server error during login",
       error: error.message,
       type: error.name,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -231,7 +227,7 @@ export const loginAdmin = async (req, res) => {
 export const logoutAdmin = (req, res) => {
   try {
     console.log("👋 Logout request");
-    
+
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -255,8 +251,8 @@ export const logoutAdmin = (req, res) => {
     });
   } catch (error) {
     console.error("❌ Logout error:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Error during logout",
       error: error.message
     });
@@ -269,19 +265,19 @@ export const getAdminProfile = async (req, res) => {
     console.log("👤 Profile request for user ID:", req.user?.id);
 
     if (!req.user || !req.user.id) {
-      return res.status(401).json({ 
-        success: false, 
+      return res.status(401).json({
+        success: false,
         message: "Authentication required",
         debug: "req.user not set by middleware"
       });
     }
 
     const admin = await Admin.findById(req.user.id).select("-password");
-    
+
     if (!admin) {
       console.log("❌ Admin not found with ID:", req.user.id);
-      return res.status(404).json({ 
-        success: false, 
+      return res.status(404).json({
+        success: false,
         message: "Admin profile not found",
         userId: req.user.id
       });
@@ -295,8 +291,8 @@ export const getAdminProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Profile fetch error:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Error fetching profile",
       error: error.message
     });
