@@ -33,8 +33,9 @@ export const registerTeacher = async (req, res) => {
             secure: process.env.NODE_ENV === "production",
             sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
             path: "/",
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            maxAge: 7 * 24 * 60 * 60 * 1000,
         });
+
 
         res.status(201).json({
             success: true,
@@ -84,6 +85,7 @@ export const loginTeacher = async (req, res) => {
             path: "/",
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
+
 
         res.status(200).json({
             success: true,
