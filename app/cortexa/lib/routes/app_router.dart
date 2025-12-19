@@ -8,10 +8,6 @@ import '../features/auth/presentation/pages/institute_signup_step1_page.dart';
 import '../features/auth/presentation/pages/institute_signup_step2_page.dart';
 import '../features/auth/presentation/pages/institute_signup_step3_page.dart';
 import '../features/dashboard/presentation/pages/dashboard_page.dart';
-import '../features/dashboard/presentation/pages/admin_dashboard_page.dart';
-import '../features/dashboard/presentation/pages/user_dashboard_page.dart';
-import '../features/dashboard/presentation/pages/institution_detail_page.dart';
-import '../features/dashboard/data/models/institution_display_model.dart';
 import '../features/admin/data/models/institution_model.dart';
 
 class AppRouter {
@@ -77,35 +73,11 @@ class AppRouter {
         },
       ),
       
-      // Dashboard route (legacy - redirects to role-specific dashboard)
+      // Dashboard route
       GoRoute(
         path: '/dashboard',
         name: 'dashboard',
         builder: (context, state) => const DashboardPage(),
-      ),
-      
-      // Admin Dashboard (for admins)
-      GoRoute(
-        path: '/admin-dashboard',
-        name: 'admin-dashboard',
-        builder: (context, state) => const AdminDashboardPage(),
-      ),
-      
-      // User Dashboard (for teachers and students)
-      GoRoute(
-        path: '/user-dashboard',
-        name: 'user-dashboard',
-        builder: (context, state) => const UserDashboardPage(),
-      ),
-      
-      // Institution Detail Page
-      GoRoute(
-        path: '/institution/:id',
-        name: 'institution-detail',
-        builder: (context, state) {
-          final institution = state.extra as InstitutionDisplayModel;
-          return InstitutionDetailPage(institution: institution);
-        },
       ),
     ],
     

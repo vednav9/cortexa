@@ -1,314 +1,170 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/providers/app_state_provider.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 
-/// Main splash page that handles routing after animation
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
-
+  
   @override
   State<SplashPage> createState() => _SplashPageState();
 }
 
 class _SplashPageState extends State<SplashPage> {
+  bool _hasNavigated = false;
+  
   @override
   void initState() {
     super.initState();
-    // Check authentication status when splash page loads
-    context.read<AuthBloc>().add(const CheckAuthStatus());
+    _initializeApp();
   }
-
-  void _navigateBasedOnState(AuthState state) {
+  
+  Future<void> _initializeApp() async {
+    // Small delay for splash screen visibility
+    await Future.delayed(const Duration(milliseconds: 500));
+    
     if (!mounted) return;
-
-    if (state is AuthAuthenticated) {
-      // Navigate based on user role
-      final userRole = state.user.role.toLowerCase();
-      if (userRole == 'admin') {
-        context.go('/admin-dashboard');
-      } else {
-        context.go('/user-dashboard');
-      }
+    
+    final appState = context.read<AppStateProvider>();
+    
+    if (!appState.isInitialized) {
+      // First time launch - check auth
+      print('🚀 First launch - checking auth status');
+      context.read<AuthBloc>().add(const CheckAuthStatus());
     } else {
-      // Not authenticated, go to login
-      context.go('/login');
+      // App resumed - use cached state
+      print('🔄 App resumed - cached state: ${appState.isAuthenticated}');
+      _navigateBasedOnState(appState.isAuthenticated);
     }
   }
-
+  
+  void _navigateBasedOnState(bool isAuthenticated) {
+    if (_hasNavigated || !mounted) return;
+    
+    setState(() {
+      _hasNavigated = true;
+    });
+    
+    // Navigate after current frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      
+      if (isAuthenticated) {
+        print('✅ Navigating to dashboard');
+        context.go('/dashboard');
+      } else {
+        print('❌ Navigating to login');
+        context.go('/login');
+      }
+    });
+  }
+  
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
-        // Don't navigate immediately, let animation complete first
+        if (state is AuthAuthenticated) {
+          _navigateBasedOnState(true);
+        } else if (state is AuthUnauthenticated || state is AuthError) {
+          _navigateBasedOnState(false);
+        }
       },
-      child: CortexaSplashScreen(
-        onAnimationComplete: () {
-          // Navigate based on current auth state after animation completes
-          final currentState = context.read<AuthBloc>().state;
-          _navigateBasedOnState(currentState);
-        },
-      ),
-    );
-  }
-}
-
-/// Animated splash screen widget
-class CortexaSplashScreen extends StatefulWidget {
-  final VoidCallback onAnimationComplete;
-
-  const CortexaSplashScreen({super.key, required this.onAnimationComplete});
-
-  @override
-  State<CortexaSplashScreen> createState() => _CortexaSplashScreenState();
-}
-
-class _CortexaSplashScreenState extends State<CortexaSplashScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  // // Controls the fade-in of the final Logo
-  // late Animation<double> _logoOpacity;
-  // // Controls the fade-out of the particles
-  // late Animation<double> _particleOpacity;
-
-  @override
-  void initState() {
-    super.initState();
-    // Hide status bar for full immersion
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
-
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    );
-
-    // Particles fade out sharply at 3.0s - 3.5s
-    // _particleOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
-    //   CurvedAnimation(
-    //     parent: _controller,
-    //     curve: const Interval(0.75, 0.85, curve: Curves.easeOut),
-    //   ),
-    // );
-
-    // // Logo fades in at 3.2s - 4.0s
-    // _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-    //   CurvedAnimation(
-    //     parent: _controller,
-    //     curve: const Interval(0.8, 1.0, curve: Curves.easeIn),
-    //   ),
-    // );
-
-    _controller.forward().whenComplete(() {
-      widget.onAnimationComplete();
-    });
-  }
-
-  @override
-  void dispose() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0A3D2C), // AppColors.backgroundGreen
-              Color(0xFF0D1F1A), // AppColors.backgroundDark
-            ],
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: AppColors.backgroundGradient,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo with animation
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 600),
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Opacity(
+                        opacity: value,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3 * value),
+                                blurRadius: 30,
+                                spreadRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.school_rounded,
+                            color: Colors.white,
+                            size: 60,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                
+                // App name
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 800),
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Text(
+                        'Cortexa',
+                        style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                
+                // Tagline
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 1000),
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Text(
+                        'AI-Powered Educational Hub',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 40),
+                
+                // Loading indicator
+                const CircularProgressIndicator(
+                  color: AppColors.primary,
+                  strokeWidth: 3,
+                ),
+              ],
+            ),
           ),
         ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Single clean particle layer - no overlap
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                // Particles only visible from 0.0 to 0.625 (0-2.5s)
-                // Complete fade out from 0.625 to 0.75 (2.5s-3.0s)
-                double particleOpacity = 0.0;
-                if (_controller.value < 0.625) {
-                  particleOpacity = 1.0;
-                } else if (_controller.value < 0.75) {
-                  particleOpacity = 1.0 - ((_controller.value - 0.625) / 0.125);
-                }
-                
-                return Opacity(
-                  opacity: particleOpacity,
-                  child: CustomPaint(
-                    painter: DataStreamPainter(
-                      progress: _controller.value,
-                      colorPalette: [
-                        const Color(0xFF10B981), // AppColors.primary
-                        const Color(0xFF34D399), // AppColors.primaryLight
-                      ],
-                      particleStyle: ParticleStyle.trail,
-                      particleCount: 150,
-                    ),
-                    size: Size.infinite,
-                  ),
-                );
-              },
-            ),
-
-            // Logo - only visible after particles are completely gone
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                // Logo fades in from 0.75 to 1.0 (3.0s-4.0s)
-                double logoOpacity = 0.0;
-                if (_controller.value > 0.75) {
-                  logoOpacity = (_controller.value - 0.75) / 0.25;
-                }
-                
-                return Opacity(
-                  opacity: logoOpacity,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Logo Icon
-                        const Icon(
-                          Icons.school_rounded,
-                          size: 100,
-                          color: Color(0xFF10B981), // AppColors.primary
-                        ),
-                        const SizedBox(height: 24),
-                        // Brand Name
-                        ShaderMask(
-                          shaderCallback: (bounds) => const LinearGradient(
-                            colors: [
-                              Color(0xFF10B981), // AppColors.primary
-                              Color(0xFF34D399), // AppColors.primaryLight
-                            ],
-                          ).createShader(bounds),
-                          child: const Text(
-                            "CORTEXA",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 42,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 8.0,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        // Subtitle
-                        const Text(
-                          "Education Reimagined",
-                          style: TextStyle(
-                            color: Color(0xFF34D399), // AppColors.primaryLight
-                            fontSize: 14,
-                            letterSpacing: 2.0,
-                            fontWeight: FontWeight.w300,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
       ),
     );
-  }
-}
-
-// -----------------------------------------------------------
-// Custom Painter Logic - Simple and Clean
-// -----------------------------------------------------------
-
-enum ParticleStyle { trail, glow, spark }
-
-class DataStreamPainter extends CustomPainter {
-  final double progress;
-  final List<Color> colorPalette;
-  final ParticleStyle particleStyle;
-  final int particleCount;
-  
-  static final Map<int, List<Particle>> _particleCache = {};
-
-  DataStreamPainter({
-    required this.progress,
-    required this.colorPalette,
-    this.particleStyle = ParticleStyle.trail,
-    this.particleCount = 150,
-  }) {
-    _particleCache[particleCount] ??= List.generate(
-      particleCount,
-      (index) => Particle(colorPalette),
-    );
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final maxRadius = math.sqrt(size.width * size.width + size.height * size.height) / 1.5;
-    final particles = _particleCache[particleCount]!;
-
-    for (var p in particles) {
-      double t = (progress * p.speedMultiplier).clamp(0.0, 1.0);
-      
-      if (t >= 1.0) continue;
-
-      // Smooth easing with acceleration
-      double currentRadius = maxRadius * math.pow(1 - t, 2.5);
-
-      // Gentle spiral motion
-      double spiralOffset = progress * math.pi * 1.5;
-      double currentAngle = p.initialAngle + spiralOffset;
-
-      double x = center.dx + currentRadius * math.cos(currentAngle);
-      double y = center.dy + currentRadius * math.sin(currentAngle);
-
-      double intensity = (1.0 - t).clamp(0.0, 1.0);
-
-      // Simple particle rendering
-      final paint = Paint()
-        ..color = p.color.withValues(alpha: intensity * 0.8)
-        ..style = PaintingStyle.fill;
-      
-      canvas.drawCircle(Offset(x, y), p.size, paint);
-      
-      // Subtle glow
-      final glowPaint = Paint()
-        ..color = p.color.withValues(alpha: intensity * 0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      
-      canvas.drawCircle(Offset(x, y), p.size * 2, glowPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant DataStreamPainter oldDelegate) {
-    return oldDelegate.progress != progress;
-  }
-}
-
-class Particle {
-  late double initialAngle;
-  late double speedMultiplier;
-  late double size;
-  late Color color;
-
-  Particle(List<Color> palette) {
-    final random = math.Random();
-    initialAngle = random.nextDouble() * 2 * math.pi;
-    speedMultiplier = 0.85 + random.nextDouble() * 0.3; // Consistent speed
-    size = 2.0 + random.nextDouble() * 1.5; // Uniform size
-    color = palette[random.nextInt(palette.length)];
   }
 }
