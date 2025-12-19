@@ -162,7 +162,7 @@ class _InstituteSignupStep2PageState extends State<InstituteSignupStep2Page> {
                       decoration: BoxDecoration(
                         color: AppColors.cardBackground,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.borderDark.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
                       ),
                       child: DropdownButtonFormField<InstitutionType>(
                         value: _selectedType,
