@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -80,7 +80,13 @@ class _SignupPageState extends State<SignupPage> {
               ),
             );
           } else if (state is AuthAuthenticated) {
-            context.go('/dashboard');
+            // Navigate to role-specific dashboard
+            final userRole = state.user.role.toLowerCase();
+            if (userRole == 'admin') {
+              context.go('/admin-dashboard');
+            } else {
+              context.go('/user-dashboard');
+            }
           }
         },
         builder: (context, state) {
@@ -108,7 +114,7 @@ class _SignupPageState extends State<SignupPage> {
                           borderRadius: BorderRadius.circular(screenWidth * 0.04),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withOpacity(0.5),
+                              color: AppColors.primary.withValues(alpha: 0.5),
                               blurRadius: 20,
                               spreadRadius: 2,
                             ),
@@ -196,7 +202,7 @@ class _SignupPageState extends State<SignupPage> {
                       child: Text(
                         'Must be at least 8 characters',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textTertiary.withOpacity(0.7),
+                              color: AppColors.textTertiary.withValues(alpha: 0.7),
                             ),
                       ),
                     ),
@@ -234,7 +240,7 @@ class _SignupPageState extends State<SignupPage> {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withOpacity(0.1),
+                                color: AppColors.primary.withValues(alpha: 0.1),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               ),
@@ -242,9 +248,9 @@ class _SignupPageState extends State<SignupPage> {
                           ),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F2A1F).withOpacity(0.6),
+                              color: const Color(0xFF0F2A1F).withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 1.5),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2), width: 1.5),
                             ),
                             child: DropdownButtonFormField<UserRole>(
                               value: _selectedRole,
@@ -281,7 +287,7 @@ class _SignupPageState extends State<SignupPage> {
                           onChanged: (value) => setState(() => _agreeToTerms = value ?? false),
                           activeColor: AppColors.primary,
                           checkColor: Colors.white,
-                          side: BorderSide(color: AppColors.primary.withOpacity(0.5), width: 2),
+                          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5), width: 2),
                         ),
                         Expanded(
                           child: Padding(
@@ -326,7 +332,7 @@ class _SignupPageState extends State<SignupPage> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withOpacity(0.4),
+                            color: AppColors.primary.withValues(alpha: 0.4),
                             blurRadius: 20,
                             offset: const Offset(0, 4),
                           ),
@@ -363,7 +369,7 @@ class _SignupPageState extends State<SignupPage> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5),
+                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: RichText(
