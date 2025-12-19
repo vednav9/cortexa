@@ -65,11 +65,10 @@ const AdminDashboard = () => {
                   whileHover={{ scale: 1.02, x: 5 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setSelectedFeature(feature.id)}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl transition-all ${
-                    selectedFeature === feature.id
+                  className={`w-full flex items-center justify-between p-4 rounded-xl transition-all ${selectedFeature === feature.id
                       ? 'bg-emerald-50 border-2 border-emerald-200'
                       : 'bg-white border border-emerald-100 hover:bg-emerald-50'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center space-x-3">
                     <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${feature.color} flex items-center justify-center`}>
@@ -135,16 +134,14 @@ const AdminDashboard = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative py-4 px-2 font-medium transition-colors flex items-center space-x-2 ${
-                    activeTab === tab.id ? 'text-emerald-600' : 'text-gray-600 hover:text-emerald-600'
-                  }`}
+                  className={`relative py-4 px-2 font-medium transition-colors flex items-center space-x-2 ${activeTab === tab.id ? 'text-emerald-600' : 'text-gray-600 hover:text-emerald-600'
+                    }`}
                 >
                   {tab.icon && <tab.icon className="w-5 h-5" />}
                   <span>{tab.label}</span>
                   {tab.count !== undefined && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      activeTab === tab.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
                       {tab.count}
                     </span>
                   )}
@@ -239,11 +236,10 @@ const UserCard = ({ user, onDelete }) => {
             <FiUser className="w-3 h-3" />
             <span>{user.role}</span>
           </span>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-            user.status === 'active' 
-              ? 'bg-green-50 text-green-600' 
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${user.status === 'active'
+              ? 'bg-green-50 text-green-600'
               : 'bg-gray-100 text-gray-600'
-          }`}>
+            }`}>
             {user.status}
           </span>
         </div>
