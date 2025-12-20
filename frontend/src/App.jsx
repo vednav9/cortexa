@@ -35,29 +35,25 @@ function InstitutionLayout({ children, institution, institutionSlug }) {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <Navbar />
-      
       <div className="flex flex-1">
-        <Sidebar 
-          isOpen={sidebarOpen} 
-          onClose={() => setSidebarOpen(false)} 
-          isInstitution={true} 
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          isInstitution={true}
         />
-        
+
         <div className="flex-1 flex flex-col">
-          <InstitutionNavbar 
-            institution={institution} 
+          <InstitutionNavbar
+            institution={institution}
             institutionSlug={institutionSlug}
-            onMenuClick={() => setSidebarOpen(true)} 
+            onMenuClick={() => setSidebarOpen(true)}
           />
-          
+
           <main className="flex-1 overflow-y-auto">
             {children}
           </main>
         </div>
       </div>
-      
-      <Footer />
     </div>
   );
 }
@@ -78,8 +74,11 @@ function InstitutionRouter() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-emerald-400 text-xl">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -91,29 +90,29 @@ function InstitutionRouter() {
   return (
     <InstitutionContext.Provider value={{ institution }}>
       <Routes>
-        <Route 
-          path="/" 
+        <Route
+          path="/"
           element={
             <InstitutionLayout institution={institution} institutionSlug={institutionSlug}>
               <InstitutionHome />
             </InstitutionLayout>
-          } 
+          }
         />
-        <Route 
-          path="/courses" 
+        <Route
+          path="/courses"
           element={
             <InstitutionLayout institution={institution} institutionSlug={institutionSlug}>
               <CourseCatalog />
             </InstitutionLayout>
-          } 
+          }
         />
-        <Route 
-          path="/courses/:courseId" 
+        <Route
+          path="/courses/:courseId"
           element={
             <InstitutionLayout institution={institution} institutionSlug={institutionSlug}>
               <CourseDetails />
             </InstitutionLayout>
-          } 
+          }
         />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Routes>
@@ -130,21 +129,24 @@ function App() {
   return (
     <AuthContext.Provider value={{ user, setUser }}>
       <Router>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/institute-signup" element={<InstituteSignUp />} />
+        <div className="flex flex-col min-h-screen bg-black">
+          <Navbar />
 
-          <Route path="/dashboard" element={<Dashboard />} />
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/institute-signup" element={<InstituteSignUp />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
+              <Route path="/404" element={<NotFound />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
 
-          <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
-
-          <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-        <Footer />
+          <Footer />
+        </div>
       </Router>
     </AuthContext.Provider>
   );
