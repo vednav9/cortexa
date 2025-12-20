@@ -91,15 +91,15 @@ class _LoginPageState extends State<LoginPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              width: screenWidth * 0.15,
-                              height: screenWidth * 0.15,
+                              width: screenWidth * 0.12,
+                              height: screenWidth * 0.12,
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
                                   colors: [Color(0xFF10B981), Color(0xFF34D399)],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.circular(screenWidth * 0.045),
+                                borderRadius: BorderRadius.circular(screenWidth * 0.03),
                                 boxShadow: [
                                   BoxShadow(
                                     color: AppColors.primary.withValues(alpha: 0.5),
@@ -111,14 +111,14 @@ class _LoginPageState extends State<LoginPage> {
                               child: Icon(
                                 Icons.school_rounded,
                                 color: Colors.white,
-                                size: screenWidth * 0.08,
+                                size: screenWidth * 0.06,
                               ),
                             ),
-                            SizedBox(width: screenWidth * 0.03),
+                            SizedBox(width: screenWidth * 0.025),
                             Text(
                               'Cortexa',
                               style: TextStyle(
-                                fontSize: screenWidth * 0.12,
+                                fontSize: screenWidth * 0.08,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primary,
                                 letterSpacing: 1,
@@ -127,7 +127,7 @@ class _LoginPageState extends State<LoginPage> {
                           ],
                         ),
                       ),
-                      SizedBox(height: screenHeight * 0.03),
+                      SizedBox(height: screenHeight * 0.025),
                       Center(
                         child: Text(
                           'Welcome Back',
@@ -135,62 +135,20 @@ class _LoginPageState extends State<LoginPage> {
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
                                 letterSpacing: 0.5,
-                                fontSize: screenWidth * 0.065,
+                                fontSize: screenWidth * 0.08,
                               ),
                         ),
                       ),
                       SizedBox(height: screenHeight * 0.008),
                       Center(
                         child: Text(
-                          'Sign in to continue your learning journey',
+                          'Sign in to continue to your account',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 color: AppColors.textSecondary,
-                                fontSize: screenWidth * 0.035,
+                                fontSize: screenWidth * 0.040,
                               ),
                           textAlign: TextAlign.center,
                         ),
-                      ),
-                      SizedBox(height: screenHeight * 0.03),
-                      CustomTextField(
-                        label: 'Email / Username',
-                        hint: 'you@example.com or username',
-                        controller: _usernameOrEmailController,
-                        keyboardType: TextInputType.text,
-                        prefixIcon: const Icon(
-                          Icons.email_outlined,
-                          color: AppColors.primary,
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Email or username is required';
-                          }
-                          return null;
-                        },
-                      ),
-                      SizedBox(height: screenHeight * 0.016),
-                      CustomTextField(
-                        label: 'Password',
-                        hint: 'Password',
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        prefixIcon: const Icon(
-                          Icons.lock_outline,
-                          color: AppColors.primary,
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            color: AppColors.primary,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                        validator: Validators.validatePassword,
                       ),
                       SizedBox(height: screenHeight * 0.016),
                       Column(
@@ -198,9 +156,9 @@ class _LoginPageState extends State<LoginPage> {
                         children: [
                           Text(
                             'I am a',
-                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            style: Theme.of(context).textTheme.labelLarge?.copyWith(
                                   color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                   letterSpacing: 0.5,
                                 ),
                           ),
@@ -261,6 +219,48 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
+                      SizedBox(height: screenHeight * 0.03),
+                      CustomTextField(
+                        label: 'Email / Username',
+                        hint: 'you@example.com or username',
+                        controller: _usernameOrEmailController,
+                        keyboardType: TextInputType.text,
+                        prefixIcon: const Icon(
+                          Icons.email_outlined,
+                          color: AppColors.primary,
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Email or username is required';
+                          }
+                          return null;
+                        },
+                      ),
+                      SizedBox(height: screenHeight * 0.016),
+                      CustomTextField(
+                        label: 'Password',
+                        hint: 'Password',
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: AppColors.primary,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.primary,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
+                        validator: Validators.validatePassword,
+                      ),
                       SizedBox(height: screenHeight * 0.008),
                       Align(
                         alignment: Alignment.centerRight,
@@ -296,14 +296,13 @@ class _LoginPageState extends State<LoginPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'Don''t have an account?',
+                            'Don\'t have an account?',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   color: AppColors.textSecondary,
                                 ),
                           ),
-                          const SizedBox(width: 8),
                           CustomButton(
-                            text: 'Sign Up',
+                            text: 'Create one now',
                             type: ButtonType.text,
                             onPressed: () {
                               context.push('/signup');
