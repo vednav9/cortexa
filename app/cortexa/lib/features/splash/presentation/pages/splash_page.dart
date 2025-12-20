@@ -194,7 +194,7 @@ class _CortexaSplashScreenState extends State<CortexaSplashScreen>
                             ],
                           ).createShader(bounds),
                           child: const Text(
-                            "CORTEXA",
+                            "Cortexa",
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 42,
@@ -203,13 +203,13 @@ class _CortexaSplashScreenState extends State<CortexaSplashScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         // Subtitle
                         const Text(
                           "Education Reimagined",
                           style: TextStyle(
                             color: Color(0xFF34D399), // AppColors.primaryLight
-                            fontSize: 14,
+                            fontSize: 20,
                             letterSpacing: 2.0,
                             fontWeight: FontWeight.w300,
                           ),

@@ -25,7 +25,9 @@ enum UserRole {
 enum JobTitle {
   principal('Principal'),
   dean('Dean'),
-  coWorker('Co-worker');
+  director('Director'),
+  administrator('Administrator'),
+  registrar('Registrar');
 
   final String displayName;
   const JobTitle(this.displayName);
@@ -36,9 +38,12 @@ enum JobTitle {
         return JobTitle.principal;
       case 'dean':
         return JobTitle.dean;
-      case 'co-worker':
-      case 'coworker':
-        return JobTitle.coWorker;
+      case 'director':
+        return JobTitle.director;
+      case 'administrator':
+        return JobTitle.administrator;
+      case 'registrar':
+        return JobTitle.registrar;
       default:
         return JobTitle.principal;
     }
