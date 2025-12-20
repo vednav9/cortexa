@@ -12,7 +12,7 @@ import '../bloc/auth_state.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
-  
+
   @override
   State<SignupPage> createState() => _SignupPageState();
 }
@@ -28,7 +28,7 @@ class _SignupPageState extends State<SignupPage> {
   bool _obscureConfirmPassword = true;
   UserRole _selectedRole = UserRole.student;
   bool _agreeToTerms = false;
-  
+
   @override
   void dispose() {
     _fullNameController.dispose();
@@ -38,36 +38,38 @@ class _SignupPageState extends State<SignupPage> {
     _confirmPasswordController.dispose();
     super.dispose();
   }
-  
+
   void _handleSignup() {
     if (!_agreeToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please agree to the Terms of Service and Privacy Policy'),
+          content: Text(
+            'Please agree to the Terms of Service and Privacy Policy',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
       return;
     }
-    
+
     if (_formKey.currentState!.validate()) {
       context.read<AuthBloc>().add(
-            SignupRequested(
-              username: _usernameController.text.trim(),
-              email: _emailController.text.trim(),
-              password: _passwordController.text,
-              fullName: _fullNameController.text.trim(),
-              role: _selectedRole.name,
-            ),
-          );
+        SignupRequested(
+          username: _usernameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          fullName: _fullNameController.text.trim(),
+          role: _selectedRole.name,
+        ),
+      );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: BlocConsumer<AuthBloc, AuthState>(
@@ -91,7 +93,7 @@ class _SignupPageState extends State<SignupPage> {
         },
         builder: (context, state) {
           final isLoading = state is AuthLoading;
-          
+
           return SafeArea(
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
@@ -102,36 +104,56 @@ class _SignupPageState extends State<SignupPage> {
                   children: [
                     SizedBox(height: screenHeight * 0.02),
                     Center(
-                      child: Container(
-                        width: screenWidth * 0.16,
-                        height: screenWidth * 0.16,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF10B981), Color(0xFF34D399)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(screenWidth * 0.04),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.5),
-                              blurRadius: 20,
-                              spreadRadius: 2,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: screenWidth * 0.12,
+                              height: screenWidth * 0.12,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF10B981), Color(0xFF34D399)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(screenWidth * 0.03),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.5),
+                                    blurRadius: 20,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.school_rounded,
+                                color: Colors.white,
+                                size: screenWidth * 0.06,
+                              ),
+                            ),
+                            SizedBox(width: screenWidth * 0.025),
+                            Text(
+                              'Cortexa',
+                              style: TextStyle(
+                                fontSize: screenWidth * 0.08,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                                letterSpacing: 1,
+                              ),
                             ),
                           ],
                         ),
-                        child: Icon(Icons.school_rounded, color: Colors.white, size: screenWidth * 0.08),
                       ),
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
+                    SizedBox(height: screenHeight * 0.015),
                     Center(
                       child: Text(
                         'Create Account',
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: AppColors.textPrimary,
                               letterSpacing: 0.5,
-                              fontSize: screenWidth * 0.06,
+                              fontSize: screenWidth * 0.08,
                             ),
                       ),
                     ),
@@ -140,87 +162,11 @@ class _SignupPageState extends State<SignupPage> {
                       child: Text(
                         'Join Cortexa and start your learning journey',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.textSecondary,
-                              fontSize: screenWidth * 0.035,
-                            ),
+                          color: AppColors.textSecondary,
+                          fontSize: screenWidth * 0.040,
+                        ),
                         textAlign: TextAlign.center,
                       ),
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-                    CustomTextField(
-                      label: 'Full Name',
-                      hint: 'John Doe',
-                      controller: _fullNameController,
-                      keyboardType: TextInputType.name,
-                      prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
-                      validator: Validators.validateName,
-                    ),
-                    SizedBox(height: screenHeight * 0.012),
-                    CustomTextField(
-                      label: 'Username',
-                      hint: 'johndoe',
-                      controller: _usernameController,
-                      keyboardType: TextInputType.text,
-                      prefixIcon: const Icon(Icons.alternate_email, color: AppColors.primary),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Username is required';
-                        if (value.length < 3) return 'Username must be at least 3 characters';
-                        if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
-                          return 'Username can only contain letters, numbers, and underscores';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: screenHeight * 0.012),
-                    CustomTextField(
-                      label: 'Email Address',
-                      hint: 'you@example.com',
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
-                      validator: Validators.validateEmail,
-                    ),
-                    SizedBox(height: screenHeight * 0.012),
-                    CustomTextField(
-                      label: 'Password',
-                      hint: 'Password',
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: AppColors.primary,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                      validator: Validators.validatePassword,
-                    ),
-                    SizedBox(height: screenHeight * 0.004),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Text(
-                        'Must be at least 8 characters',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textTertiary.withValues(alpha: 0.7),
-                            ),
-                      ),
-                    ),
-                    SizedBox(height: screenHeight * 0.012),
-                    CustomTextField(
-                      label: 'Confirm Password',
-                      hint: 'Confirm Password',
-                      controller: _confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: AppColors.primary,
-                        ),
-                        onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                      ),
-                      validator: (value) => Validators.validateConfirmPassword(value, _passwordController.text),
                     ),
                     SizedBox(height: screenHeight * 0.012),
                     Column(
@@ -228,9 +174,10 @@ class _SignupPageState extends State<SignupPage> {
                       children: [
                         Text(
                           'I am a',
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
                                 color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                                 letterSpacing: 0.5,
                               ),
                         ),
@@ -248,78 +195,199 @@ class _SignupPageState extends State<SignupPage> {
                           ),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F2A1F).withValues(alpha: 0.6),
+                              color: const Color(
+                                0xFF0F2A1F,
+                              ).withValues(alpha: 0.6),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2), width: 1.5),
+                              border: Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                                width: 1.5,
+                              ),
                             ),
                             child: DropdownButtonFormField<UserRole>(
                               value: _selectedRole,
                               decoration: const InputDecoration(
-                                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
                                 border: InputBorder.none,
-                                prefixIcon: Icon(Icons.person_outline, color: AppColors.primary),
+                                prefixIcon: Icon(
+                                  Icons.person_outline,
+                                  color: AppColors.primary,
+                                ),
                               ),
                               dropdownColor: const Color(0xFF0F2A1F),
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              style: Theme.of(context).textTheme.bodyLarge
+                                  ?.copyWith(
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w500,
                                   ),
-                              items: [UserRole.student, UserRole.teacher].map((role) {
+                              items: [UserRole.student, UserRole.teacher].map((
+                                role,
+                              ) {
                                 return DropdownMenuItem<UserRole>(
                                   value: role,
                                   child: Text(role.displayName),
                                 );
                               }).toList(),
                               onChanged: (UserRole? newRole) {
-                                if (newRole != null) setState(() => _selectedRole = newRole);
+                                if (newRole != null)
+                                  setState(() => _selectedRole = newRole);
                               },
                             ),
                           ),
                         ),
                       ],
                     ),
+                    SizedBox(height: screenHeight * 0.02),
+                    CustomTextField(
+                      label: 'Full Name',
+                      hint: 'John Doe',
+                      controller: _fullNameController,
+                      keyboardType: TextInputType.name,
+                      prefixIcon: const Icon(
+                        Icons.person_outline,
+                        color: AppColors.primary,
+                      ),
+                      validator: Validators.validateName,
+                    ),
+                    SizedBox(height: screenHeight * 0.012),
+                    CustomTextField(
+                      label: 'Username',
+                      hint: 'johndoe',
+                      controller: _usernameController,
+                      keyboardType: TextInputType.text,
+                      prefixIcon: const Icon(
+                        Icons.alternate_email,
+                        color: AppColors.primary,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty)
+                          return 'Username is required';
+                        if (value.length < 3)
+                          return 'Username must be at least 3 characters';
+                        if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
+                          return 'Username can only contain letters, numbers, and underscores';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: screenHeight * 0.012),
+                    CustomTextField(
+                      label: 'Email Address',
+                      hint: 'you@example.com',
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      prefixIcon: const Icon(
+                        Icons.email_outlined,
+                        color: AppColors.primary,
+                      ),
+                      validator: Validators.validateEmail,
+                    ),
+                    SizedBox(height: screenHeight * 0.012),
+                    CustomTextField(
+                      label: 'Password',
+                      hint: 'Password',
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: AppColors.primary,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.primary,
+                        ),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                      ),
+                      validator: Validators.validatePassword,
+                    ),
+                    SizedBox(height: screenHeight * 0.004),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Text(
+                        'Must be at least 8 characters',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textTertiary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: screenHeight * 0.012),
+                    CustomTextField(
+                      label: 'Confirm Password',
+                      hint: 'Confirm Password',
+                      controller: _confirmPasswordController,
+                      obscureText: _obscureConfirmPassword,
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        color: AppColors.primary,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: AppColors.primary,
+                        ),
+                        onPressed: () => setState(
+                          () => _obscureConfirmPassword =
+                              !_obscureConfirmPassword,
+                        ),
+                      ),
+                      validator: (value) => Validators.validateConfirmPassword(
+                        value,
+                        _passwordController.text,
+                      ),
+                    ),
                     SizedBox(height: screenHeight * 0.014),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Checkbox(
                           value: _agreeToTerms,
-                          onChanged: (value) => setState(() => _agreeToTerms = value ?? false),
+                          onChanged: (value) =>
+                              setState(() => _agreeToTerms = value ?? false),
                           activeColor: AppColors.primary,
                           checkColor: Colors.white,
-                          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5), width: 2),
+                          side: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.5),
+                            width: 2,
+                          ),
                         ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: GestureDetector(
-                              onTap: () => setState(() => _agreeToTerms = !_agreeToTerms),
-                              child: RichText(
-                                text: TextSpan(
-                                  text: 'I agree to the ',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: AppColors.textSecondary,
-                                      ),
-                                  children: [
-                                    TextSpan(
-                                      text: 'Terms of Service',
-                                      style: TextStyle(
-                                        color: AppColors.primary,
-                                        decoration: TextDecoration.underline,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                        Flexible(
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => _agreeToTerms = !_agreeToTerms),
+                            child: RichText(
+                              text: TextSpan(
+                                text: 'I agree to the ',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: AppColors.textSecondary),
+                                children: [
+                                  TextSpan(
+                                    text: 'Terms of Service',
+                                    style: TextStyle(
+                                      color: AppColors.primary,
+                                      decoration: TextDecoration.underline,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                    const TextSpan(text: ' and '),
-                                    TextSpan(
-                                      text: 'Privacy Policy',
-                                      style: TextStyle(
-                                        color: AppColors.primary,
-                                        decoration: TextDecoration.underline,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                  ),
+                                  const TextSpan(text: ' and '),
+                                  TextSpan(
+                                    text: 'Privacy Policy',
+                                    style: TextStyle(
+                                      color: AppColors.primary,
+                                      decoration: TextDecoration.underline,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -350,9 +418,8 @@ class _SignupPageState extends State<SignupPage> {
                       children: [
                         Text(
                           'Already have an account?',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.textSecondary),
                         ),
                         const SizedBox(width: 8),
                         CustomButton(
@@ -362,22 +429,26 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                       ],
                     ),
-                    SizedBox(height: screenHeight * 0.012),
                     Center(
                       child: GestureDetector(
                         onTap: () => context.push('/institute-signup'),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              width: 1.5,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: RichText(
                             text: TextSpan(
                               text: 'Registering as an institution? ',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textSecondary,
-                                  ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: AppColors.textSecondary),
                               children: const [
                                 TextSpan(
                                   text: 'Click here ',
