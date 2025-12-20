@@ -7,7 +7,10 @@ import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../data/models/institution_display_model.dart';
 import '../../data/repositories/mock_dashboard_repository.dart';
-import '../widgets/institution_card.dart';
+import '../widgets/dashboard_drawer.dart';
+import '../widgets/institution_tab_view.dart';
+import 'notifications_page.dart';
+import 'invite_people_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -22,14 +25,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   List<InstitutionDisplayModel> _institutions = [];
   List<InstitutionDisplayModel> _filteredInstitutions = [];
+  List<InstitutionDisplayModel> _myInstitutions = [];
   bool _isLoading = true;
   String? _selectedType;
   String? _selectedCountry;
+  DashboardTab _currentTab = DashboardTab.dashboard;
 
   @override
   void initState() {
     super.initState();
     _loadInstitutions();
+    _loadMyInstitutions();
+  }
+
+  Future<void> _loadMyInstitutions() async {
+    // TODO: Load admin's registered/managed institutions from API
+    // For now, using empty list
+    setState(() {
+      _myInstitutions = [];
+    });
   }
 
   @override
@@ -118,47 +132,91 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           context.go('/login');
         }
       },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: const Text('Cortexa Dashboard'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _loadInstitutions,
-              tooltip: 'Refresh',
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          final userName = state is AuthAuthenticated
+              ? (state.user.fullName ?? state.user.username)
+              : 'Admin';
+          final userRole = state is AuthAuthenticated
+              ? state.user.role
+              : 'Admin';
+
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(
+              backgroundColor: AppColors.surface,
+              elevation: 0,
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF10B981), Color(0xFF34D399)],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'CORTEXA',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                if (_currentTab == DashboardTab.dashboard)
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _loadInstitutions,
+                    tooltip: 'Refresh',
+                  ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () => _showLogoutDialog(context),
-              tooltip: 'Logout',
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            // User info banner
-            BlocBuilder<AuthBloc, AuthState>(
-              builder: (context, state) {
-                if (state is AuthAuthenticated) {
-                  return _buildUserBanner(state);
-                }
-                return const SizedBox.shrink();
+            drawer: DashboardDrawer(
+              currentTab: _currentTab,
+              isAdmin: true,
+              onTabSelected: (tab) {
+                setState(() => _currentTab = tab);
               },
+              onLogout: () => _showLogoutDialog(context),
+              userName: userName,
+              userRole: userRole,
             ),
-            // Search and filters
-            _buildSearchAndFilters(),
-            // Institution list
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _filteredInstitutions.isEmpty
-                      ? _buildEmptyState()
-                      : _buildInstitutionList(),
-            ),
-          ],
-        ),
+            body: _buildCurrentTabContent(),
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildCurrentTabContent() {
+    switch (_currentTab) {
+      case DashboardTab.dashboard:
+        return _buildDashboardContent();
+      case DashboardTab.notifications:
+        return const NotificationsPage(isAdmin: true);
+      case DashboardTab.invitePeople:
+        return const InvitePeoplePage();
+    }
+  }
+
+  Widget _buildDashboardContent() {
+    return InstitutionTabView(
+      allInstitutions: _filteredInstitutions,
+      myInstitutions: _myInstitutions,
+      isLoading: _isLoading,
+      onRefresh: _loadInstitutions,
+      onInstitutionTap: _navigateToInstitutionDetail,
+      searchAndFilters: _buildSearchAndFilters(),
+      userRole: 'admin',
     );
   }
 
@@ -379,59 +437,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             );
           }).toList(),
           onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInstitutionList() {
-    return Expanded(
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _filteredInstitutions.length,
-        itemBuilder: (context, index) {
-          final institution = _filteredInstitutions[index];
-          return InstitutionCard(
-            institution: institution,
-            userRole: 'admin',
-            onLoginPressed: institution.isOwnInstitution
-                ? () => _handleInstitutionLogin(institution)
-                : null,
-            onCardTapped: () => _navigateToInstitutionDetail(institution),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search_off,
-              size: 80,
-              color: AppColors.textSecondary.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No institutions found',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Try adjusting your search or filters',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-          ],
         ),
       ),
     );
