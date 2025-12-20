@@ -7,7 +7,6 @@ import '../features/auth/presentation/pages/forgot_password_page.dart';
 import '../features/auth/presentation/pages/institute_signup_step1_page.dart';
 import '../features/auth/presentation/pages/institute_signup_step2_page.dart';
 import '../features/auth/presentation/pages/institute_signup_step3_page.dart';
-import '../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../features/dashboard/presentation/pages/admin_dashboard_page.dart';
 import '../features/dashboard/presentation/pages/user_dashboard_page.dart';
 import '../features/dashboard/presentation/pages/institution_detail_page.dart';
@@ -75,13 +74,6 @@ class AppRouter {
           final data = state.extra as InstitutionModel;
           return InstituteSignupStep3Page(previousData: data);
         },
-      ),
-      
-      // Dashboard route (legacy - redirects to role-specific dashboard)
-      GoRoute(
-        path: '/dashboard',
-        name: 'dashboard',
-        builder: (context, state) => const DashboardPage(),
       ),
       
       // Admin Dashboard (for admins)
