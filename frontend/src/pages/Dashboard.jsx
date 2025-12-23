@@ -56,7 +56,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Optional global logout button */}
+      {/* Optional global logout button
       <div className="flex justify-end p-4">
         <button
           onClick={handleLogout}
@@ -64,7 +64,7 @@ const Dashboard = () => {
         >
           Logout
         </button>
-      </div>
+      </div> */}
 
       {renderDashboard()}
     </div>
