@@ -9,11 +9,12 @@ import '../../../admin/data/models/institution_model.dart';
 
 class InstituteSignupStep1Page extends StatefulWidget {
   final InstitutionModel? initialData;
-  
+
   const InstituteSignupStep1Page({super.key, this.initialData});
-  
+
   @override
-  State<InstituteSignupStep1Page> createState() => _InstituteSignupStep1PageState();
+  State<InstituteSignupStep1Page> createState() =>
+      _InstituteSignupStep1PageState();
 }
 
 class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
@@ -28,7 +29,7 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
   bool _obscureConfirmPassword = true;
   JobTitle _selectedJobTitle = JobTitle.principal;
   bool _agreeToTerms = false;
-  
+
   @override
   void initState() {
     super.initState();
@@ -37,10 +38,12 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
       _usernameController.text = widget.initialData!.adminUsername;
       _emailController.text = widget.initialData!.adminEmail;
       _phoneController.text = widget.initialData!.adminPhoneNumber;
-      _selectedJobTitle = JobTitle.fromString(widget.initialData!.adminJobTitle);
+      _selectedJobTitle = JobTitle.fromString(
+        widget.initialData!.adminJobTitle,
+      );
     }
   }
-  
+
   @override
   void dispose() {
     _fullNameController.dispose();
@@ -51,18 +54,20 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
     _phoneController.dispose();
     super.dispose();
   }
-  
+
   void _handleNext() {
     if (!_agreeToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please confirm you are authorized to register this institution'),
+          content: Text(
+            'Please confirm you are authorized to register this institution',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
       return;
     }
-    
+
     if (_formKey.currentState!.validate()) {
       final data = InstitutionModel(
         adminFullName: _fullNameController.text.trim(),
@@ -84,13 +89,15 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
         primaryBrandColor: widget.initialData?.primaryBrandColor ?? '#34d399',
         logoPath: widget.initialData?.logoPath,
       );
-      
+
       context.push('/institute-signup/step2', extra: data);
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -110,30 +117,57 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
               children: [
                 // Logo
                 Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.school_rounded,
-                      color: Colors.white,
-                      size: 40,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: screenWidth * 0.12,
+                        height: screenWidth * 0.12,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF10B981), Color(0xFF34D399)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            screenWidth * 0.03,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.5),
+                              blurRadius: 20,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.school_rounded,
+                          color: Colors.white,
+                          size: screenWidth * 0.06,
+                        ),
+                      ),
+                      SizedBox(width: screenWidth * 0.025),
+                      Text(
+                        'Cortexa',
+                        style: TextStyle(
+                          fontSize: screenWidth * 0.08,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                
                 const SizedBox(height: 24),
-                
+
                 // Title
                 Center(
                   child: Text(
                     'Register Your Institution',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -142,14 +176,14 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                   child: Text(
                     'Join Cortexa as an educational institution',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                      color: AppColors.textSecondary,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Progress indicator
                 Row(
                   children: [
@@ -160,26 +194,32 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                     _buildStepIndicator(3, 'Branding', false),
                   ],
                 ),
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Full Name
                 CustomTextField(
                   label: 'Full Name',
                   hint: 'John Doe',
                   controller: _fullNameController,
-                  prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
+                  prefixIcon: const Icon(
+                    Icons.person_outline,
+                    color: AppColors.primary,
+                  ),
                   validator: Validators.validateName,
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Username
                 CustomTextField(
                   label: 'Username',
                   hint: 'johndoe',
                   controller: _usernameController,
-                  prefixIcon: const Icon(Icons.alternate_email, color: AppColors.primary),
+                  prefixIcon: const Icon(
+                    Icons.alternate_email,
+                    color: AppColors.primary,
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Username is required';
@@ -193,59 +233,78 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Email
                 CustomTextField(
                   label: 'Email Address',
                   hint: 'you@institution.edu',
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
+                  prefixIcon: const Icon(
+                    Icons.email_outlined,
+                    color: AppColors.primary,
+                  ),
                   validator: Validators.validateEmail,
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Password
                 CustomTextField(
                   label: 'Password',
                   hint: '••••••••',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                  prefixIcon: const Icon(
+                    Icons.lock_outline,
+                    color: AppColors.primary,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      _obscurePassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                       color: AppColors.primary,
                     ),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   validator: Validators.validatePassword,
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Confirm Password
                 CustomTextField(
                   label: 'Confirm Password',
                   hint: '••••••••',
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirmPassword,
-                  prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                  prefixIcon: const Icon(
+                    Icons.lock_outline,
+                    color: AppColors.primary,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      _obscureConfirmPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                       color: AppColors.primary,
                     ),
-                    onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                    onPressed: () => setState(
+                      () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                    ),
                   ),
-                  validator: (value) => Validators.validateConfirmPassword(value, _passwordController.text),
+                  validator: (value) => Validators.validateConfirmPassword(
+                    value,
+                    _passwordController.text,
+                  ),
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Job Title
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,26 +312,36 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                     Text(
                       'Job Title',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.cardBackground,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: AppColors.borderDark.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: DropdownButtonFormField<JobTitle>(
                         value: _selectedJobTitle,
                         decoration: const InputDecoration(
-                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
                           border: InputBorder.none,
-                          prefixIcon: Icon(Icons.work_outline, color: AppColors.primary),
+                          prefixIcon: Icon(
+                            Icons.work_outline,
+                            color: AppColors.primary,
+                          ),
                         ),
                         dropdownColor: AppColors.cardBackground,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.textPrimary),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
                         items: JobTitle.values.map((title) {
                           return DropdownMenuItem<JobTitle>(
                             value: title,
@@ -280,34 +349,40 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                           );
                         }).toList(),
                         onChanged: (JobTitle? newTitle) {
-                          if (newTitle != null) setState(() => _selectedJobTitle = newTitle);
+                          if (newTitle != null)
+                            setState(() => _selectedJobTitle = newTitle);
                         },
                       ),
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Phone Number
                 CustomTextField(
                   label: 'Phone Number',
                   hint: '+1 (555) 000-0000',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.primary),
-                  validator: (value) => Validators.validateRequired(value, 'Phone number'),
+                  prefixIcon: const Icon(
+                    Icons.phone_outlined,
+                    color: AppColors.primary,
+                  ),
+                  validator: (value) =>
+                      Validators.validateRequired(value, 'Phone number'),
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // Authorization checkbox
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Checkbox(
                       value: _agreeToTerms,
-                      onChanged: (bool? value) => setState(() => _agreeToTerms = value ?? false),
+                      onChanged: (bool? value) =>
+                          setState(() => _agreeToTerms = value ?? false),
                       activeColor: AppColors.primary,
                       checkColor: Colors.white,
                     ),
@@ -315,29 +390,29 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                       child: Padding(
                         padding: const EdgeInsets.only(top: 12),
                         child: GestureDetector(
-                          onTap: () => setState(() => _agreeToTerms = !_agreeToTerms),
+                          onTap: () =>
+                              setState(() => _agreeToTerms = !_agreeToTerms),
                           child: Text(
                             'I confirm I am an authorized representative of this institution and have the authority to register it on Cortexa.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.textSecondary),
                           ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Next button
                 CustomButton(
                   text: 'Next: Institution Details',
                   onPressed: _handleNext,
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Sign in link
                 Center(
                   child: Row(
@@ -346,8 +421,8 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                       Text(
                         'Already registered? ',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       GestureDetector(
                         onTap: () => context.go('/login'),
@@ -362,7 +437,7 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 20),
               ],
             ),
@@ -371,7 +446,7 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
       ),
     );
   }
-  
+
   Widget _buildStepIndicator(int step, String label, bool isActive) {
     return Column(
       children: [
@@ -407,7 +482,7 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
       ],
     );
   }
-  
+
   Widget _buildStepLine(bool isActive) {
     return Container(
       height: 2,
