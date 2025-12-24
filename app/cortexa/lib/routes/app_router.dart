@@ -22,37 +22,83 @@ class AppRouter {
       GoRoute(
         path: '/',
         name: 'splash',
-        builder: (context, state) => const SplashPage(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const SplashPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
       ),
       
       // Login route
       GoRoute(
         path: '/login',
         name: 'login',
-        builder: (context, state) => const LoginPage(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const LoginPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOutCubic;
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            return SlideTransition(position: animation.drive(tween), child: child);
+          },
+        ),
       ),
       
       // Signup route
       GoRoute(
         path: '/signup',
         name: 'signup',
-        builder: (context, state) => const SignupPage(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const SignupPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOutCubic;
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            return SlideTransition(position: animation.drive(tween), child: child);
+          },
+        ),
       ),
       
       // Forgot password route
       GoRoute(
         path: '/forgot-password',
         name: 'forgot-password',
-        builder: (context, state) => const ForgotPasswordPage(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const ForgotPasswordPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOutCubic;
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            return SlideTransition(position: animation.drive(tween), child: child);
+          },
+        ),
       ),
       
       // Institution Signup - Step 1
       GoRoute(
         path: '/institute-signup',
         name: 'institute-signup',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final data = state.extra as InstitutionModel?;
-          return InstituteSignupStep1Page(initialData: data);
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: InstituteSignupStep1Page(initialData: data),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOutCubic;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(position: animation.drive(tween), child: child);
+            },
+          );
         },
       ),
       
@@ -60,9 +106,19 @@ class AppRouter {
       GoRoute(
         path: '/institute-signup/step2',
         name: 'institute-signup-step2',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final data = state.extra as InstitutionModel;
-          return InstituteSignupStep2Page(previousData: data);
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: InstituteSignupStep2Page(previousData: data),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOutCubic;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(position: animation.drive(tween), child: child);
+            },
+          );
         },
       ),
       
@@ -70,9 +126,19 @@ class AppRouter {
       GoRoute(
         path: '/institute-signup/step3',
         name: 'institute-signup-step3',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final data = state.extra as InstitutionModel;
-          return InstituteSignupStep3Page(previousData: data);
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: InstituteSignupStep3Page(previousData: data),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOutCubic;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(position: animation.drive(tween), child: child);
+            },
+          );
         },
       ),
       
@@ -80,23 +146,45 @@ class AppRouter {
       GoRoute(
         path: '/admin-dashboard',
         name: 'admin-dashboard',
-        builder: (context, state) => const AdminDashboardPage(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const AdminDashboardPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
       ),
       
       // User Dashboard (for teachers and students)
       GoRoute(
         path: '/user-dashboard',
         name: 'user-dashboard',
-        builder: (context, state) => const UserDashboardPage(),
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const UserDashboardPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
       ),
       
       // Institution Detail Page
       GoRoute(
         path: '/institution/:id',
         name: 'institution-detail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final institution = state.extra as InstitutionDisplayModel;
-          return InstitutionDetailPage(institution: institution);
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: InstitutionDetailPage(institution: institution),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(0.0, 1.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOutCubic;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              return SlideTransition(position: animation.drive(tween), child: child);
+            },
+          );
         },
       ),
     ],

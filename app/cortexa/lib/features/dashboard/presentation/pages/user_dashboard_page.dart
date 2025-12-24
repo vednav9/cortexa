@@ -9,6 +9,7 @@ import '../../data/models/institution_display_model.dart';
 import '../../data/repositories/mock_dashboard_repository.dart';
 import '../widgets/dashboard_drawer.dart';
 import '../widgets/institution_tab_view.dart';
+import '../widgets/search_filter_modal.dart';
 import 'notifications_page.dart';
 
 class UserDashboardPage extends StatefulWidget {
@@ -29,8 +30,11 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   bool _isLoadingInstitutions = true;
 
   String? _selectedType;
-  String? _selectedCountry;
-  
+  String? _selectedState;
+  String? _selectedAffiliation;
+  String? _selectedBoard;
+  String? _selectedStrength;
+
   DashboardTab _currentTab = DashboardTab.dashboard;
 
   @override
@@ -79,21 +83,59 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   void _applyInstitutionFilters() {
     setState(() {
       _filteredInstitutions = _institutions.where((institution) {
-        final matchesSearch = _searchController.text.isEmpty ||
-            institution.name
-                .toLowerCase()
-                .contains(_searchController.text.toLowerCase()) ||
-            institution.city
-                .toLowerCase()
-                .contains(_searchController.text.toLowerCase());
+        final matchesSearch =
+            _searchController.text.isEmpty ||
+            institution.name.toLowerCase().contains(
+              _searchController.text.toLowerCase(),
+            ) ||
+            institution.city.toLowerCase().contains(
+              _searchController.text.toLowerCase(),
+            );
 
         final matchesType =
             _selectedType == null || institution.type == _selectedType;
 
-        final matchesCountry =
-            _selectedCountry == null || institution.country == _selectedCountry;
+        // TODO: State filter will use institution.state when field is added to model
+        final matchesState =
+            _selectedState == null || institution.country == _selectedState;
 
-        return matchesSearch && matchesType && matchesCountry;
+        // Affiliation filter
+        bool matchesAffiliation = true;
+        if (_selectedAffiliation != null) {
+          final isGovernment = institution.studentCount > 5000;
+          matchesAffiliation = (_selectedAffiliation == 'Government' && isGovernment) ||
+                              (_selectedAffiliation == 'Private' && !isGovernment) ||
+                              (_selectedAffiliation == 'Semi-Government' && institution.studentCount > 3000 && institution.studentCount <= 5000) ||
+                              (_selectedAffiliation == 'Autonomous' && institution.studentCount > 8000);
+        }
+
+        // Board filter (for schools and colleges)
+        bool matchesBoard = true;
+        if (_selectedBoard != null) {
+          // In real app, this would come from institution.board field
+          matchesBoard = institution.type == 'School' || institution.type == 'College';
+        }
+
+        // Student strength filter
+        bool matchesStrength = true;
+        if (_selectedStrength != null) {
+          switch (_selectedStrength) {
+            case 'Small (0-1000)':
+              matchesStrength = institution.studentCount <= 1000;
+              break;
+            case 'Medium (1001-5000)':
+              matchesStrength = institution.studentCount > 1000 && institution.studentCount <= 5000;
+              break;
+            case 'Large (5001-20000)':
+              matchesStrength = institution.studentCount > 5000 && institution.studentCount <= 20000;
+              break;
+            case 'Very Large (20000+)':
+              matchesStrength = institution.studentCount > 20000;
+              break;
+          }
+        }
+
+        return matchesSearch && matchesType && matchesState && matchesAffiliation && matchesBoard && matchesStrength;
       }).toList();
     });
   }
@@ -102,9 +144,45 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     setState(() {
       _searchController.clear();
       _selectedType = null;
-      _selectedCountry = null;
+      _selectedState = null;
+      _selectedAffiliation = null;
+      _selectedBoard = null;
+      _selectedStrength = null;
       _filteredInstitutions = _institutions;
     });
+  }
+
+  void _showSearchFilterModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SearchFilterModal(
+        searchController: _searchController,
+        selectedType: _selectedType,
+        selectedState: _selectedState,
+        selectedAffiliation: _selectedAffiliation,
+        selectedBoard: _selectedBoard,
+        selectedStrength: _selectedStrength,
+        onTypeChanged: (value) {
+          setState(() => _selectedType = value);
+        },
+        onStateChanged: (value) {
+          setState(() => _selectedState = value);
+        },
+        onAffiliationChanged: (value) {
+          setState(() => _selectedAffiliation = value);
+        },
+        onBoardChanged: (value) {
+          setState(() => _selectedBoard = value);
+        },
+        onStrengthChanged: (value) {
+          setState(() => _selectedStrength = value);
+        },
+        onClearFilters: _clearInstitutionFilters,
+        onApplyFilters: _applyInstitutionFilters,
+      ),
+    );
   }
 
   void _navigateToInstitutionDetail(InstitutionDisplayModel institution) {
@@ -119,11 +197,11 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, authState) {
-        final userName = authState is AuthAuthenticated 
+        final userName = authState is AuthAuthenticated
             ? (authState.user.fullName ?? authState.user.username)
             : '';
-        final userRole = authState is AuthAuthenticated 
-            ? authState.user.role 
+        final userRole = authState is AuthAuthenticated
+            ? authState.user.role
             : '';
 
         return BlocListener<AuthBloc, AuthState>(
@@ -141,40 +219,53 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
                 setState(() => _currentTab = tab);
               },
               onLogout: () => _showLogoutDialog(context),
+              onProfileTap: () {
+                // TODO: Navigate to profile page
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Profile page coming soon'),
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              },
               userName: userName,
               userRole: userRole,
             ),
             appBar: AppBar(
               backgroundColor: AppColors.surface,
               elevation: 0,
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF10B981), Color(0xFF34D399)],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'CORTEXA',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  ),
-                ],
+              leading: Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu, color: AppColors.primary),
+                  onPressed: () => Scaffold.of(context).openDrawer(),
+                  padding: EdgeInsets.zero, // <-- This reduces the gap
+                  visualDensity: VisualDensity
+                      .compact, // Optional: makes icon more compact
+                ),
               ),
+              title: const Text(
+                'CORTEXA',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              // Optionally, you can also adjust the titleSpacing property:
+              titleSpacing:
+                  0, // <-- This reduces the space between leading and title
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.search, color: AppColors.primary),
+                  onPressed: _showSearchFilterModal,
+                  tooltip: 'Search & Filter',
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
-        body: _buildCurrentTabContent(),
-      ),
+            body: _buildCurrentTabContent(),
+          ),
         );
       },
     );
@@ -194,154 +285,19 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   Widget _buildDashboardContent() {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, authState) {
-        final userRole = authState is AuthAuthenticated 
-            ? authState.user.role 
+        final userRole = authState is AuthAuthenticated
+            ? authState.user.role
             : 'student';
-        
+
         return InstitutionTabView(
           allInstitutions: _filteredInstitutions,
           myInstitutions: _myInstitutions,
           isLoading: _isLoadingInstitutions,
           onRefresh: _loadInstitutions,
           onInstitutionTap: _navigateToInstitutionDetail,
-          searchAndFilters: _buildSearchAndFilters(),
           userRole: userRole,
         );
       },
-    );
-  }
-
-  Widget _buildSearchAndFilters() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.borderDark.withValues(alpha: 0.2),
-          ),
-        ),
-      ),
-      child: Column(
-        children: [
-          // Search bar
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search institutions by name or city...',
-              prefixIcon: const Icon(Icons.search, color: AppColors.primary),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, size: 20),
-                      onPressed: () {
-                        _searchController.clear();
-                        _applyInstitutionFilters();
-                      },
-                    )
-                  : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: AppColors.borderDark.withValues(alpha: 0.3),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: AppColors.borderDark.withValues(alpha: 0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary),
-              ),
-              filled: true,
-              fillColor: AppColors.background,
-            ),
-            onChanged: (value) => _applyInstitutionFilters(),
-          ),
-          const SizedBox(height: 12),
-          // Filter dropdowns
-          Row(
-            children: [
-              Expanded(
-                child: _buildFilterDropdown(
-                  hint: 'Type',
-                  value: _selectedType,
-                  items: _repository.getInstitutionTypes(),
-                  onChanged: (value) {
-                    setState(() => _selectedType = value);
-                    _applyInstitutionFilters();
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildFilterDropdown(
-                  hint: 'Country',
-                  value: _selectedCountry,
-                  items: _repository.getCountries(),
-                  onChanged: (value) {
-                    setState(() => _selectedCountry = value);
-                    _applyInstitutionFilters();
-                  },
-                ),
-              ),
-              if (_selectedType != null || _selectedCountry != null) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.clear_all, color: AppColors.error),
-                  onPressed: _clearInstitutionFilters,
-                  tooltip: 'Clear filters',
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterDropdown({
-    required String hint,
-    required String? value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppColors.borderDark.withValues(alpha: 0.3),
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          hint: Text(
-            hint,
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
-          ),
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down, color: AppColors.primary),
-          dropdownColor: AppColors.cardBackground,
-          items: items.map((item) {
-            return DropdownMenuItem(
-              value: item,
-              child: Text(
-                item,
-                style: const TextStyle(color: AppColors.textPrimary),
-              ),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ),
     );
   }
 
