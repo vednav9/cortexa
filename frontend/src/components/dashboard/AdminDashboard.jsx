@@ -15,7 +15,7 @@ import { HiSparkles } from 'react-icons/hi';
 import Sidebar from './Sidebar';
 import AddUsersTab from './AddUsersTab';
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('students');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -108,7 +108,10 @@ const AdminDashboard = () => {
 
                     <div className="border-t border-gray-100">
                       <button
-                        onClick={() => setProfileMenuOpen(false)}
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          onLogout();
+                        }}
                         className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-colors"
                       >
                         <FiLogOut className="w-4 h-4" />
