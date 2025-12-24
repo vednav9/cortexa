@@ -1,36 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FiMenu, FiUser, FiLogOut, FiSettings, FiChevronDown } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
 import Sidebar from './Sidebar';
 import BrowseInstitutionsTab from './BrowseInstitutionsTab';
 import MyInstitutionsTab from './MyInstitutionsTab';
-import InvitationTab from './InvitationTab';
 
 const StudentDashboard = ({ onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('access');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    if (profileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileMenuOpen]);
 
   // Mock data
   const myInstitutions = [
     { id: 1, name: 'MIT', logo: 'M', role: 'Student', status: 'active' },
   ];
 
-  const invitations = [
-    { id: 1, institutionName: 'Harvard University', logo: 'H', email: 'admissions@harvard.edu', type: 'university', date: '2 days ago', status: 'pending' },
-    { id: 2, institutionName: 'IIT', logo: 'M', email: 'info@iit.edu', type: 'university', date: '5 days ago', status: 'pending' },
-  ];
-
   const tabs = [
     { id: 'access', label: 'Browse Colleges' },
     { id: 'institutions', label: 'My Institutions' },
-    { id: 'invitations', label: 'Invitations' },
   ];
-
-  const handleAcceptInvitation = (id) => console.log('Accepted:', id);
-  const handleRejectInvitation = (id) => console.log('Rejected:', id);
-
 
   return (
     <div className="flex w-full h-screen bg-gray-50 pl-80">
@@ -62,7 +69,7 @@ const StudentDashboard = ({ onLogout }) => {
             </div>
 
             {/* Right - Profile Menu */}
-            <div className="relative">
+            <div className="relative" ref={profileMenuRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
@@ -118,7 +125,7 @@ const StudentDashboard = ({ onLogout }) => {
           <div className="px-6 pb-3">
             <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
               {tabs.map((tab) => {
-                const count = tab.id === 'institutions' ? myInstitutions.length : tab.id === 'invitations' ? invitations.length : 5;
+                const count = tab.id === 'institutions' ? myInstitutions.length : 5;
                 return (
                   <button
                     key={tab.id}
@@ -152,24 +159,6 @@ const StudentDashboard = ({ onLogout }) => {
 
           {activeTab === 'access' && <BrowseInstitutionsTab />}
           {activeTab === 'institutions' && <MyInstitutionsTab institutions={myInstitutions} />}
-          {activeTab === 'invitations' && (
-            <div className="space-y-4">
-              {invitations.map((invitation, index) => (
-                <motion.div
-                  key={invitation.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <InvitationTab
-                    invitation={invitation}
-                    onAccept={handleAcceptInvitation}
-                    onReject={handleRejectInvitation}
-                  />
-                </motion.div>
-              ))}
-            </div>
-          )}
         </main>
       </div>
     </div>

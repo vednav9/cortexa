@@ -1,22 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FiMenu, FiLogOut, FiUser, FiChevronDown, FiSettings } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
 import Sidebar from './Sidebar';
-import InvitationTab from './InvitationTab';
 import MyInstitutionsTab from './MyInstitutionsTab';
 import BrowseInstitutionsTab from './BrowseInstitutionsTab';
 
 const TeacherDashboard = ({ onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('access');
-  const [searchQuery, setSearchQuery] = useState('');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [filters, setFilters] = useState({
-    institutionType: 'all',
-    status: 'all',
-    sortBy: 'recent'
-  });
+  const profileMenuRef = useRef(null);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    if (profileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileMenuOpen]);
 
   // Mock data
   const myInstitutions = [
@@ -24,31 +35,10 @@ const TeacherDashboard = ({ onLogout }) => {
     { id: 2, name: 'Berkeley', logo: 'B', role: 'Teacher', status: 'active' },
   ];
 
-  const invitations = [
-    { id: 1, institutionName: 'Yale University', logo: 'Y', email: 'faculty@yale.edu', type: 'university', date: '1 day ago', status: 'pending' },
-    { id: 2, institutionName: 'Princeton', logo: 'P', email: 'admissions@princeton.edu', type: 'university', date: '3 days ago', status: 'pending' },
-  ];
-
   const tabs = [
     { id: 'access', label: 'Browse Colleges', count: 5 },
     { id: 'institutions', label: 'My Institutions', count: myInstitutions.length },
-    { id: 'invitations', label: 'Invitations', count: invitations.length },
   ];
-
-  const handleAcceptInvitation = (id) => {
-    console.log('Accepted:', id);
-  };
-
-  const handleRejectInvitation = (id) => {
-    console.log('Rejected:', id);
-  };
-
-  const filteredInvitations = invitations.filter(inv => {
-    const matchesSearch = inv.institutionName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = filters.institutionType === 'all' || inv.type === filters.institutionType;
-    const matchesStatus = filters.status === 'all' || inv.status === filters.status;
-    return matchesSearch && matchesType && matchesStatus;
-  });
 
   return (
     <div className="flex w-full h-screen bg-gray-50 pl-80">
@@ -79,7 +69,7 @@ const TeacherDashboard = ({ onLogout }) => {
             </div>
 
             {/* Right - Profile Menu */}
-            <div className="relative">
+            <div className="relative" ref={profileMenuRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
@@ -135,7 +125,7 @@ const TeacherDashboard = ({ onLogout }) => {
           <div className="px-6 pb-3">
             <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
               {tabs.map((tab) => {
-                const count = tab.id === 'institutions' ? myInstitutions.length : tab.id === 'invitations' ? invitations.length : 5;
+                const count = tab.id === 'institutions' ? myInstitutions.length : 5;
                 return (
                   <button
                     key={tab.id}
@@ -172,24 +162,6 @@ const TeacherDashboard = ({ onLogout }) => {
           <div className="max-w-7xl mx-auto"></div>
           {activeTab === 'access' && <BrowseInstitutionsTab />}
           {activeTab === 'institutions' && <MyInstitutionsTab institutions={myInstitutions} />}
-          {activeTab === 'invitations' && (
-            <div className="space-y-4">
-              {invitations.map((invitation, index) => (
-                <motion.div
-                  key={invitation.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <InvitationTab
-                    invitation={invitation}
-                    onAccept={handleAcceptInvitation}
-                    onReject={handleRejectInvitation}
-                  />
-                </motion.div>
-              ))}
-            </div>
-          )}
         </main>
       </div>
     </div>
