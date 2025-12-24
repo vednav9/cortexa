@@ -3,12 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiHome,
-  FiMessageCircle,
   FiBell,
-  FiFolder,
   FiUserPlus,
   FiHelpCircle,
-  FiTrendingUp,
   FiX,
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
@@ -35,8 +32,8 @@ export default function Sidebar({
   /* ROLE → MENU ACCESS MAP */
   const MENU_BY_ROLE = {
     admin: ["dashboard", "addUsers", "notifications", "querydesk"],
-    student: ["dashboard", "chatbot", "notifications", "space", "analytics"],
-    teacher: ["dashboard", "notifications", "querydesk", "analytics"],
+    student: ["dashboard", "notifications"],
+    teacher: ["dashboard", "notifications", "querydesk"],
   };
 
   /* BRAND COLOR */
@@ -46,7 +43,7 @@ export default function Sidebar({
       ? institution.brandColor
       : defaultColor;
 
-  /* ALL MENU ITEMS */
+  /* MENU ITEMS */
   const menuItems = [
     {
       id: "dashboard",
@@ -58,29 +55,14 @@ export default function Sidebar({
       id: "addUsers",
       label: "Add Users",
       icon: FiUserPlus,
-      path: "#",
-      isTab: true,
-    },
-    {
-      id: "chatbot",
-      label: "AI Assistant",
-      icon: FiMessageCircle,
-      path: "#",
-      isAIChat: true,
+      path: "/dashboard", // Keep on dashboard
+      isTab: true, // Mark as tab-based
     },
     {
       id: "notifications",
       label: "Notifications",
       icon: FiBell,
       path: "/notifications",
-      badge: 3,
-    },
-    {
-      id: "space",
-      label: "My Space",
-      icon: FiFolder,
-      path: "/space",
-      description: "Documents & Notes",
     },
     {
       id: "querydesk",
@@ -88,34 +70,22 @@ export default function Sidebar({
       icon: FiHelpCircle,
       path: "/querydesk",
     },
-    {
-      id: "analytics",
-      label: "Progress Insights",
-      icon: FiTrendingUp,
-      path: "/analytics",
-    },
   ];
 
-  /* FILTER MENU BY ROLE */
   const allowedMenuIds = MENU_BY_ROLE[userRole] || [];
   const filteredMenuItems = menuItems.filter((item) =>
     allowedMenuIds.includes(item.id)
   );
 
-  /* FIXED isActive FUNCTION */
+  /* ACTIVE STATE */
   const isActive = (item) => {
-    // For AI Chat - never show as active in sidebar
-    if (item.isAIChat) {
-      return false;
-    }
-
-    // Tab-based items (Admin: Add Users)
+    // For tab-based items
     if (item.isTab) {
       return activeTab === item.id;
     }
 
     // If any tab is active, route-based items should NOT be active
-    if (activeTab && activeTab !== 'students' && activeTab !== 'teachers') {
+    if (activeTab) {
       return false;
     }
 
@@ -127,16 +97,8 @@ export default function Sidebar({
     return location.pathname.startsWith(item.path) && item.path !== "#";
   };
 
-  /* FIXED handleItemClick FUNCTION */
+  /* CLICK HANDLER */
   const handleItemClick = (item, e) => {
-    // Handle AI Chat
-    if (item.isAIChat) {
-      e.preventDefault();
-      setAiChatOpen(true);
-      onClose?.();
-      return;
-    }
-
     // Handle Tab-based navigation (Admin Add Users)
     if (item.isTab && setActiveTab) {
       e.preventDefault();
@@ -219,7 +181,7 @@ export default function Sidebar({
             const active = isActive(item);
 
             // For tab items, use button instead of Link
-            if (item.isTab || item.isAIChat) {
+            if (item.isTab) {
               return (
                 <button
                   key={item.id}
@@ -236,24 +198,9 @@ export default function Sidebar({
                   }
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
-
                   <div className="flex-1 text-left">
                     <p className="font-medium text-sm">{item.label}</p>
-                    {item.description && (
-                      <p className="text-xs text-gray-500">
-                        {item.description}
-                      </p>
-                    )}
                   </div>
-
-                  {item.badge && (
-                    <span
-                      className="px-2 py-0.5 text-xs text-white rounded-full font-bold flex-shrink-0"
-                      style={{ backgroundColor: brandColor }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
 
                   {active && (
                     <motion.div
@@ -285,24 +232,9 @@ export default function Sidebar({
                 }
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-
                 <div className="flex-1">
                   <p className="font-medium text-sm">{item.label}</p>
-                  {item.description && (
-                    <p className="text-xs text-gray-500">
-                      {item.description}
-                    </p>
-                  )}
                 </div>
-
-                {item.badge && (
-                  <span
-                    className="px-2 py-0.5 text-xs text-white rounded-full font-bold flex-shrink-0"
-                    style={{ backgroundColor: brandColor }}
-                  >
-                    {item.badge}
-                  </span>
-                )}
 
                 {active && (
                   <motion.div

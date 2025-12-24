@@ -40,7 +40,7 @@ const StudentDashboard = ({ onLogout }) => {
   ];
 
   return (
-    <div className="flex w-full h-screen bg-gray-50 pl-80">
+    <div className="flex w-full h-screen bg-gray-50 lg:pl-80">
 
       {/* Sidebar */}
       <Sidebar
