@@ -65,4 +65,15 @@ class AppColors {
   // Shadow Colors
   static Color shadow = const Color(0xFF000000).withValues(alpha: 0.3);
   static Color shadowLight = const Color(0xFF000000).withValues(alpha: 0.1);
+
+  // Normal colors
+  static const Color white = Color(0xFFFFFFFF);
+  static const Color black = Color(0xFF000000);
+  static const Color transparent = Colors.transparent;
+  static const Color grey = Color(0xFF808080);
+  static const Color red = Color(0xFFFF0000);
+  static const Color green = Color(0xFF00FF00);
+  static const Color blue = Color(0xFF0000FF);
+  static const Color yellow = Color(0xFFFFFF00);
+
 }

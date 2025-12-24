@@ -12,6 +12,7 @@ class DashboardDrawer extends StatelessWidget {
   final bool isAdmin;
   final Function(DashboardTab) onTabSelected;
   final VoidCallback onLogout;
+  final VoidCallback? onProfileTap;
   final String userName;
   final String userRole;
 
@@ -21,6 +22,7 @@ class DashboardDrawer extends StatelessWidget {
     required this.isAdmin,
     required this.onTabSelected,
     required this.onLogout,
+    this.onProfileTap,
     required this.userName,
     required this.userRole,
   });
@@ -33,58 +35,66 @@ class DashboardDrawer extends StatelessWidget {
         child: Column(
           children: [
             // User profile section
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.2),
-                    AppColors.primary.withValues(alpha: 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border(
-                  bottom: BorderSide(
-                    color: AppColors.borderDark.withValues(alpha: 0.3),
+            InkWell(
+              onTap: onProfileTap != null
+                  ? () {
+                      Navigator.pop(context);
+                      onProfileTap!();
+                    }
+                  : null,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.2),
+                      AppColors.primary.withValues(alpha: 0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 32,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                    child: Text(
-                      userName.substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 28,
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 32,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                      child: Text(
+                        userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 28,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    userName,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        userName,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    userRole,
-                    style: TextStyle(
-                      color: AppColors.textSecondary.withValues(alpha: 0.8),
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+                    if (onProfileTap != null)
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: AppColors.textSecondary.withValues(alpha: 0.6),
+                      ),
+                  ],
+                ),
               ),
+            ),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.borderDark.withValues(alpha: 0.3),
             ),
 
             // Navigation items
