@@ -3,7 +3,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../data/models/institution_display_model.dart';
 import '../widgets/institution_card.dart';
 
-enum InstitutionTabType { allColleges, myInstitutes }
+enum InstitutionTabType { allInstitutions, myInstitutions }
 
 class InstitutionTabView extends StatefulWidget {
   final List<InstitutionDisplayModel> allInstitutions;
@@ -11,7 +11,6 @@ class InstitutionTabView extends StatefulWidget {
   final bool isLoading;
   final VoidCallback onRefresh;
   final Function(InstitutionDisplayModel) onInstitutionTap;
-  final Widget searchAndFilters;
   final String userRole;
 
   const InstitutionTabView({
@@ -21,7 +20,6 @@ class InstitutionTabView extends StatefulWidget {
     required this.isLoading,
     required this.onRefresh,
     required this.onInstitutionTap,
-    required this.searchAndFilters,
     required this.userRole,
   });
 
@@ -30,7 +28,7 @@ class InstitutionTabView extends StatefulWidget {
 }
 
 class _InstitutionTabViewState extends State<InstitutionTabView> {
-  InstitutionTabType _selectedTab = InstitutionTabType.allColleges;
+  InstitutionTabType _selectedTab = InstitutionTabType.allInstitutions;
 
   @override
   Widget build(BuildContext context) {
@@ -51,26 +49,22 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
             children: [
               Expanded(
                 child: _buildTab(
-                  'All Colleges',
-                  InstitutionTabType.allColleges,
+                  'All Institutions',
+                  InstitutionTabType.allInstitutions,
                   widget.allInstitutions.length,
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _buildTab(
-                  'My Institutes',
-                  InstitutionTabType.myInstitutes,
+                  'My Institutions',
+                  InstitutionTabType.myInstitutions,
                   widget.myInstitutions.length,
                 ),
               ),
             ],
           ),
         ),
-
-        // Search and filters (only show for All Colleges tab)
-        if (_selectedTab == InstitutionTabType.allColleges)
-          widget.searchAndFilters,
 
         // Content
         Expanded(
@@ -94,9 +88,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: isSelected
-                  ? AppColors.primary
-                  : Colors.transparent,
+              color: isSelected ? AppColors.primary : Colors.transparent,
               width: 3,
             ),
           ),
@@ -107,9 +99,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
             Text(
               label,
               style: TextStyle(
-                color: isSelected
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
+                color: isSelected ? AppColors.primary : AppColors.textSecondary,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 16,
               ),
@@ -141,7 +131,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
   }
 
   Widget _buildTabContent() {
-    final institutions = _selectedTab == InstitutionTabType.allColleges
+    final institutions = _selectedTab == InstitutionTabType.allInstitutions
         ? widget.allInstitutions
         : widget.myInstitutions;
 
@@ -157,13 +147,10 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
         itemCount: institutions.length,
         itemBuilder: (context, index) {
           final institution = institutions[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: InstitutionCard(
-              institution: institution,
-              userRole: widget.userRole,
-              onCardTapped: () => widget.onInstitutionTap(institution),
-            ),
+          return InstitutionCard(
+            institution: institution,
+            userRole: widget.userRole,
+            onCardTapped: () => widget.onInstitutionTap(institution),
           );
         },
       ),
@@ -171,7 +158,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
   }
 
   Widget _buildEmptyState() {
-    final isAllColleges = _selectedTab == InstitutionTabType.allColleges;
+    final isAllColleges = _selectedTab == InstitutionTabType.allInstitutions;
 
     return Center(
       child: Column(
@@ -184,9 +171,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
           ),
           const SizedBox(height: 16),
           Text(
-            isAllColleges
-                ? 'No colleges found'
-                : 'No registered institutes',
+            isAllColleges ? 'No colleges found' : 'No registered institutes',
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 18,

@@ -22,6 +22,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import InstitutionNavbar from './components/InstitutionNavbar';
 import Sidebar from './components/dashboard/Sidebar';
+import Notifications from './components/dashboard/Notifications';
 
 // Context
 export const InstitutionContext = createContext(null);
@@ -139,6 +140,7 @@ function App() {
               <Route path="/signup" element={<SignUp />} />
               <Route path="/institute-signup" element={<InstituteSignUp />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
               <Route path="/404" element={<NotFound />} />
               <Route path="*" element={<NotFound />} />

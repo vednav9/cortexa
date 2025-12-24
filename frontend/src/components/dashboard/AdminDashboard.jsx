@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiMenu,
@@ -21,7 +21,31 @@ const AdminDashboard = ({ onLogout }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('students');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFeature, setSelectedFeature] = useState(null);
+  const profileMenuRef = useRef(null);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    if (profileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileMenuOpen]);
+
+  const adminFeatures = [
+    { id: 1, name: 'User Management', icon: FiUsers, count: 245, color: 'from-emerald-400 to-green-500' },
+    { id: 2, name: 'Settings', icon: FiSettings, count: 12, color: 'from-blue-400 to-blue-500' },
+    { id: 3, name: 'Analytics', icon: FiBarChart, count: 8, color: 'from-purple-400 to-purple-500' },
+  ];
 
   const students = [
     { id: 1, name: 'John Doe', email: 'john@example.com', logo: 'JD', role: 'Student', status: 'active' },
@@ -78,7 +102,7 @@ const AdminDashboard = ({ onLogout }) => {
             </div>
 
             {/* Right – Profile Dropdown */}
-            <div className="relative">
+            <div className="relative" ref={profileMenuRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 className="flex items-center space-x-3 px-4 py-2 rounded-xl hover:bg-gray-50 transition-all"
@@ -117,7 +141,10 @@ const AdminDashboard = ({ onLogout }) => {
                     <div className="border-t border-gray-100">
                       <button
                         onClick={() => {
-                          setProfileMenuOpen(false);
+                          {
+                            setProfileMenuOpen(false);
+                            onLogout();
+                          };
                           onLogout();
                         }}
                         className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-colors"

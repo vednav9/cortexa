@@ -19,195 +19,190 @@ class InstitutionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brandColor = _parseColor(institution.primaryBrandColor);
+    final hasLoginButton = institution.isOwnInstitution && userRole == 'admin' && onLoginPressed != null;
 
     return GestureDetector(
       onTap: onCardTapped,
       child: Container(
+        height: 180,
         width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: institution.isOwnInstitution && userRole == 'admin'
-                ? brandColor.withValues(alpha: 0.5)
-                : AppColors.borderDark.withValues(alpha: 0.2),
-            width: institution.isOwnInstitution && userRole == 'admin' ? 2 : 1,
+            color: AppColors.white,
+            width: 0.5
           ),
           boxShadow: [
             BoxShadow(
-              color: institution.isOwnInstitution && userRole == 'admin'
-                  ? brandColor.withValues(alpha: 0.2)
-                  : Colors.black.withValues(alpha: 0.1),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+              spreadRadius: 0,
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
             children: [
-              // Logo placeholder
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: brandColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: brandColor.withValues(alpha: 0.3),
-                    width: 2,
+              // Background Image (full width)
+              Positioned.fill(
+                child: institution.logoUrl != null
+                    ? Image.network(
+                        institution.logoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildPlaceholderBackground(),
+                      )
+                    : _buildPlaceholderBackground(),
+              ),
+              // Gradient Overlay (transparent to black, right to left)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerRight,
+                      end: Alignment.centerLeft,
+                      stops: const [0.0, 0.2, 0.35, 0.5, 0.65, 0.8, 1.0],
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.0),
+                        Colors.black.withValues(alpha: 0.25),
+                        Colors.black.withValues(alpha: 0.4),
+                        Colors.black.withValues(alpha: 0.58),
+                        Colors.black.withValues(alpha: 0.75),
+                        Colors.black.withValues(alpha: 0.98),
+                      ],
+                    ),
                   ),
                 ),
-                child: institution.logoUrl != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          institution.logoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _buildLogoPlaceholder(brandColor),
-                        ),
-                      )
-                    : _buildLogoPlaceholder(brandColor),
               ),
-              const SizedBox(width: 16),
-              // Institution details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Name with "Your Institution" badge
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            institution.name,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
-                                ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+              // Content on the left side
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                right: MediaQuery.of(context).size.width * 0.25,
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Institution Name (full name, no ellipsis)
+                      Text(
+                        institution.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 17,
+                          letterSpacing: -0.3,
+                          height: 1.2,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black54,
+                              offset: Offset(0, 2),
+                              blurRadius: 4,
+                            ),
+                          ],
                         ),
-                        if (institution.isOwnInstitution &&
-                            userRole == 'admin') ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
+                        maxLines: 2,
+                        overflow: TextOverflow.visible,
+                      ),
+                      const SizedBox(height: 6),
+                      // Location
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 18,
+                            color: AppColors.primaryLight,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
                             child: Text(
-                              'Yours',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 10,
+                              institution.fullLocation,
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                shadows: const [
+                                  Shadow(
+                                    color: Colors.black54,
+                                    offset: Offset(0, 1),
+                                    blurRadius: 3,
                                   ),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // Type badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
                       ),
-                      decoration: BoxDecoration(
-                        color: brandColor.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        institution.type,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: brandColor,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    // Location
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 14,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            institution.fullLocation,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 12,
-                                    ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Description
-                    Text(
-                      institution.description,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.3,
+                      const SizedBox(height: 8),
+                      // Description
+                      Expanded(
+                        child: Text(
+                          institution.description,
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            height: 1.5,
                             fontSize: 12,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black54,
+                                offset: Offset(0, 1),
+                                blurRadius: 3,
+                              ),
+                            ],
                           ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    // Login button (only for admin on own institution)
-                    if (institution.isOwnInstitution &&
-                        userRole == 'admin' &&
-                        onLoginPressed != null) ...[
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: onLoginPressed,
-                          icon: const Icon(Icons.login, size: 16),
-                          label: const Text('Login to Manage'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: brandColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 10,
-                              horizontal: 12,
+                          maxLines: hasLoginButton ? 2 : 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // Login button (only for admin on own institution)
+                      if (hasLoginButton) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 38,
+                          child: ElevatedButton(
+                            onPressed: onLoginPressed,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: brandColor,
+                              foregroundColor: Colors.white,
+                              elevation: 4,
+                              shadowColor: brandColor.withValues(alpha: 0.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            elevation: 1,
-                            textStyle: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.login_rounded, size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Login to Manage',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -217,13 +212,33 @@ class InstitutionCard extends StatelessWidget {
     );
   }
 
-  Widget _buildLogoPlaceholder(Color brandColor) {
-    return Center(
-      child: Icon(
-        Icons.school_rounded,
-        color: brandColor,
-        size: 32,
-      ),
+  Widget _buildPlaceholderBackground() {
+    return Image.asset(
+      'assets/images/placeholder_education.png',
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        // Fallback to gradient if asset fails to load
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF10B981),
+                Color(0xFF0D1F1A),
+                Color(0xFF0F2A1F),
+              ],
+            ),
+          ),
+          child: Center(
+            child: Icon(
+              Icons.school_rounded,
+              color: AppColors.primary.withValues(alpha: 0.4),
+              size: 80,
+            ),
+          ),
+        );
+      },
     );
   }
 
