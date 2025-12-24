@@ -22,6 +22,8 @@ const AdminDashboard = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState('students');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
   const profileMenuRef = useRef(null);
 
   // Close profile menu when clicking outside
