@@ -8,6 +8,8 @@ import teacherrouter from "./routes/teacherRoutes.js"
 import adminrouter from "./routes/adminRoutes.js";
 import airouter from "./routes/aiRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import institutionRoutes from "./routes/institutionRoutes.js";
+import invitationRoutes from "./routes/invitationRoutes.js";
 
 //testing
 // Load environment variables
@@ -43,6 +45,8 @@ app.use("/api/teacher", teacherrouter);
 app.use("/api/admin", adminrouter);
 app.use('/api/ai', airouter);
 app.use("/api/auth", authRoutes);
+app.use("/api/institutions", institutionRoutes);
+app.use("/api/invitations", invitationRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
