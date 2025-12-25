@@ -12,12 +12,16 @@ import {
   FiCheckCircle
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
+import toast from 'react-hot-toast';
+import { adminAPI } from '../../services/api';
+import { LoadingSpinner } from '../common/LoadingSpinner';
 
 const AddUsersTab = () => {
   const [userType, setUserType] = useState('student');
   const [dragActive, setDragActive] = useState(false);
   const [users, setUsers] = useState([]);
   const [uploadMethod, setUploadMethod] = useState('csv');
+  const [uploading, setUploading] = useState(false);
   const [manualForm, setManualForm] = useState({
     fullName: '',
     email: '',
@@ -93,10 +97,36 @@ const AddUsersTab = () => {
     a.click();
   };
 
-  const handleUpload = () => {
-    console.log('Uploading:', users);
-    alert(`${users.length} ${userType}s uploaded successfully!`);
-    setUsers([]);
+  const handleUpload = async () => {
+    if (users.length === 0) {
+      toast.error('No users to upload');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      
+      // Create CSV content
+      const headers = 'fullName,email,mobile,year,dept,division,cortexaUsername\n';
+      const rows = users.map(u => 
+        `${u.fullName},${u.email},${u.mobile},${u.year},${u.dept},${u.division},${u.cortexaUsername}`
+      ).join('\n');
+      const csvContent = headers + rows;
+      
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      formData.append('file', blob, `${userType}s.csv`);
+      formData.append('userType', userType);
+
+      await adminAPI.bulkUpload(formData);
+      
+      toast.success(`${users.length} ${userType}(s) uploaded successfully!`);
+      setUsers([]);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload users');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const displayedUsers = users.filter(u => u.userType === userType);
@@ -489,10 +519,20 @@ const AddUsersTab = () => {
                   whileHover={{ scale: 1.05, y: -2 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleUpload}
-                  className="px-6 py-3.5 bg-white text-emerald-600 font-bold rounded-xl hover:shadow-2xl transition-all flex items-center gap-2"
+                  disabled={uploading || users.length === 0}
+                  className="px-6 py-3.5 bg-white text-emerald-600 font-bold rounded-xl hover:shadow-2xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <FiUpload className="w-5 h-5" />
-                  Upload All Users
+                  {uploading ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FiUpload className="w-5 h-5" />
+                      Upload All Users
+                    </>
+                  )}
                 </motion.button>
               </div>
             </div>
