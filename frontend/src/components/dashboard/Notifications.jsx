@@ -2,13 +2,37 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiCheck, FiX, FiClock, FiBell, FiMenu, FiUser, FiSettings, FiLogOut, FiChevronDown, FiMail } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 import Sidebar from './Sidebar';
+import { invitationAPI } from '../../services/api';
+import { LoadingPage } from '../common/LoadingSpinner';
+import { useAuth } from '../../context/authcontext';
 
 function Notifications() {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState('all');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
+  
+  const [invitations, setInvitations] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch invitations
+  useEffect(() => {
+    const fetchInvitations = async () => {
+      try {
+        setLoading(true);
+        const { data } = await invitationAPI.getAll('pending');
+        setInvitations(data.invitations || []);
+      } catch (err) {
+        toast.error('Failed to load invitations');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInvitations();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -26,76 +50,31 @@ function Notifications() {
     };
   }, [profileMenuOpen]);
 
-  const invitations = [
-    {
-      id: 1,
-      institutionName: 'Harvard University',
-      logo: 'H',
-      email: 'admissions@harvard.edu',
-      type: 'University',
-      date: '2 days ago',
-      status: 'pending'
-    },
-    {
-      id: 2,
-      institutionName: 'Indian Institute of Technology',
-      logo: 'I',
-      email: 'info@iit.edu',
-      type: 'University',
-      date: '5 days ago',
-      status: 'pending'
-    },
-    {
-      id: 3,
-      institutionName: 'Yale University',
-      logo: 'Y',
-      email: 'faculty@yale.edu',
-      type: 'University',
-      date: '1 day ago',
-      status: 'pending'
-    },
-  ];
-
-  const otherNotifications = [
-    {
-      id: 4,
-      type: 'announcement',
-      title: 'New Course Available',
-      message: 'Check out the new Data Science course',
-      date: '3 hours ago',
-      read: false,
-    },
-    {
-      id: 5,
-      type: 'update',
-      title: 'System Maintenance',
-      message: 'Scheduled maintenance on Sunday',
-      date: '1 day ago',
-      read: true,
-    },
-  ];
-
-  const handleAcceptInvitation = (id) => {
-    console.log('Accepted:', id);
+  const handleAcceptInvitation = async (id) => {
+    try {
+      await invitationAPI.accept(id);
+      setInvitations(prev => prev.filter(inv => inv._id !== id));
+      toast.success('Invitation accepted! You can now access the institution.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to accept invitation');
+    }
   };
 
-  const handleRejectInvitation = (id) => {
-    console.log('Rejected:', id);
+  const handleRejectInvitation = async (id) => {
+    try {
+      await invitationAPI.reject(id);
+      setInvitations(prev => prev.filter(inv => inv._id !== id));
+      toast.success('Invitation rejected');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to reject invitation');
+    }
   };
 
   const filters = [
-    { id: 'all', label: 'All Notifications' },
-    { id: 'invitations', label: 'Invitations' },
-    { id: 'announcements', label: 'Announcements' },
+    { id: 'all', label: 'All Invitations' },
   ];
 
-  const filteredInvitations = activeFilter === 'all' || activeFilter === 'invitations'
-    ? invitations
-    : [];
-
-  const filteredOtherNotifications = activeFilter === 'all' || activeFilter === 'announcements'
-    ? otherNotifications
-    : [];
+  if (loading) return <LoadingPage message="Loading invitations..." />;
 
   return (
     <div className="flex w-full h-screen bg-gray-50">
@@ -134,11 +113,11 @@ function Notifications() {
                 className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                  AD
+                  {user?.fullName?.substring(0, 2).toUpperCase() || user?.role?.substring(0, 2).toUpperCase() || 'U'}
                 </div>
                 <div className="hidden sm:block text-left">
-                  <p className="text-sm font-semibold text-gray-800">Admin</p>
-                  <p className="text-xs text-gray-500">Administrator</p>
+                  <p className="text-sm font-semibold text-gray-800">{user?.fullName || user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1) || 'User'}</p>
+                  <p className="text-xs text-gray-500">{user?.institutionName || user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1) || 'User'}</p>
                 </div>
                 <FiChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -152,8 +131,8 @@ function Notifications() {
                     className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50"
                   >
                     <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-semibold text-gray-800">Admin</p>
-                      <p className="text-xs text-gray-500">admin@email.com</p>
+                      <p className="text-sm font-semibold text-gray-800">{user?.fullName || user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1) || 'User'}</p>
+                      <p className="text-xs text-gray-500">{user?.email || 'user@email.com'}</p>
                     </div>
                     <button className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors">
                       <FiUser className="w-4 h-4" />
@@ -200,10 +179,7 @@ function Notifications() {
                 {/* Filter Pills */}
                 <div className="flex gap-2 p-1.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
                   {filters.map((filter) => {
-                    const count =
-                      filter.id === 'invitations' ? invitations.length :
-                        filter.id === 'announcements' ? otherNotifications.length :
-                          invitations.length + otherNotifications.length;
+                    const count = invitations.length;
 
                     return (
                       <button
@@ -231,7 +207,7 @@ function Notifications() {
             </div>
 
             {/* Invitations Grid */}
-            {filteredInvitations.length > 0 && (
+            {invitations.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
@@ -244,9 +220,9 @@ function Notifications() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredInvitations.map((invitation, index) => (
+                  {invitations.map((invitation, index) => (
                     <motion.div
-                      key={invitation.id}
+                      key={invitation._id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
@@ -254,20 +230,20 @@ function Notifications() {
                     >
                       <div className="flex items-start gap-4 mb-4">
                         <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-md flex-shrink-0">
-                          {invitation.logo}
+                          {invitation.institution?.logo || invitation.institution?.name?.substring(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="text-lg font-bold text-gray-900 mb-1 truncate">
-                            {invitation.institutionName}
+                            {invitation.institution?.name}
                           </h4>
                           <p className="text-sm text-gray-600 mb-2 truncate flex items-center gap-1">
                             <FiMail className="w-3.5 h-3.5 flex-shrink-0" />
-                            {invitation.email}
+                            {invitation.sender?.email}
                           </p>
                           <div className="flex items-center gap-2">
                             <span className="flex items-center gap-1 text-xs text-gray-500">
                               <FiClock className="w-3.5 h-3.5" />
-                              {invitation.date}
+                              {new Date(invitation.createdAt).toLocaleDateString()}
                             </span>
                             <span className="px-2.5 py-1 bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 rounded-full text-xs font-bold border border-emerald-200">
                               {invitation.type}
@@ -276,11 +252,15 @@ function Notifications() {
                         </div>
                       </div>
 
+                      {invitation.message && (
+                        <p className="text-sm text-gray-600 mb-4 italic">"{invitation.message}"</p>
+                      )}
+
                       <div className="flex gap-2">
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => handleAcceptInvitation(invitation.id)}
+                          onClick={() => handleAcceptInvitation(invitation._id)}
                           className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
                         >
                           <FiCheck className="w-4 h-4" />
@@ -289,7 +269,7 @@ function Notifications() {
                         <motion.button
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => handleRejectInvitation(invitation.id)}
+                          onClick={() => handleRejectInvitation(invitation._id)}
                           className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-red-50 hover:text-red-600 transition-all flex items-center justify-center gap-2"
                         >
                           <FiX className="w-4 h-4" />
@@ -302,59 +282,8 @@ function Notifications() {
               </div>
             )}
 
-            {/* Other Notifications */}
-            {filteredOtherNotifications.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <FiBell className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Recent Updates</h3>
-                    <p className="text-sm text-gray-600 mt-0.5">Latest announcements and updates</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {filteredOtherNotifications.map((notification, index) => (
-                    <motion.div
-                      key={notification.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`relative bg-white border-2 rounded-2xl p-6 hover:shadow-lg transition-all overflow-hidden ${!notification.read
-                        ? 'border-emerald-200 bg-gradient-to-r from-emerald-50/30 to-transparent'
-                        : 'border-gray-100'
-                        }`}
-                    >
-                      {!notification.read && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-500 to-green-500"></div>
-                      )}
-                      <div className="flex items-start justify-between pl-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h4 className="text-base font-bold text-gray-900">
-                              {notification.title}
-                            </h4>
-                            {!notification.read && (
-                              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600 mb-3">{notification.message}</p>
-                          <span className="flex items-center gap-1.5 text-xs text-gray-500">
-                            <FiClock className="w-3.5 h-3.5" />
-                            {notification.date}
-                          </span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Empty State */}
-            {filteredInvitations.length === 0 && filteredOtherNotifications.length === 0 && (
+            {invitations.length === 0 && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -364,7 +293,7 @@ function Notifications() {
                   <FiBell className="w-10 h-10 text-gray-400" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-700 mb-2">All Caught Up!</h3>
-                <p className="text-sm text-gray-500">You have no new notifications at the moment</p>
+                <p className="text-sm text-gray-500">You have no new invitations at the moment</p>
               </motion.div>
             )}
           </div>
