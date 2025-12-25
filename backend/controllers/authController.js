@@ -37,9 +37,11 @@ export const getMe = async (req, res) => {
         res.status(200).json({
             success: true,
             user: {
-                name: user.fullName,
+                fullName: user.fullName,
                 email: user.email,
                 role: user.role,
+                institutionName: user.institutionName,
+                jobTitle: user.jobTitle
             },
         });
     } catch (err) {
