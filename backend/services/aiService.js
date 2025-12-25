@@ -2,6 +2,10 @@ import axios from "axios";
 
 const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
 
+// Increased timeouts for AI operations
+const DEFAULT_TIMEOUT = 180000; // 3 minutes
+const LONG_TIMEOUT = 300000; // 5 minutes
+
 class AIService {
   // RAG Query
   async queryRAG(query, institutionId = null) {
@@ -11,7 +15,7 @@ class AIService {
         top_k: 5,
         institution_id: institutionId
       }, {
-        timeout: 60000 // 60 seconds timeout
+        timeout: DEFAULT_TIMEOUT // 3 minutes timeout
       });
       return response.data;
     } catch (error) {
@@ -22,11 +26,11 @@ class AIService {
   // Hybrid Assistant (RAG + Web)
   async queryHybridAssistant(query, useWebFallback = true) {
     try {
-      const response = await axios.post(`${AI_API_URL}/assistant/query`, {
+      const response = await axios.post(`${AI_API_URL}/assistant`, {
         query,
         use_web_fallback: useWebFallback
       }, {
-        timeout: 60000
+        timeout: DEFAULT_TIMEOUT // 3 minutes timeout
       });
       return response.data;
     } catch (error) {
@@ -43,7 +47,7 @@ class AIService {
         num_questions: numQuestions,
         difficulty: difficulty
       }, {
-        timeout: 90000 // MCQ generation can take longer
+        timeout: LONG_TIMEOUT // 5 minutes - MCQ generation can take longer
       });
       return response.data;
     } catch (error) {
@@ -57,6 +61,8 @@ class AIService {
       const response = await axios.post(`${AI_API_URL}/mcq/score`, {
         mcqs,
         user_answers: userAnswers
+      }, {
+        timeout: 30000 // 30 seconds for scoring
       });
       return response.data;
     } catch (error) {
@@ -76,7 +82,7 @@ class AIService {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
-        timeout: 120000 // 2 minutes for file upload
+        timeout: LONG_TIMEOUT // 5 minutes for file upload
       });
       return response.data;
     } catch (error) {

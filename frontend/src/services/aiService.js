@@ -2,16 +2,28 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+// Create axios instance with longer timeout for AI operations
+const aiAxios = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 180000, // 3 minutes timeout for AI operations (increased from 2 min)
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
 class AIService {
   // RAG Query
   async queryRAG(query, institutionId = null) {
     try {
-      const response = await axios.post(`${API_BASE_URL}/ai/query`, {
+      const response = await aiAxios.post('/ai/query', {
         query,
         institution_id: institutionId
       });
       return response.data;
     } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timeout - AI is taking longer than expected. Please try a simpler query or restart the AI server.');
+      }
       throw new Error(error.response?.data?.error || 'Query failed');
     }
   }
@@ -19,12 +31,15 @@ class AIService {
   // Hybrid Assistant
   async queryAssistant(query, useWebFallback = true) {
     try {
-      const response = await axios.post(`${API_BASE_URL}/ai/assistant`, {
+      const response = await aiAxios.post('/ai/assistant', {
         query,
         use_web_fallback: useWebFallback
       });
       return response.data;
     } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timeout - AI is taking longer than expected. Please try a simpler query or restart the AI server.');
+      }
       throw new Error(error.response?.data?.error || 'Assistant query failed');
     }
   }
@@ -32,7 +47,7 @@ class AIService {
   // Generate MCQs
   async generateMCQs(sourceType, source, numQuestions = 5, difficulty = 'medium') {
     try {
-      const response = await axios.post(`${API_BASE_URL}/ai/mcq/generate`, {
+      const response = await aiAxios.post('/ai/mcq/generate', {
         source_type: sourceType,
         source,
         num_questions: numQuestions,
@@ -40,6 +55,9 @@ class AIService {
       });
       return response.data;
     } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timeout - MCQ generation taking too long. Try fewer questions.');
+      }
       throw new Error(error.response?.data?.error || 'MCQ generation failed');
     }
   }
@@ -47,7 +65,7 @@ class AIService {
   // Score MCQs
   async scoreMCQs(mcqs, userAnswers) {
     try {
-      const response = await axios.post(`${API_BASE_URL}/ai/mcq/score`, {
+      const response = await aiAxios.post('/ai/mcq/score', {
         mcqs,
         user_answers: userAnswers
       });
@@ -65,13 +83,17 @@ class AIService {
       if (institutionId) formData.append('institution_id', institutionId);
       if (courseId) formData.append('course_id', courseId);
 
-      const response = await axios.post(`${API_BASE_URL}/ai/upload`, formData, {
+      const response = await aiAxios.post('/ai/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
-        }
+        },
+        timeout: 300000, // 5 minutes for file uploads
       });
       return response.data;
     } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Upload timeout - File might be too large or processing is taking too long.');
+      }
       throw new Error(error.response?.data?.error || 'Upload failed');
     }
   }
@@ -79,10 +101,10 @@ class AIService {
   // Check AI Health
   async checkHealth() {
     try {
-      const response = await axios.get(`${API_BASE_URL}/ai/health`);
+      const response = await aiAxios.get('/ai/health', { timeout: 5000 }); // Short timeout for health check
       return response.data;
     } catch (error) {
-      return { status: 'unavailable' };
+      return { status: 'unavailable', error: error.message };
     }
   }
 }

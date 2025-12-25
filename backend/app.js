@@ -26,6 +26,13 @@ app.use(cookieParser());
 
 app.use(express.json());
 
+// Increase timeout for AI routes (2 minutes)
+app.use('/api/ai', (req, res, next) => {
+    req.setTimeout(180000); // 3 minutes (increased from 2)
+    res.setTimeout(180000); // 3 minutes (increased from 2)
+    next();
+});
+
 // Example Route
 app.get("/", (req, res) => {
     res.send("Backend is running");
