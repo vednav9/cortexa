@@ -22,11 +22,14 @@ class MCQGenerator:
         """Generate MCQs from given text"""
         prompt = self._create_mcq_prompt(text, num_questions, difficulty, topic)
         
+        # ⚡ Calculate tokens based on number of questions (avg 150 tokens per MCQ)
+        tokens_needed = min(num_questions * 150 + 100, 800)  # Cap at 800 for speed
+        
         # Generate MCQs with higher temperature for creativity
         response = self.llm.generate(
             prompt=prompt,
-            max_new_tokens=2048,  # Increased for more questions
-            temperature=0.9  # Higher for more creative questions
+            max_new_tokens=tokens_needed,  # Dynamic based on num_questions
+            temperature=0.8  # Balanced creativity
         )
         
         print(f"\n🤖 LLM Response:\n{response[:500]}...\n")  # Debug
@@ -59,15 +62,17 @@ class MCQGenerator:
         difficulty: str = "medium"
     ) -> List[Dict]:
         """Generate MCQs from a specific topic using vector search"""
+        # ⚡ Reduce search for speed - fewer documents = faster
         documents, metadatas, distances = self.vector_store.search(
             query=topic,
-            top_k=15  # Get more context
+            top_k=5  # Reduced from 15 for speed
         )
         
         if not documents:
             raise ValueError(f"No content found for topic: {topic}")
         
-        text = "\n\n".join(documents[:5])  # Use top 5 most relevant
+        # ⚡ Use top 3 most relevant (reduced from 5)
+        text = "\n\n".join(documents[:3])
         return self.generate_from_text(text, num_questions, difficulty, topic)
     
     def _create_mcq_prompt(
@@ -81,11 +86,14 @@ class MCQGenerator:
         
         topic_str = f" about {topic}" if topic else ""
         
+        # ⚡ Shorter text input = faster generation
+        max_text_length = 800 if num_questions <= 3 else 1200
+        
         # Simpler, clearer prompt
         prompt = f"""Based on the following text, create {num_questions} multiple-choice questions{topic_str}.
 
 TEXT:
-{text[:1500]}
+{text[:max_text_length]}
 
 Create exactly {num_questions} questions. For each question:
 1. Write a clear question

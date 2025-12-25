@@ -1,4 +1,5 @@
 import axios from "axios";
+import FormData from "form-data"; // Node.js FormData
 
 const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
 
@@ -74,19 +75,26 @@ class AIService {
   async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
     try {
       const formData = new FormData();
-      formData.append('file', fileBuffer, fileName);
+      // Append buffer as blob with proper options
+      formData.append('file', fileBuffer, {
+        filename: fileName,
+        contentType: 'application/octet-stream'
+      });
       if (institutionId) formData.append('institution_id', institutionId);
       if (courseId) formData.append('course_id', courseId);
 
       const response = await axios.post(`${AI_API_URL}/upload`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          ...formData.getHeaders() // Get proper headers from form-data
         },
-        timeout: LONG_TIMEOUT // 5 minutes for file upload
+        timeout: LONG_TIMEOUT, // 5 minutes for file upload
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
       });
       return response.data;
     } catch (error) {
-      throw new Error(`Document upload failed: ${error.message}`);
+      console.error('Backend upload error:', error.response?.data || error.message);
+      throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
     }
   }
 

@@ -78,10 +78,67 @@ class AIService {
   // Upload Document
   async uploadDocument(file, institutionId = null, courseId = null) {
     try {
+      // Validate file parameter
+      if (!file) {
+        throw new Error('No file provided');
+      }
+
+      console.log('uploadDocument called with:', {
+        file: file,
+        type: typeof file,
+        constructor: file?.constructor?.name,
+        isFile: file instanceof File,
+        isBlob: file instanceof Blob,
+        hasName: !!file?.name,
+        hasSize: !!file?.size,
+        hasType: !!file?.type
+      });
+
+      // If file-like object but not instanceof File/Blob, try to reconstruct it
+      let validFile = file;
+      
+      if (!(file instanceof File) && !(file instanceof Blob)) {
+        console.warn('File object lost prototype, attempting to reconstruct...');
+        
+        // Check if it has file-like properties
+        if (file.name && file.size !== undefined && file.type !== undefined) {
+          try {
+            // Try to read as blob and create new File
+            if (file instanceof Object && file.arrayBuffer) {
+              const buffer = await file.arrayBuffer();
+              validFile = new File([buffer], file.name, { type: file.type });
+              console.log('✓ Successfully reconstructed File object');
+            } else {
+              throw new Error('Cannot reconstruct File object - missing arrayBuffer method');
+            }
+          } catch (reconstructError) {
+            console.error('Failed to reconstruct file:', reconstructError);
+            throw new Error('Document upload failed: Invalid file object. Please refresh the page and try again.');
+          }
+        } else {
+          throw new Error('Document upload failed: Invalid file object. Please select the file again.');
+        }
+      }
+
+      console.log('Final file validation:', {
+        name: validFile.name,
+        type: validFile.type,
+        size: validFile.size,
+        isFile: validFile instanceof File,
+        isBlob: validFile instanceof Blob
+      });
+
       const formData = new FormData();
-      formData.append('file', file);
-      if (institutionId) formData.append('institution_id', institutionId);
-      if (courseId) formData.append('course_id', courseId);
+      formData.append('file', validFile, validFile.name);
+      
+      if (institutionId) {
+        formData.append('institution_id', String(institutionId));
+      }
+      if (courseId) {
+        formData.append('course_id', String(courseId));
+      }
+
+      console.log('Sending upload request to /ai/upload...');
 
       const response = await aiAxios.post('/ai/upload', formData, {
         headers: {
@@ -89,12 +146,15 @@ class AIService {
         },
         timeout: 300000, // 5 minutes for file uploads
       });
+
+      console.log('Upload successful:', response.data);
       return response.data;
     } catch (error) {
+      console.error('Upload error:', error);
       if (error.code === 'ECONNABORTED') {
         throw new Error('Upload timeout - File might be too large or processing is taking too long.');
       }
-      throw new Error(error.response?.data?.error || 'Upload failed');
+      throw new Error(error.response?.data?.detail || error.response?.data?.error || error.message || 'Upload failed');
     }
   }
 
