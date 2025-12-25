@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 
 // Data
 import { getInstitutionBySlug } from './data/institutionsData';
@@ -131,6 +132,30 @@ function App() {
   return (
     <AuthContext.Provider value={{ user, setUser }}>
       <Router>
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#fff',
+              color: '#1f2937',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              borderRadius: '12px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
         <div className="flex flex-col min-h-screen bg-black">
           <Navbar />
 
