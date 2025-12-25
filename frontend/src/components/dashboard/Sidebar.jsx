@@ -10,8 +10,6 @@ import {
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import AIChat from "../ai/AIChat";
-import DocumentUploader from "../ai/DocumentUploader";
-import MCQGenerator from "../ai/MCQGenerator";
 import { InstitutionContext } from "../../App";
 import { useAuth } from "../../context/authcontext";
 
@@ -252,29 +250,15 @@ export default function Sidebar({
         </nav>
       </aside>
 
-      {/* AI Chat */}
-      <AIChat
-        isOpen={aiChatOpen}
-        onClose={() => setAiChatOpen(false)}
-        institutionId={institution?.id}
-        brandColor={brandColor}
-      />
-
-      {/* AI Chat */}
-      <DocumentUploader
-        isOpen={aiChatOpen}
-        onClose={() => setAiChatOpen(false)}
-        institutionId={institution?.id}
-        brandColor={brandColor}
-      />
-
-      {/* AI Chat */}
-      <MCQGenerator
-        isOpen={aiChatOpen}
-        onClose={() => setAiChatOpen(false)}
-        institutionId={institution?.id}
-        brandColor={brandColor}
-      />
+      {/* AI Chat Modal - Only AIChat has modal support */}
+      {aiChatOpen && (
+        <AIChat
+          isOpen={aiChatOpen}
+          onClose={() => setAiChatOpen(false)}
+          institutionId={institution?.id}
+          brandColor={brandColor}
+        />
+      )}
     </>
   );
 }
