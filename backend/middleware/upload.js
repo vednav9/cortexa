@@ -17,8 +17,16 @@ const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith("image/")) cb(null, true);
-        else cb(new Error("Only images allowed"), false);
+        const allowedTypes = ['image/', 'text/csv', 'application/vnd.ms-excel'];
+        const isAllowed = allowedTypes.some(type => 
+            file.mimetype.startsWith(type) || file.originalname.endsWith('.csv')
+        );
+        
+        if (isAllowed) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only images and CSV files allowed'), false);
+        }
     },
 });
 
