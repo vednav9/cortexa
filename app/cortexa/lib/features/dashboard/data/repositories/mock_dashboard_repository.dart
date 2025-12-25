@@ -70,19 +70,34 @@ class MockDashboardRepository {
     // In real app, make API call to reject invitation
   }
 
-  /// Get list of countries for filter dropdown
-  List<String> getCountries() {
+  /// Get list of Indian states for filter dropdown
+  /// TODO: Replace with API call if states list needs to be dynamic
+  List<String> getStates() {
     return [
-      'United States',
-      'United Kingdom',
-      'India',
-      'Canada',
-      'Australia',
-      'Germany',
-      'France',
-      'Japan',
-      'Singapore',
-      'United Arab Emirates',
+      'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+      'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand',
+      'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+      'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab',
+      'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
+      'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+      // Union Territories
+      'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
+      'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
+    ];
+  }
+
+  /// Get list of educational boards for filter dropdown
+  /// TODO: Replace with API call - getAvailableBoards()
+  List<String> getBoards() {
+    return [
+      'CBSE',
+      'ICSE',
+      'State Board',
+      'IB (International Baccalaureate)',
+      'Cambridge International',
+      'IGCSE',
+      'NIOS',
+      'Other',
     ];
   }
 
@@ -93,6 +108,29 @@ class MockDashboardRepository {
       'College',
       'School',
       'Training Center',
+    ];
+  }
+
+  /// Get list of affiliations for filter dropdown
+  /// TODO: Replace with API call - getAvailableAffiliations()
+  List<String> getAffiliations() {
+    return [
+      'Government',
+      'Private',
+      'Semi-Government',
+      'Autonomous',
+      'Aided',
+      'Unaided',
+    ];
+  }
+
+  /// Get list of student strength categories for filter dropdown
+  List<String> getStudentStrengths() {
+    return [
+      'Small (0-1000)',
+      'Medium (1001-5000)',
+      'Large (5001-20000)',
+      'Very Large (20000+)',
     ];
   }
 
@@ -220,6 +258,81 @@ class MockDashboardRepository {
         studentCount: 51000,
         teacherCount: 6500,
         createdAt: DateTime.now().subtract(const Duration(days: 400)),
+      ),
+      InstitutionDisplayModel(
+        id: '9',
+        name: 'Delhi Public School',
+        type: 'School',
+        logoUrl: null,
+        city: 'Delhi',
+        country: 'India',
+        description:
+            'Premier chain of public schools in India with focus on holistic development.',
+        customUrlSlug: 'dps-delhi',
+        primaryBrandColor: '#003DA5',
+        studentCount: 3200,
+        teacherCount: 180,
+        createdAt: DateTime.now().subtract(const Duration(days: 150)),
+      ),
+      InstitutionDisplayModel(
+        id: '10',
+        name: 'Bangalore International Academy',
+        type: 'College',
+        logoUrl: null,
+        city: 'Bangalore',
+        country: 'India',
+        description:
+            'Leading international college offering diverse undergraduate programs.',
+        customUrlSlug: 'bia-blr',
+        primaryBrandColor: '#E94B3C',
+        studentCount: 4500,
+        teacherCount: 320,
+        createdAt: DateTime.now().subtract(const Duration(days: 180)),
+      ),
+      InstitutionDisplayModel(
+        id: '11',
+        name: 'Hyderabad Institute of Technology',
+        type: 'Institute',
+        logoUrl: null,
+        city: 'Hyderabad',
+        country: 'India',
+        description:
+            'Autonomous engineering and technology institute with modern facilities.',
+        customUrlSlug: 'hit-hyd',
+        primaryBrandColor: '#FF6F00',
+        studentCount: 8200,
+        teacherCount: 420,
+        createdAt: DateTime.now().subtract(const Duration(days: 220)),
+      ),
+      InstitutionDisplayModel(
+        id: '12',
+        name: 'Chennai Skill Development Center',
+        type: 'Training Center',
+        logoUrl: null,
+        city: 'Chennai',
+        country: 'India',
+        description:
+            'Vocational training and skill development for technical courses.',
+        customUrlSlug: 'csdc-chennai',
+        primaryBrandColor: '#4CAF50',
+        studentCount: 650,
+        teacherCount: 35,
+        createdAt: DateTime.now().subtract(const Duration(days: 90)),
+      ),
+      InstitutionDisplayModel(
+        id: '13',
+        name: 'Pune Engineering College',
+        type: 'College',
+        logoUrl: null,
+        city: 'Pune',
+        country: 'India',
+        description:
+            'Established engineering college known for placements and research.',
+        customUrlSlug: 'pec-pune',
+        primaryBrandColor: '#1976D2',
+        studentCount: 6800,
+        teacherCount: 380,
+        createdAt: DateTime.now().subtract(const Duration(days: 310)),
       ),
     ];
   }
