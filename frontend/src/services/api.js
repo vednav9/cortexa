@@ -87,17 +87,27 @@ export const adminAPI = {
   }),
   deleteUser: (userId) => api.delete(`/admin/user/${userId}`),
   updateUser: (userId, userData) => api.put(`/admin/user/${userId}`, userData),
+  
+  // Admin Management APIs
+  addAdmin: (adminData) => api.post('/admin/add-admin', adminData),
+  getAllAdmins: () => api.get('/admin/admins'),
+  updateAdminPermissions: (adminId, permissions) => api.put(`/admin/admins/${adminId}/permissions`, { permissions }),
+  removeAdmin: (adminId) => api.delete(`/admin/admins/${adminId}`),
 };
 
 // ============================================
 // INSTITUTION APIs
 // ============================================
+// INSTITUTION APIs
+// ============================================
 export const institutionAPI = {
   browse: () => api.get('/institutions/browse'),
-  getAll: (params) => api.get('/institutions', { params }),
+  getBySlug: (slug) => api.get(`/institutions/slug/${slug}`),
+  getCourses: (slug) => api.get(`/institutions/slug/${slug}/courses`),
+  getCourseDetails: (slug, courseCode) => api.get(`/institutions/slug/${slug}/courses/${courseCode}`),
   getById: (id) => api.get(`/institutions/${id}`),
   create: (data) => api.post('/institutions', data),
-  update: (id, data) => api.put(`/institutions/${id}`, data),
+  update: (data) => api.put('/institutions/update', data),
   delete: (id) => api.delete(`/institutions/${id}`),
   join: (id) => api.post(`/institutions/${id}/join`),
   leave: (id) => api.post(`/institutions/${id}/leave`),

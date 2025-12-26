@@ -1,6 +1,7 @@
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
-import Admin from "../models/admin.js"
+import Admin from "../models/admin.js";
+import Institution from "../models/institution.js";
 
 export const getMe = async (req, res) => {
     try {
@@ -14,11 +15,28 @@ export const getMe = async (req, res) => {
         else if (role === "teacher") {
             user = await Teacher.findById(id).select("fullName email role");
         }
-
-        else if (role === "admin") {               // ✅ ADD THIS
-            user = await Admin.findById(id).select(
-                "fullName email role institutionName jobTitle"
-            );
+        else if (role === "admin") {
+            user = await Admin.findById(id)
+                .select("fullName email role jobTitle isSuperAdmin permissions")
+                .populate('institution', 'name slug code branding stats');
+            
+            if (user && user.institution) {
+                user = {
+                    fullName: user.fullName,
+                    email: user.email,
+                    role: user.role,
+                    jobTitle: user.jobTitle,
+                    isSuperAdmin: user.isSuperAdmin,
+                    permissions: user.permissions,
+                    institution: {
+                        name: user.institution.name,
+                        slug: user.institution.slug,
+                        code: user.institution.code,
+                        logo: user.institution.branding?.logo,
+                        stats: user.institution.stats
+                    }
+                };
+            }
         }
         else {
             return res.status(400).json({
@@ -36,13 +54,7 @@ export const getMe = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            user: {
-                fullName: user.fullName,
-                email: user.email,
-                role: user.role,
-                institutionName: user.institutionName,
-                jobTitle: user.jobTitle
-            },
+            user: user,
         });
     } catch (err) {
         console.error("Auth Me Error:", err);
