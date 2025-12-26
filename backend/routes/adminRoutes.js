@@ -4,6 +4,10 @@ import {
     loginAdmin,
     logoutAdmin,
     getAdminProfile,
+    addAdminToInstitution,
+    getAllInstitutionAdmins,
+    updateAdminPermissions,
+    removeAdmin,
 } from "../controllers/adminController.js";
 import { authenticate } from "../middleware/auth.js";
 import upload from "../middleware/upload.js";
@@ -13,11 +17,17 @@ import fs from "fs";
 
 const router = express.Router();
 
+// Auth routes
 router.post("/register", upload.single("logo"), registerAdmin);
-
 router.post("/login", loginAdmin);
 router.post("/logout", logoutAdmin);
 router.get("/me", authenticate, getAdminProfile);
+
+// Admin management routes (Super Admin only)
+router.post("/add-admin", authenticate, addAdminToInstitution);
+router.get("/admins", authenticate, getAllInstitutionAdmins);
+router.put("/admins/:adminId/permissions", authenticate, updateAdminPermissions);
+router.delete("/admins/:adminId", authenticate, removeAdmin);
 
 // Get all students
 router.get("/students", authenticate, async (req, res) => {

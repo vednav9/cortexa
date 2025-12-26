@@ -3,29 +3,153 @@ import { authenticate } from '../middleware/auth.js';
 import Institution from '../models/institution.js';
 import Membership from '../models/membership.js';
 import Invitation from '../models/invitation.js';
+import Admin from '../models/admin.js';
 
 const router = express.Router();
 
 // Get all institutions (public browse)
-router.get('/browse', authenticate, async (req, res) => {
+router.get('/browse', async (req, res) => {
   try {
-    const institutions = await Institution.find({ isActive: true })
-      .select('name code logo description type stats')
-      .sort('-stats.totalStudents');
+    const institutions = await Institution.find()
+      .select('name slug code type description address contact branding stats departments established')
+      .sort('name');
     
-    res.json({ institutions });
+    res.json({ 
+      success: true,
+      count: institutions.length,
+      institutions 
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching institutions', error: error.message });
+    console.error('❌ Error fetching institutions:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching institutions', 
+      error: error.message 
+    });
   }
 });
 
-// Get institution by ID
+// Get institution by slug (PUBLIC - for institution pages)
+router.get('/slug/:slug', async (req, res) => {
+  try {
+    // Mock data mapping for now
+    const slugToData = {
+      'mumbai-university': {
+        slug: 'mumbai-university',
+        name: 'University of Mumbai',
+        shortName: 'MU',
+        type: 'University',
+        description: 'One of the oldest and premier universities in India',
+        logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/f/f5/University_of_Mumbai_coat_of_arms.svg/150px-University_of_Mumbai_coat_of_arms.svg.png',
+        branding: {
+          primaryColor: '#0052A5',
+          accentColor: '#003366'
+        },
+        stats: {
+          totalStudents: 45000,
+          totalFaculty: 850,
+          totalCourses: 320,
+          activeSemesters: 2
+        },
+        departments: [
+          { id: 1, name: 'Computer Science', code: 'CS' },
+          { id: 2, name: 'Information Technology', code: 'IT' }
+        ]
+      }
+    };
+
+    const institution = slugToData[req.params.slug];
+    
+    if (!institution) {
+      return res.status(404).json({ message: 'Institution not found' });
+    }
+    
+    res.json({ institution });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching institution', error: error.message });
+  }
+});
+
+// Get courses for institution (PUBLIC)
+router.get('/slug/:slug/courses', async (req, res) => {
+  try {
+    // Mock courses data
+    const courses = [
+      {
+        id: 1,
+        code: 'CS101',
+        name: 'Introduction to Computer Science',
+        description: 'Fundamental concepts of computer science and programming',
+        credits: 3,
+        instructor: 'Dr. Rajesh Sharma',
+        duration: '14 weeks',
+        rating: 4.5,
+        department: 'CS'
+      },
+      {
+        id: 2,
+        code: 'CS201',
+        name: 'Data Structures and Algorithms',
+        description: 'Advanced data structures and algorithmic techniques',
+        credits: 4,
+        instructor: 'Dr. Priya Deshmukh',
+        duration: '14 weeks',
+        rating: 4.7,
+        department: 'CS'
+      }
+    ];
+    
+    res.json({ courses });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching courses', error: error.message });
+  }
+});
+
+// Get course details (PUBLIC)
+router.get('/slug/:slug/courses/:courseCode', async (req, res) => {
+  try {
+    // Mock course detail
+    const course = {
+      id: 1,
+      code: req.params.courseCode,
+      name: 'Introduction to Computer Science',
+      description: 'Fundamental concepts of computer science and programming',
+      fullDescription: 'This comprehensive course introduces students to the foundational concepts of computer science, including programming fundamentals, computational thinking, and problem-solving strategies.',
+      credits: 3,
+      instructor: 'Dr. Rajesh Sharma',
+      duration: '14 weeks',
+      schedule: 'Mon, Wed, Fri - 10:00 AM',
+      rating: 4.5,
+      department: 'Computer Science',
+      outcomes: [
+        'Understand fundamental programming concepts',
+        'Apply computational thinking to solve problems',
+        'Design and implement basic algorithms',
+        'Write clean and efficient code'
+      ],
+      topics: [
+        'Programming Basics',
+        'Data Types & Variables',
+        'Control Structures',
+        'Functions & Modules',
+        'Object-Oriented Programming',
+        'Algorithm Design'
+      ]
+    };
+    
+    res.json({ course });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching course', error: error.message });
+  }
+});
+
+// Get institution by ID (AUTHENTICATED)
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const institution = await Institution.findById(req.params.id)
-      .populate('admin', 'name email')
-      .populate('students', 'name email')
-      .populate('teachers', 'name email');
+      .populate('admin', 'fullName email')
+      .populate('students', 'fullName email')
+      .populate('teachers', 'fullName email');
     
     if (!institution) {
       return res.status(404).json({ message: 'Institution not found' });
@@ -199,6 +323,58 @@ router.post('/:id/leave', authenticate, async (req, res) => {
     res.json({ message: 'Left institution successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error leaving institution', error: error.message });
+  }
+});
+
+// Admin route: Update institution details
+router.put('/update', authenticate, async (req, res) => {
+  try {
+    const adminId = req.user.userId;
+    const updateData = req.body;
+
+    // Get admin to verify institution
+    const admin = await Admin.findById(adminId).populate('institution');
+    
+    if (!admin || !admin.institution) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin or institution not found"
+      });
+    }
+
+    // Check if admin has edit permission
+    if (!admin.isSuperAdmin && !admin.permissions.canEditInstitution) {
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to edit institution details"
+      });
+    }
+
+    const institution = await Institution.findByIdAndUpdate(
+      admin.institution._id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('-admins -superAdmin');
+
+    if (!institution) {
+      return res.status(404).json({
+        success: false,
+        message: "Institution not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Institution updated successfully",
+      institution
+    });
+  } catch (error) {
+    console.error("❌ Error updating institution:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update institution",
+      error: error.message
+    });
   }
 });
 
