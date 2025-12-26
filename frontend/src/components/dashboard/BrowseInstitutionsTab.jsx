@@ -1,8 +1,9 @@
-// BrowseInstitutionsTab.jsx - Simplified version
+// BrowseInstitutionsTab.jsx - Fetches from backend
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiSearch, FiMapPin, FiUsers, FiBook, FiExternalLink, FiChevronDown } from 'react-icons/fi';
-import { institutionsData } from '../../data/institutionsData';
+import { FiSearch, FiMapPin, FiUsers, FiBook, FiExternalLink, FiChevronDown, FiLoader } from 'react-icons/fi';
+import { institutionAPI } from '../../services/api';
+import toast from 'react-hot-toast';
 
 export default function BrowseInstitutionsTab() {
   const [filters, setFilters] = useState({
@@ -11,14 +12,34 @@ export default function BrowseInstitutionsTab() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [institutions, setInstitutions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const typeDropdownRef = useRef(null);
   const sortDropdownRef = useRef(null);
 
-  const uniqueTypes = useMemo(() => {
-    const types = [...new Set(institutionsData.map(inst => inst.type))];
-    return types.sort();
+  // Fetch institutions from backend
+  useEffect(() => {
+    const fetchInstitutions = async () => {
+      try {
+        setLoading(true);
+        const response = await institutionAPI.browse();
+        setInstitutions(response.data.institutions || []);
+      } catch (error) {
+        console.error('Error fetching institutions:', error);
+        toast.error('Failed to load institutions');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInstitutions();
   }, []);
+
+  const uniqueTypes = useMemo(() => {
+    const types = [...new Set(institutions.map(inst => inst.type))];
+    return types.sort();
+  }, [institutions]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -35,7 +56,7 @@ export default function BrowseInstitutionsTab() {
   }, []);
 
   const filteredInstitutions = useMemo(() => {
-    let results = institutionsData;
+    let results = institutions;
 
     if (filters.type !== 'all') {
       results = results.filter(inst => inst.type === filters.type);
@@ -44,8 +65,8 @@ export default function BrowseInstitutionsTab() {
     if (searchQuery) {
       results = results.filter(inst =>
         inst.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        inst.shortName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        inst.location.city.toLowerCase().includes(searchQuery.toLowerCase())
+        (inst.code && inst.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (inst.address?.city && inst.address.city.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
 
@@ -53,15 +74,15 @@ export default function BrowseInstitutionsTab() {
       if (filters.sortBy === 'name') {
         return a.name.localeCompare(b.name);
       } else if (filters.sortBy === 'students') {
-        return b.stats.totalStudents - a.stats.totalStudents;
+        return (b.stats?.totalStudents || 0) - (a.stats?.totalStudents || 0);
       } else if (filters.sortBy === 'established') {
-        return a.established - b.established;
+        return (a.established || 0) - (b.established || 0);
       }
       return 0;
     });
 
     return results;
-  }, [filters, searchQuery]);
+  }, [filters, searchQuery, institutions]);
 
   const typeOptions = [
     { value: 'all', label: 'All Types' },
@@ -193,10 +214,15 @@ export default function BrowseInstitutionsTab() {
 
       {/* Institution Cards */}
       <div className="space-y-4">
-        {filteredInstitutions.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
+            <FiLoader className="w-12 h-12 text-emerald-500 mx-auto mb-4 animate-spin" />
+            <p className="text-gray-500 text-lg font-medium">Loading institutions...</p>
+          </div>
+        ) : filteredInstitutions.length > 0 ? (
           filteredInstitutions.map((institution, index) => (
             <motion.div
-              key={institution.id}
+              key={institution._id || institution.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
@@ -206,12 +232,12 @@ export default function BrowseInstitutionsTab() {
                 {/* Logo */}
                 <div
                   className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-sm"
-                  style={{ backgroundColor: institution.branding.primaryColor }}
+                  style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
                 >
-                  {institution.logo ? (
-                    <img src={institution.branding.logo} alt={institution.shortName} className="w-full h-full object-cover rounded-lg" />
+                  {institution.branding?.logo ? (
+                    <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover rounded-lg" />
                   ) : (
-                    institution.shortName
+                    institution.code || institution.name.substring(0, 2).toUpperCase()
                   )}
                 </div>
 
@@ -223,11 +249,11 @@ export default function BrowseInstitutionsTab() {
                       <h3 className="text-lg font-bold text-gray-800 mb-1">
                         {institution.name}
                       </h3>
-                      <p className="text-sm text-gray-500">{institution.tagline}</p>
+                      <p className="text-sm text-gray-500">{institution.code || ''}</p>
                     </div>
                     <span
                       className="px-3 py-1 rounded-full text-xs font-semibold text-white shadow-sm"
-                      style={{ backgroundColor: institution.branding.primaryColor }}
+                      style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
                     >
                       {institution.type}
                     </span>
@@ -235,50 +261,62 @@ export default function BrowseInstitutionsTab() {
 
                   {/* Info Row */}
                   <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-3">
-                    <div className="flex items-center space-x-1.5">
-                      <FiMapPin className="w-4 h-4" />
-                      <span>{institution.location.city}, {institution.location.state}</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <FiUsers className="w-4 h-4" />
-                      <span>{institution.stats.totalStudents.toLocaleString()} Students</span>
-                    </div>
-                    <div className="flex items-center space-x-1.5">
-                      <FiBook className="w-4 h-4" />
-                      <span>{institution.stats.totalCourses} Courses</span>
-                    </div>
-                    <div className="text-gray-500">
-                      Est. {institution.established}
-                    </div>
+                    {institution.address?.city && (
+                      <div className="flex items-center space-x-1.5">
+                        <FiMapPin className="w-4 h-4" />
+                        <span>{institution.address.city}{institution.address.state && `, ${institution.address.state}`}</span>
+                      </div>
+                    )}
+                    {institution.stats?.totalStudents && (
+                      <div className="flex items-center space-x-1.5">
+                        <FiUsers className="w-4 h-4" />
+                        <span>{institution.stats.totalStudents.toLocaleString()} Students</span>
+                      </div>
+                    )}
+                    {institution.stats?.totalCourses && (
+                      <div className="flex items-center space-x-1.5">
+                        <FiBook className="w-4 h-4" />
+                        <span>{institution.stats.totalCourses} Courses</span>
+                      </div>
+                    )}
+                    {institution.established && (
+                      <div className="text-gray-500">
+                        Est. {institution.established}
+                      </div>
+                    )}
                   </div>
 
                   {/* Description */}
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                    {institution.description}
-                  </p>
+                  {institution.description && (
+                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                      {institution.description}
+                    </p>
+                  )}
 
                   {/* Departments */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {institution.departments.slice(0, 4).map((dept) => (
-                      <span
-                        key={dept.id}
-                        className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium"
-                      >
-                        {dept.code}
-                      </span>
-                    ))}
-                    {institution.departments.length > 4 && (
-                      <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                        +{institution.departments.length - 4} more
-                      </span>
-                    )}
-                  </div>
+                  {institution.departments && institution.departments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {institution.departments.slice(0, 4).map((dept, idx) => (
+                        <span
+                          key={dept._id || dept.id || idx}
+                          className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium"
+                        >
+                          {dept.code || dept.name}
+                        </span>
+                      ))}
+                      {institution.departments.length > 4 && (
+                        <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                          +{institution.departments.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="flex items-center space-x-3">
                     <button
                       className="px-5 py-2.5 rounded-lg font-medium text-white transition-all hover:shadow-md"
-                      style={{ backgroundColor: institution.branding.primaryColor }}
+                      style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
                     >
                       Request Access
                     </button>
@@ -286,8 +324,8 @@ export default function BrowseInstitutionsTab() {
                       href={`/${institution.slug}`}
                       className="px-5 py-2.5 rounded-lg font-medium border-2 transition-all flex items-center space-x-2 hover:bg-gray-50"
                       style={{
-                        borderColor: institution.branding.primaryColor,
-                        color: institution.branding.primaryColor
+                        borderColor: institution.branding?.primaryColor || '#10b981',
+                        color: institution.branding?.primaryColor || '#10b981'
                       }}
                     >
                       <span>View Details</span>
