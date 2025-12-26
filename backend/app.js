@@ -28,6 +28,9 @@ app.use(cookieParser());
 
 app.use(express.json());
 
+// Serve uploaded files as static files
+app.use('/uploads', express.static('uploads'));
+
 // Increase timeout for AI routes (2 minutes)
 app.use('/api/ai', (req, res, next) => {
     req.setTimeout(180000); // 3 minutes (increased from 2)
