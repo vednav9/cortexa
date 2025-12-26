@@ -1,9 +1,17 @@
 import mongoose from 'mongoose';
 
 const institutionSchema = new mongoose.Schema({
+  // Basic Information
   name: {
     type: String,
     required: true,
+    trim: true
+  },
+  slug: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
     trim: true
   },
   code: {
@@ -13,36 +21,77 @@ const institutionSchema = new mongoose.Schema({
     uppercase: true,
     trim: true
   },
-  logo: {
+  type: {
     type: String,
-    default: ''
+    required: true,
+    lowercase: true
   },
   description: {
     type: String,
     default: ''
   },
-  type: {
-    type: String,
-    enum: ['university', 'college', 'school', 'institute'],
-    default: 'college'
-  },
+  
+  // Address
   address: {
-    street: String,
-    city: String,
-    state: String,
-    country: String,
+    street: {
+      type: String,
+      required: true
+    },
+    city: {
+      type: String,
+      required: true
+    },
+    state: {
+      type: String,
+      required: true
+    },
+    country: {
+      type: String,
+      required: true
+    },
     zipCode: String
   },
+  
+  // Contact Information
   contact: {
     email: String,
     phone: String,
     website: String
   },
-  admin: {
+  
+  // Branding
+  branding: {
+    logo: {
+      type: String,
+      default: ''
+    },
+    primaryColor: {
+      type: String,
+      default: '#0052A5'
+    },
+    secondaryColor: {
+      type: String,
+      default: '#FFFFFF'
+    },
+    accentColor: String,
+    banner: String,
+    favicon: String
+  },
+  
+  // Admins Array (multiple admins can manage one institution)
+  admins: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin'
+  }],
+  
+  // Super Admin (first registered admin)
+  superAdmin: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
     required: true
   },
+  
+  // Students and Teachers
   students: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Student'
@@ -51,6 +100,15 @@ const institutionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Teacher'
   }],
+  
+  // Departments
+  departments: [{
+    name: String,
+    code: String,
+    head: String
+  }],
+  
+  // Settings
   settings: {
     allowPublicJoin: {
       type: Boolean,
@@ -69,6 +127,8 @@ const institutionSchema = new mongoose.Schema({
       default: null
     }
   },
+  
+  // Statistics
   stats: {
     totalStudents: {
       type: Number,
@@ -81,20 +141,22 @@ const institutionSchema = new mongoose.Schema({
     totalCourses: {
       type: Number,
       default: 0
+    },
+    totalAdmins: {
+      type: Number,
+      default: 1
     }
   },
+  
+  // Status
   isActive: {
     type: Boolean,
     default: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
+}, { 
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 // Update timestamp on save
@@ -107,6 +169,22 @@ institutionSchema.pre('save', function(next) {
 institutionSchema.virtual('initials').get(function() {
   return this.name.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
 });
+
+// Method to add admin
+institutionSchema.methods.addAdmin = async function(adminId) {
+  if (!this.admins.includes(adminId)) {
+    this.admins.push(adminId);
+    this.stats.totalAdmins = this.admins.length;
+    await this.save();
+  }
+};
+
+// Method to remove admin
+institutionSchema.methods.removeAdmin = async function(adminId) {
+  this.admins = this.admins.filter(id => id.toString() !== adminId.toString());
+  this.stats.totalAdmins = this.admins.length;
+  await this.save();
+};
 
 const Institution = mongoose.model('Institution', institutionSchema);
 

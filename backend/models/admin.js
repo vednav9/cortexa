@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 
 const adminSchema = new mongoose.Schema(
     {
-        // Step 1 — Main Info
+        // Personal Information
         fullName: {
             type: String,
             required: [true, "Full name is required"],
@@ -29,59 +29,61 @@ const adminSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
+        
+        // Institution Reference
+        institution: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Institution',
+            required: true
+        },
+        
+        // Admin Privileges
+        isSuperAdmin: {
+            type: Boolean,
+            default: false, // First admin of institution becomes super admin
+        },
+        permissions: {
+            canAddAdmins: {
+                type: Boolean,
+                default: false,
+            },
+            canManageStudents: {
+                type: Boolean,
+                default: true,
+            },
+            canManageTeachers: {
+                type: Boolean,
+                default: true,
+            },
+            canManageCourses: {
+                type: Boolean,
+                default: true,
+            },
+            canViewReports: {
+                type: Boolean,
+                default: true,
+            },
+            canEditInstitution: {
+                type: Boolean,
+                default: false,
+            }
+        },
+        
+        // Status
+        isActive: {
+            type: Boolean,
+            default: true,
+        },
         authorized: {
             type: Boolean,
-            default: false,
+            default: false, // Needs approval from super admin
         },
-
-        // Step 2 — Institution Details
-        institutionName: {
-            type: String,
-            required: true,
-        },
-        institutionType: {
-            type: String,
-            required: true,
-        },
-        website: {
-            type: String,
-        },
-        address1: {
-            type: String,
-            required: true,
-        },
-        city: {
-            type: String,
-            required: true,
-        },
-        state: {
-            type: String,
-            required: true,
-        },
-        country: {
-            type: String,
-            required: true,
-        },
-        postalCode: {
-            type: String,
-            required: true,
-        },
-        description: {
-            type: String,
-        },
-
-        // Step 3 — Branding
-        logo: {
-            type: String,
-        }, // URL of uploaded logo
-        customURL: {
-            type: String,
-            unique: true,
-            sparse: true,
-        },
-        brandColor: {
-            type: String,
-            default: "#34d399",
+        
+        // Added by
+        addedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Admin',
+            default: null
         },
 
         role: {
