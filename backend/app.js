@@ -8,6 +8,8 @@ import teacherrouter from "./routes/teacherRoutes.js"
 import adminrouter from "./routes/adminRoutes.js";
 import airouter from "./routes/aiRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import institutionRoutes from "./routes/institutionRoutes.js";
+import invitationRoutes from "./routes/invitationRoutes.js";
 
 //testing
 // Load environment variables
@@ -26,6 +28,13 @@ app.use(cookieParser());
 
 app.use(express.json());
 
+// Increase timeout for AI routes (2 minutes)
+app.use('/api/ai', (req, res, next) => {
+    req.setTimeout(180000); // 3 minutes (increased from 2)
+    res.setTimeout(180000); // 3 minutes (increased from 2)
+    next();
+});
+
 // Example Route
 app.get("/", (req, res) => {
     res.send("Backend is running");
@@ -36,6 +45,8 @@ app.use("/api/teacher", teacherrouter);
 app.use("/api/admin", adminrouter);
 app.use('/api/ai', airouter);
 app.use("/api/auth", authRoutes);
+app.use("/api/institutions", institutionRoutes);
+app.use("/api/invitations", invitationRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)

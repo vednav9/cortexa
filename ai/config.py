@@ -22,19 +22,31 @@ EMBEDDINGS_JSON = PROCESSED_DIR / "embeddings_store.json"
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-MiniLM-L3-v2"  # 120 MB
 LLM_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 1.1 GB
 
+# Alternative faster models (uncomment to use):
+# LLM_MODEL = "distilgpt2"  # 350 MB - RECOMMENDED: 3-5x faster!
+# LLM_MODEL = "gpt2"  # 500 MB - 2x faster than TinyLlama
+
 # Chunking settings
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 50
 MAX_CHUNKS_PER_DOC = 1000
 
 # Retrieval settings
-TOP_K = 5
+TOP_K = 3  # Reduced from 5 for faster retrieval
 SIMILARITY_THRESHOLD = 0.3
 
 # Generation settings
-MAX_NEW_TOKENS = 512
+MAX_NEW_TOKENS = 256  # Reduced from 512 for faster generation
 TEMPERATURE = 0.7
 TOP_P = 0.9
 
+# MCQ Generation settings (optimized for speed)
+MCQ_MAX_TOKENS_PER_QUESTION = 150  # ~150 tokens per MCQ
+MCQ_MAX_CONTEXT_LENGTH = 1000  # Shorter context = faster generation
+
 # Device settings
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Performance settings
+USE_FAST_TOKENIZER = True
+LOW_CPU_MEM_USAGE = True

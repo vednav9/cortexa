@@ -90,7 +90,7 @@ export const loginStudent = async (req, res) => {
             success: true,
             message: "Login successful",
             user: {
-                name: student.fullName,
+                fullName: student.fullName,
                 email: student.email,
                 role: student.role,
             },
@@ -119,7 +119,7 @@ export const getUserProfile = async (req, res) => {
         res.status(200).json({
             success: true,
             user: {
-                name: student.fullName,
+                fullName: student.fullName,
                 email: student.email,
                 role: student.role,
             },

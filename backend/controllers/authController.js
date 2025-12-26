@@ -1,5 +1,6 @@
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
+import Admin from "../models/admin.js"
 
 export const getMe = async (req, res) => {
     try {
@@ -12,6 +13,12 @@ export const getMe = async (req, res) => {
         }
         else if (role === "teacher") {
             user = await Teacher.findById(id).select("fullName email role");
+        }
+
+        else if (role === "admin") {               // ✅ ADD THIS
+            user = await Admin.findById(id).select(
+                "fullName email role institutionName jobTitle"
+            );
         }
         else {
             return res.status(400).json({
@@ -30,9 +37,11 @@ export const getMe = async (req, res) => {
         res.status(200).json({
             success: true,
             user: {
-                name: user.fullName,
+                fullName: user.fullName,
                 email: user.email,
                 role: user.role,
+                institutionName: user.institutionName,
+                jobTitle: user.jobTitle
             },
         });
     } catch (err) {

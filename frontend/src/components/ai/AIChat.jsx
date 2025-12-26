@@ -166,8 +166,11 @@ export default function AIChat({ isOpen, onClose, institutionId = null, brandCol
 
               {loading && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-lg p-3">
+                  <div className="bg-gray-100 rounded-lg p-3 flex items-center space-x-2">
                     <FiLoader className="w-5 h-5 animate-spin" style={{ color: brandColor }} />
+                    <span className="text-sm text-gray-600">
+                      AI is thinking... This may take 1-2 minutes on first use
+                    </span>
                   </div>
                 </div>
               )}

@@ -7,35 +7,101 @@ export default function DocumentUploader({ institutionId = null, courseId = null
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(null);
+  const fileInputRef = React.useRef(null); // Add ref to access file input directly
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      // Check file type
-      const allowedTypes = ['application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-      if (!allowedTypes.includes(selectedFile.type)) {
-        alert('Only PDF, TXT, and DOCX files are allowed');
-        return;
-      }
-      
-      // Check file size (max 10MB)
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
-        return;
-      }
-
-      setFile(selectedFile);
+    if (!selectedFile) {
+      console.log('No file selected');
+      return;
     }
+
+    console.log('File selected:', {
+      name: selectedFile.name,
+      type: selectedFile.type,
+      size: selectedFile.size,
+      isFile: selectedFile instanceof File,
+      constructor: selectedFile.constructor.name
+    });
+    
+    // Check file type - Allow PDF for sure, relaxed validation
+    const fileName = selectedFile.name.toLowerCase();
+    if (!fileName.endsWith('.pdf') && !fileName.endsWith('.txt') && !fileName.endsWith('.docx')) {
+      setProgress({ status: 'error', message: 'Only PDF, TXT, and DOCX files are allowed' });
+      return;
+    }
+    
+    // Check file size (max 10MB)
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setProgress({ status: 'error', message: 'File size must be less than 10MB' });
+      return;
+    }
+
+    // Verify it's a proper File object
+    if (!(selectedFile instanceof File)) {
+      console.error('Not a File instance:', selectedFile);
+      setProgress({ status: 'error', message: 'Invalid file object selected' });
+      return;
+    }
+
+    setFile(selectedFile);
+    setProgress(null); // Clear any previous error messages
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file) {
+      console.error('No file to upload');
+      return;
+    }
+
+    // CRITICAL: Get file directly from input as backup
+    const inputFile = fileInputRef.current?.files?.[0];
+    const fileToUpload = inputFile || file;
+
+    console.log('=== UPLOAD DEBUG ===');
+    console.log('State file:', file);
+    console.log('Input file:', inputFile);
+    console.log('Will upload:', fileToUpload);
+    console.log('Upload attempt:', {
+      stateFile: file ? {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        isFile: file instanceof File,
+        isBlob: file instanceof Blob,
+        constructor: file.constructor.name,
+        proto: Object.getPrototypeOf(file).constructor.name
+      } : null,
+      inputFile: inputFile ? {
+        name: inputFile.name,
+        type: inputFile.type,
+        size: inputFile.size,
+        isFile: inputFile instanceof File,
+        isBlob: inputFile instanceof Blob,
+        constructor: inputFile.constructor.name,
+        proto: Object.getPrototypeOf(inputFile).constructor.name
+      } : null,
+      usingInputFile: !!inputFile
+    });
+    console.log('===================');
+
+    // Validate file is a proper File/Blob object
+    if (!(fileToUpload instanceof File) && !(fileToUpload instanceof Blob)) {
+      console.error('❌ FAILED: File validation failed');
+      console.error('File object:', fileToUpload);
+      console.error('typeof:', typeof fileToUpload);
+      console.error('constructor:', fileToUpload?.constructor?.name);
+      setProgress({ status: 'error', message: 'Invalid file object. Please refresh the page and try again.' });
+      return;
+    }
+
+    console.log('✓ File validation passed, starting upload...');
 
     setUploading(true);
     setProgress({ status: 'uploading', message: 'Uploading document...' });
 
     try {
-      const response = await aiService.uploadDocument(file, institutionId, courseId);
+      const response = await aiService.uploadDocument(fileToUpload, institutionId, courseId);
       
       setProgress({ 
         status: 'success', 
@@ -45,11 +111,16 @@ export default function DocumentUploader({ institutionId = null, courseId = null
       setTimeout(() => {
         setFile(null);
         setProgress(null);
+        // Clear file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
         if (onUploadComplete) onUploadComplete(response);
       }, 2000);
 
     } catch (error) {
-      setProgress({ status: 'error', message: error.message });
+      console.error('Upload error:', error);
+      setProgress({ status: 'error', message: error.message || 'Upload failed' });
     } finally {
       setUploading(false);
     }
@@ -58,6 +129,10 @@ export default function DocumentUploader({ institutionId = null, courseId = null
   const handleRemove = () => {
     setFile(null);
     setProgress(null);
+    // Clear file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -72,6 +147,7 @@ export default function DocumentUploader({ institutionId = null, courseId = null
             <p className="text-sm text-gray-400">PDF, TXT, or DOCX (Max 10MB)</p>
           </div>
           <input
+            ref={fileInputRef}
             type="file"
             onChange={handleFileChange}
             accept=".pdf,.txt,.docx"

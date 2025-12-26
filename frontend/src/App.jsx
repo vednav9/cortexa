@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 
 // Data
 import { getInstitutionBySlug } from './data/institutionsData';
@@ -23,6 +24,7 @@ import Footer from './components/Footer';
 import InstitutionNavbar from './components/InstitutionNavbar';
 import Sidebar from './components/dashboard/Sidebar';
 import Notifications from './components/dashboard/Notifications';
+import AddUsersTab from './components/dashboard/AddUsersTab';
 
 // Context
 export const InstitutionContext = createContext(null);
@@ -130,6 +132,30 @@ function App() {
   return (
     <AuthContext.Provider value={{ user, setUser }}>
       <Router>
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#fff',
+              color: '#1f2937',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              borderRadius: '12px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
         <div className="flex flex-col min-h-screen bg-black">
           <Navbar />
 
@@ -140,6 +166,7 @@ function App() {
               <Route path="/signup" element={<SignUp />} />
               <Route path="/institute-signup" element={<InstituteSignUp />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/add-user" element={<AddUsersTab />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
               <Route path="/404" element={<NotFound />} />
