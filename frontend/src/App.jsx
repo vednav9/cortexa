@@ -2,8 +2,9 @@ import React, { createContext, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useParams, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
-// Data
+// Data & API
 import { getInstitutionBySlug } from './data/institutionsData';
+import { institutionAPI } from './services/api';
 
 // Pages
 import Home from './pages/Home';
@@ -70,10 +71,23 @@ function InstitutionRouter() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const inst = getInstitutionBySlug(institutionSlug);
-    setInstitution(inst);
-    setLoading(false);
+    fetchInstitution();
   }, [institutionSlug]);
+
+  const fetchInstitution = async () => {
+    try {
+      // Try to fetch from backend first
+      const response = await institutionAPI.getBySlug(institutionSlug);
+      setInstitution(response.data.institution);
+    } catch (error) {
+      // Fallback to local data if backend fails
+      console.log('Using local institution data');
+      const inst = getInstitutionBySlug(institutionSlug);
+      setInstitution(inst);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -110,14 +124,17 @@ function InstitutionRouter() {
           }
         />
         <Route
-          path="/courses/:courseId"
+          path="/courses/:courseCode"
           element={
             <InstitutionLayout institution={institution} institutionSlug={institutionSlug}>
               <CourseDetails />
             </InstitutionLayout>
           }
         />
-        <Route path="*" element={<Navigate to="/404" replace />} />
+        <Route
+          path="/login"
+          element={<Login institutionSlug={institutionSlug} />}
+        />
       </Routes>
     </InstitutionContext.Provider>
   );
