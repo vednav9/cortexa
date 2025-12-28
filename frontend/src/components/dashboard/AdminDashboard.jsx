@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiMenu,
@@ -12,31 +12,62 @@ import {
   FiBarChart
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 import Sidebar from './Sidebar';
 import AddUsersTab from './AddUsersTab';
+import { adminAPI } from '../../services/api';
+import { LoadingPage, LoadingTable } from '../common/LoadingSpinner';
+import { ErrorMessage } from '../common/ErrorMessage';
+import { useAuth } from '../../context/authcontext';
 
 const AdminDashboard = ({ onLogout }) => {
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('students');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [students, setStudents] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const students = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', logo: 'JD', role: 'Student', status: 'active' },
-    { id: 2, name: 'Jane Smith', email: 'jane@example.com', logo: 'JS', role: 'Student', status: 'active' },
-    { id: 3, name: 'Bob Johnson', email: 'bob@example.com', logo: 'BJ', role: 'Student', status: 'active' },
-    { id: 4, name: 'Alice Brown', email: 'alice@example.com', logo: 'AB', role: 'Student', status: 'active' },
-  ];
-
-  const teachers = [
-    { id: 1, name: 'Prof. Wilson', email: 'wilson@example.com', logo: 'PW', role: 'Teacher', status: 'active' },
-    { id: 2, name: 'Dr. Garcia', email: 'garcia@example.com', logo: 'DG', role: 'Teacher', status: 'active' },
-  ];
+  // Fetch users
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const [studentsRes, teachersRes] = await Promise.all([
+          adminAPI.getStudents(),
+          adminAPI.getTeachers()
+        ]);
+        setStudents(studentsRes.data.students || []);
+        setTeachers(teachersRes.data.teachers || []);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load users');
+        toast.error('Failed to load users');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const filteredUsers = activeTab === 'students' ? students : activeTab === 'teachers' ? teachers : [];
 
-  const handleDeleteUser = (id) => {
-    console.log('Delete user:', id);
+  const handleDeleteUser = async (id) => {
+    try {
+      if (activeTab === 'students') {
+        await adminAPI.deleteStudent(id);
+        setStudents(prev => prev.filter(s => s.id !== id));
+      } else if (activeTab === 'teachers') {
+        await adminAPI.deleteTeacher(id);
+        setTeachers(prev => prev.filter(t => t.id !== id));
+      }
+      toast.success('User deleted successfully');
+    } catch (err) {
+      toast.error('Failed to delete user');
+    }
   };
 
   return (
@@ -77,11 +108,11 @@ const AdminDashboard = ({ onLogout }) => {
                 className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                  AD
+                  {user?.fullName?.substring(0, 2).toUpperCase() || 'AD'}
                 </div>
                 <div className="hidden sm:block text-left">
-                  <p className="text-sm font-semibold text-gray-800">Admin</p>
-                  <p className="text-xs text-gray-500">Administrator</p>
+                  <p className="text-sm font-semibold text-gray-800">{user?.fullName || 'Admin'}</p>
+                  <p className="text-xs text-gray-500">{user?.institutionName || 'Administrator'}</p>
                 </div>
                 <FiChevronDown
                   className={`w-4 h-4 text-gray-500 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`}
@@ -97,8 +128,8 @@ const AdminDashboard = ({ onLogout }) => {
                     className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50"
                   >
                     <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-semibold text-gray-800">Admin</p>
-                      <p className="text-xs text-gray-500">admin@email.com</p>
+                      <p className="text-sm font-semibold text-gray-800">{user?.fullName || 'Admin'}</p>
+                      <p className="text-xs text-gray-500">{user?.email || 'admin@email.com'}</p>
                     </div>
 
                     <button className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors">
@@ -225,22 +256,30 @@ const AdminDashboard = ({ onLogout }) => {
 
                 {/* User Grid */}
                 <div className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredUsers
-                      .filter((user) =>
-                        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        user.email.toLowerCase().includes(searchQuery.toLowerCase())
-                      )
-                      .map((user) => (
-                        <UserCard key={user.id} user={user} onDelete={handleDeleteUser} />
-                      ))}
-                  </div>
+                  {loading ? (
+                    <LoadingTable />
+                  ) : error ? (
+                    <ErrorMessage message={error} />
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {filteredUsers
+                          .filter((user) =>
+                            user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            user.email.toLowerCase().includes(searchQuery.toLowerCase())
+                          )
+                          .map((user) => (
+                            <UserCard key={user.id} user={user} onDelete={handleDeleteUser} />
+                          ))}
+                      </div>
 
-                  {filteredUsers.length === 0 && (
-                    <div className="text-center py-12">
-                      <FiUsers className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-500 font-medium">No users found</p>
-                    </div>
+                      {filteredUsers.length === 0 && (
+                        <div className="text-center py-12">
+                          <FiUsers className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500 text-lg">No {activeTab} found</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

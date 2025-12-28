@@ -80,7 +80,7 @@ export const loginTeacher = async (req, res) => {
             success: true,
             message: "Login successful",
             user: {
-                name: teacher.fullName,
+                fullName: teacher.fullName,
                 email: teacher.email,
                 role: teacher.role,
             },

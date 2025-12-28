@@ -26,6 +26,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Pre-load models on startup"""
+    print("="*60)
+    print("🚀 Starting Cortexa AI Server...")
+    print("="*60)
+    print("📦 Loading AI models (this may take 30-60 seconds)...")
+    # Models are already initialized globally above
+    print("✅ Models loaded successfully!")
+    print("🌐 Server ready at http://localhost:8000")
+    print("📚 API docs at http://localhost:8000/docs")
+    print("="*60)
+
 class QueryRequest(BaseModel):
     query: str
     top_k: Optional[int] = 5
@@ -56,13 +69,56 @@ class HybridQueryRequest(BaseModel):
     query: str
     use_web_fallback: bool = True
 
-doc_processor = DocumentProcessor()
-vector_store = get_json_store()
-retriever = get_retriever()
-generator = get_generator()
-mcq_generator = get_mcq_generator()
-mcq_validator = MCQValidator()
-hybrid_assistant = get_hybrid_assistant()
+# Global variables for lazy loading
+_doc_processor = None
+_vector_store = None
+_retriever = None
+_generator = None
+_mcq_generator = None
+_mcq_validator = None
+_hybrid_assistant = None
+
+def get_doc_processor():
+    global _doc_processor
+    if _doc_processor is None:
+        _doc_processor = DocumentProcessor()
+    return _doc_processor
+
+def get_vector_store():
+    global _vector_store
+    if _vector_store is None:
+        _vector_store = get_json_store()
+    return _vector_store
+
+def get_retriever_instance():
+    global _retriever
+    if _retriever is None:
+        _retriever = get_retriever()
+    return _retriever
+
+def get_generator_instance():
+    global _generator
+    if _generator is None:
+        _generator = get_generator()
+    return _generator
+
+def get_mcq_generator_instance():
+    global _mcq_generator
+    if _mcq_generator is None:
+        _mcq_generator = get_mcq_generator()
+    return _mcq_generator
+
+def get_mcq_validator_instance():
+    global _mcq_validator
+    if _mcq_validator is None:
+        _mcq_validator = MCQValidator()
+    return _mcq_validator
+
+def get_hybrid_assistant_instance():
+    global _hybrid_assistant
+    if _hybrid_assistant is None:
+        _hybrid_assistant = get_hybrid_assistant()
+    return _hybrid_assistant
 
 @app.get("/")
 def root():
@@ -70,8 +126,12 @@ def root():
 
 @app.get("/health")
 def health_check():
-    stats = vector_store.get_stats()
-    return {"status": "healthy", "store": stats}
+    try:
+        vector_store = get_vector_store()
+        stats = vector_store.get_stats()
+        return {"status": "healthy", "store": stats}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
 
 @app.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
@@ -80,6 +140,9 @@ async def upload_document(
     course_id: Optional[str] = None
 ):
     try:
+        doc_processor = get_doc_processor()
+        vector_store = get_vector_store()
+        
         file_path = DOCUMENTS_DIR / file.filename
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -108,6 +171,9 @@ async def upload_document(
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
     try:
+        retriever = get_retriever_instance()
+        generator = get_generator_instance()
+        
         filter_metadata = None
         if request.institution_id:
             filter_metadata = {'institution_id': request.institution_id}
@@ -143,6 +209,7 @@ async def query_documents(request: QueryRequest):
 @app.delete("/documents/all")
 def delete_all_documents():
     try:
+        vector_store = get_vector_store()
         vector_store.delete_all()
         return {"status": "success", "message": "All documents deleted"}
     except Exception as e:
@@ -152,6 +219,7 @@ def delete_all_documents():
 def export_chunks():
     """Export chunks without embeddings"""
     try:
+        vector_store = get_vector_store()
         vector_store.export_chunks_only()
         return {"status": "success", "message": "Chunks exported to chunks_only.json"}
     except Exception as e:
@@ -162,6 +230,9 @@ def export_chunks():
 async def generate_mcqs(request: MCQGenerateRequest):
     """Generate MCQs from text, document, or topic"""
     try:
+        mcq_generator = get_mcq_generator_instance()
+        mcq_validator = get_mcq_validator_instance()
+        
         if request.source_type == "text":
             mcqs = mcq_generator.generate_from_text(
                 text=request.source,
@@ -200,6 +271,7 @@ async def generate_mcqs(request: MCQGenerateRequest):
 async def score_mcqs(request: MCQScoreRequest):
     """Score user answers"""
     try:
+        mcq_validator = get_mcq_validator_instance()
         result = mcq_validator.score_answers(
             mcqs=request.mcqs,
             user_answers=request.user_answers
@@ -208,20 +280,34 @@ async def score_mcqs(request: MCQScoreRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/assistant/query")
+@app.post("/assistant")
 async def hybrid_query(request: HybridQueryRequest):
     """
     Hybrid AI Assistant - Searches documents first, then web if needed
     """
     try:
+        print(f"📥 Received query: {request.query[:50]}...")
+        print(f"🌐 Web fallback: {request.use_web_fallback}")
+        
+        hybrid_assistant = get_hybrid_assistant_instance()
         result = hybrid_assistant.answer(
             query=request.query,
             use_web=request.use_web_fallback
         )
+        
+        print(f"✅ Query successful! Method: {result.get('search_method', 'unknown')}")
         return result
     except Exception as e:
+        print(f"❌ Query failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Increase timeout for AI operations
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=8000,
+        timeout_keep_alive=300,  # 5 minutes keep-alive
+        timeout_graceful_shutdown=30
+    )

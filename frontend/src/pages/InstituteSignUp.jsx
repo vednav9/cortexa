@@ -53,6 +53,7 @@ const InstituteSignUp = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
   const [logoFile, setLogoFile] = useState(null);
+  const [canSubmit, setCanSubmit] = useState(false); // Flag to control submission
 
 
   const [formData, setFormData] = useState({
@@ -177,6 +178,7 @@ const InstituteSignUp = () => {
       if (currentStep < 3) {
         setCurrentStep(currentStep + 1);
         setError("");
+        setCanSubmit(false); // Reset canSubmit flag when navigating
       }
     }
   };
@@ -186,15 +188,22 @@ const InstituteSignUp = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
       setError("");
+      setCanSubmit(false); // Reset canSubmit flag when going back
     }
   };
 
   // Submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    console.log('handleSubmit called - currentStep:', currentStep);
+    console.log('canSubmit flag:', canSubmit);
 
-    // Only allow submit on last step
-    if (currentStep !== 3) return;
+    // Only allow submit on last step AND if canSubmit flag is true
+    if (currentStep !== 3 || !canSubmit) {
+      console.log('Blocked submission - currentStep:', currentStep, 'canSubmit:', canSubmit);
+      return; // Don't do anything if not on step 3 or if canSubmit is false
+    }
 
     setError("");
 
@@ -244,6 +253,8 @@ const InstituteSignUp = () => {
       }
     } catch (error) {
       console.error("❌ Signup failed:", error);
+      console.error("Error response:", error.response?.data);
+      console.error("Error status:", error.response?.status);
 
       const errorMsg =
         error.response?.data?.message ||
@@ -254,6 +265,7 @@ const InstituteSignUp = () => {
       alert(errorMsg);
     } finally {
       setLoading(false);
+      setCanSubmit(false); // Reset canSubmit flag after submission attempt
     }
   };
 
@@ -341,7 +353,17 @@ const InstituteSignUp = () => {
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form 
+            onSubmit={handleSubmit}
+            onKeyDown={(e) => {
+              // Prevent Enter key from submitting form in ALL steps
+              // Only allow submission via the explicit submit button
+              if (e.key === 'Enter' && e.target.type !== 'submit') {
+                e.preventDefault();
+              }
+            }}
+            className="space-y-6"
+          >
             <AnimatePresence mode="wait">
               {/* Step 1 - Personal Info */}
               {currentStep === 1 && (
@@ -823,6 +845,10 @@ const InstituteSignUp = () => {
                 <button
                   type="submit"
                   disabled={loading}
+                  onClick={() => {
+                    console.log('Submit button clicked');
+                    setCanSubmit(true);
+                  }}
                   className="ml-auto px-6 py-3.5 bg-gradient-to-r from-emerald-400 to-green-500 text-black font-semibold rounded-xl hover:shadow-lg hover:shadow-emerald-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <span>{loading ? "Registering..." : "Complete Registration"}</span>

@@ -2,15 +2,42 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiMenu, FiUser, FiLogOut, FiSettings, FiChevronDown, FiSearch } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
+import toast from 'react-hot-toast';
 import Sidebar from './Sidebar';
 import BrowseInstitutionsTab from './BrowseInstitutionsTab';
 import MyInstitutionsTab from './MyInstitutionsTab';
+import { studentAPI } from '../../services/api';
+import { LoadingPage } from '../common/LoadingSpinner';
+import { ErrorPage } from '../common/ErrorMessage';
+import { useAuth } from '../../context/authcontext';
 
 const StudentDashboard = ({ onLogout }) => {
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('access');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
+  
+  const [myInstitutions, setMyInstitutions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch institutions
+  useEffect(() => {
+    const fetchInstitutions = async () => {
+      try {
+        setLoading(true);
+        const { data } = await studentAPI.getInstitutions();
+        setMyInstitutions(data.institutions || []);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load institutions');
+        toast.error('Failed to load institutions');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInstitutions();
+  }, []);
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -29,12 +56,20 @@ const StudentDashboard = ({ onLogout }) => {
     };
   }, [profileMenuOpen]);
 
-  // Mock data
-  const myInstitutions = [
-    { id: 1, name: 'MIT', logo: 'M', role: 'Student', status: 'active' },
-  ];
+  const handleLeaveInstitution = async (institutionId) => {
+    try {
+      await studentAPI.leaveInstitution(institutionId);
+      setMyInstitutions(prev => prev.filter(inst => inst.id !== institutionId));
+      toast.success('Left institution successfully');
+    } catch (err) {
+      toast.error('Failed to leave institution');
+    }
+  };
 
-  const browseCount = 5; // Number of available institutions to browse
+  if (loading) return <LoadingPage message="Loading your dashboard..." />;
+  if (error) return <ErrorPage message={error} onRetry={() => window.location.reload()} />;
+
+  const browseCount = 5;
 
   return (
     <div className="flex w-full h-screen bg-gray-50 lg:pl-80">
@@ -77,10 +112,10 @@ const StudentDashboard = ({ onLogout }) => {
                 className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                  JD
+                  {user?.fullName?.substring(0, 2).toUpperCase() || 'ST'}
                 </div>
                 <div className="hidden sm:block text-left">
-                  <p className="text-sm font-semibold text-gray-800">John Doe</p>
+                  <p className="text-sm font-semibold text-gray-800">{user?.fullName || 'Student'}</p>
                   <p className="text-xs text-gray-500">Student</p>
                 </div>
                 <FiChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} />
@@ -96,8 +131,8 @@ const StudentDashboard = ({ onLogout }) => {
                     className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50"
                   >
                     <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-semibold text-gray-800">John Doe</p>
-                      <p className="text-xs text-gray-500">john.doe@email.com</p>
+                      <p className="text-sm font-semibold text-gray-800">{user?.fullName || 'Student'}</p>
+                      <p className="text-xs text-gray-500">{user?.email || 'student@email.com'}</p>
                     </div>
                     <button className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors">
                       <FiUser className="w-4 h-4" />
@@ -206,7 +241,12 @@ const StudentDashboard = ({ onLogout }) => {
 
             {/* Tab Content */}
             {activeTab === 'access' && <BrowseInstitutionsTab />}
-            {activeTab === 'institutions' && <MyInstitutionsTab institutions={myInstitutions} />}
+            {activeTab === 'institutions' && (
+              <MyInstitutionsTab 
+                institutions={myInstitutions}
+                onLeaveInstitution={handleLeaveInstitution}
+              />
+            )}
           </div>
         </main>
       </div>

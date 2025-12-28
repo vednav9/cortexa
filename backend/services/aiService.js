@@ -1,6 +1,11 @@
 import axios from "axios";
+import FormData from "form-data"; // Node.js FormData
 
 const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
+
+// Increased timeouts for AI operations
+const DEFAULT_TIMEOUT = 180000; // 3 minutes
+const LONG_TIMEOUT = 300000; // 5 minutes
 
 class AIService {
   // RAG Query
@@ -11,7 +16,7 @@ class AIService {
         top_k: 5,
         institution_id: institutionId
       }, {
-        timeout: 60000 // 60 seconds timeout
+        timeout: DEFAULT_TIMEOUT // 3 minutes timeout
       });
       return response.data;
     } catch (error) {
@@ -22,11 +27,11 @@ class AIService {
   // Hybrid Assistant (RAG + Web)
   async queryHybridAssistant(query, useWebFallback = true) {
     try {
-      const response = await axios.post(`${AI_API_URL}/assistant/query`, {
+      const response = await axios.post(`${AI_API_URL}/assistant`, {
         query,
         use_web_fallback: useWebFallback
       }, {
-        timeout: 60000
+        timeout: DEFAULT_TIMEOUT // 3 minutes timeout
       });
       return response.data;
     } catch (error) {
@@ -43,7 +48,7 @@ class AIService {
         num_questions: numQuestions,
         difficulty: difficulty
       }, {
-        timeout: 90000 // MCQ generation can take longer
+        timeout: LONG_TIMEOUT // 5 minutes - MCQ generation can take longer
       });
       return response.data;
     } catch (error) {
@@ -57,6 +62,8 @@ class AIService {
       const response = await axios.post(`${AI_API_URL}/mcq/score`, {
         mcqs,
         user_answers: userAnswers
+      }, {
+        timeout: 30000 // 30 seconds for scoring
       });
       return response.data;
     } catch (error) {
@@ -68,19 +75,26 @@ class AIService {
   async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
     try {
       const formData = new FormData();
-      formData.append('file', fileBuffer, fileName);
+      // Append buffer as blob with proper options
+      formData.append('file', fileBuffer, {
+        filename: fileName,
+        contentType: 'application/octet-stream'
+      });
       if (institutionId) formData.append('institution_id', institutionId);
       if (courseId) formData.append('course_id', courseId);
 
       const response = await axios.post(`${AI_API_URL}/upload`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          ...formData.getHeaders() // Get proper headers from form-data
         },
-        timeout: 120000 // 2 minutes for file upload
+        timeout: LONG_TIMEOUT, // 5 minutes for file upload
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
       });
       return response.data;
     } catch (error) {
-      throw new Error(`Document upload failed: ${error.message}`);
+      console.error('Backend upload error:', error.response?.data || error.message);
+      throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
     }
   }
 
