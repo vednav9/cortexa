@@ -37,11 +37,14 @@ export const getMe = async (req, res) => {
         res.status(200).json({
             success: true,
             user: {
+                id: user._id,
                 name: user.fullName,
                 email: user.email,
                 role: user.role,
+                institutionName: user.institutionName || null,
             },
         });
+
     } catch (err) {
         console.error("Auth Me Error:", err);
         res.status(500).json({

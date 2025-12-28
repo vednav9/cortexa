@@ -9,6 +9,6 @@ router.post("/login", loginStudent);
 router.post("/logout", logoutStudent);
 
 router.get("/check-auth", authenticate);
-router.get("/me", authenticate, getUserProfile);
+// router.get("/me", authenticate, getUserProfile);
 
 export default router;

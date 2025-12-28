@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { generateToken } from "../utils/generateToken.js";
 import Admin from "../models/admin.js";
+import { cookieOptions } from "../utils/cookieOptions.js";
 
 // Register new institution admin
 export const registerAdmin = async (req, res) => {
@@ -172,27 +173,14 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
-    // Generate token
-    const token = jwt.sign(
-      {
-        id: admin._id,
-        email: admin.email,
-        role: admin.role || 'admin'
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
+    const token = generateToken({
+      id: admin._id,
+      role: "admin",
+    });
 
     // console.log("🎫 JWT token generated");
 
-    // Set HTTP-only cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-      path: "/",
-    });
+    res.cookie("token", token, cookieOptions);
 
     // console.log("🍪 Cookie set successfully");
 
@@ -228,12 +216,7 @@ export const logoutAdmin = (req, res) => {
   try {
     console.log("👋 Logout request");
 
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    res.clearCookie("token", cookieOptions);
 
     res.cookie("token", "", {
       httpOnly: true,

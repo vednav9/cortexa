@@ -1,11 +1,8 @@
 import Student from "../models/student.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
-// Generate JWT Token
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-};
+import { generateToken } from "../utils/generateToken.js";
+import { cookieOptions } from "../utils/cookieOptions.js";
 
 //student register
 export const registerStudent = async (req, res) => {
@@ -21,16 +18,14 @@ export const registerStudent = async (req, res) => {
             role,
         });
 
-        const token = generateToken(newStudent._id);
+        const token = generateToken({
+            id: newStudent._id,
+            role: "student",
+        });
+
 
         // ✅ Set token in httpOnly cookie
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        res.cookie("token", token, cookieOptions);
 
 
         res.status(201).json({
@@ -70,20 +65,15 @@ export const loginStudent = async (req, res) => {
             return res.status(401).json({ success: false, message: "Invalid credentials" });
         }
 
-        const token = jwt.sign(
-            { id: student._id, role: student.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
+        const token = generateToken({
+            id: student._id,
+            role: "student",
+        });
+
 
         // ✅ Set cookie properly
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+
+        res.cookie("token", token, cookieOptions);
 
 
         res.status(200).json({
@@ -133,12 +123,7 @@ export const getUserProfile = async (req, res) => {
 //logout student
 export const logoutStudent = (req, res) => {
     try {
-        res.clearCookie("token", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production" ? true : false,
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/", // must match login
-        });
+        res.clearCookie("token", cookieOptions);
 
         res.cookie("token", "", {
             httpOnly: true,

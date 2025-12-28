@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useParams, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useParams, Navigate, Outlet } from 'react-router-dom';
 
 // Data
 import { getInstitutionBySlug } from './data/institutionsData';
@@ -9,8 +9,12 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import InstituteSignUp from './pages/InstituteSignUp';
-import Dashboard from './pages/Dashboard';
+import CortexaDashboard from "./components/dashboard/CortexaDashboard";
+// import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
+import { useAuth } from "./context/authcontext";
+
+
 
 // Institution Components
 import InstitutionHome from './components/institution/InstitutionHome';
@@ -24,10 +28,12 @@ import InstitutionNavbar from './components/InstitutionNavbar';
 import Sidebar from './components/dashboard/Sidebar';
 import Notifications from './components/dashboard/Notifications';
 import AddUsersTab from './components/dashboard/AddUsersTab';
+import { AuthProvider } from "./context/authcontext";
+
 
 // Context
 export const InstitutionContext = createContext(null);
-export const AuthContext = createContext(null);
+// export const AuthContext = createContext(null);
 
 // ============================================
 // INSTITUTION LAYOUT (Institution Pages)
@@ -125,11 +131,31 @@ function InstitutionRouter() {
 // ============================================
 // MAIN APP COMPONENT
 // ============================================
+
+const ProtectedRoute = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-emerald-400">
+        Checking session…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+};
+
 function App() {
-  const [user, setUser] = useState(null);
+  // const [user, setUser] = useState(null);
 
   return (
-    <AuthContext.Provider value={{ user, setUser }}>
+    <AuthProvider>
+
       <Router>
         <div className="flex flex-col min-h-screen bg-black">
           <Navbar />
@@ -140,9 +166,12 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/institute-signup" element={<InstituteSignUp />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/add-user" element={<AddUsersTab />} />
-              <Route path="/notifications" element={<Notifications />} />
+
+              <Route path="/dashboard" element={<ProtectedRoute />}>
+                <Route index element={<CortexaDashboard />} />
+              </Route>
+
+
               <Route path="/:institutionSlug/*" element={<InstitutionRouter />} />
               <Route path="/404" element={<NotFound />} />
               <Route path="*" element={<NotFound />} />
@@ -152,7 +181,8 @@ function App() {
           {/* <Footer /> */}
         </div>
       </Router>
-    </AuthContext.Provider>
+    </AuthProvider>
+
   );
 }
 
