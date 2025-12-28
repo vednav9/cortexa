@@ -15,6 +15,7 @@ import { HiSparkles } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import Sidebar from './Sidebar';
 import AddUsersTab from './AddUsersTab';
+import PendingRequestsTab from './PendingRequestsTab';
 import { adminAPI } from '../../services/api';
 import { LoadingPage, LoadingTable } from '../common/LoadingSpinner';
 import { ErrorMessage } from '../common/ErrorMessage';
@@ -26,6 +27,9 @@ const AdminDashboard = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState('students');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [classFilter, setClassFilter] = useState('all');
+  const [divisionFilter, setDivisionFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
   
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -54,6 +58,34 @@ const AdminDashboard = ({ onLogout }) => {
   }, []);
 
   const filteredUsers = activeTab === 'students' ? students : activeTab === 'teachers' ? teachers : [];
+
+  // Get unique values for filters
+  const uniqueClasses = [...new Set(students.map(s => s.class).filter(Boolean))];
+  const uniqueDivisions = [...new Set(students.map(s => s.division).filter(Boolean))];
+  const uniqueDepartments = [...new Set(teachers.map(t => t.department).filter(Boolean))];
+
+  // Apply filters
+  const getFilteredUsers = () => {
+    let filtered = filteredUsers.filter((user) =>
+      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    if (activeTab === 'students') {
+      if (classFilter !== 'all') {
+        filtered = filtered.filter(u => u.class === classFilter);
+      }
+      if (divisionFilter !== 'all') {
+        filtered = filtered.filter(u => u.division === divisionFilter);
+      }
+    } else if (activeTab === 'teachers') {
+      if (departmentFilter !== 'all') {
+        filtered = filtered.filter(u => u.department === departmentFilter);
+      }
+    }
+
+    return filtered;
+  };
 
   const handleDeleteUser = async (id) => {
     try {
@@ -160,6 +192,8 @@ const AdminDashboard = ({ onLogout }) => {
         <main className="flex-1 overflow-y-auto p-6">
           {activeTab === 'addUsers' ? (
             <AddUsersTab />
+          ) : activeTab === 'pendingRequests' ? (
+            <PendingRequestsTab />
           ) : (
             <div className="max-w-7xl mx-auto space-y-6">
               {/* Header with Stats */}
@@ -227,14 +261,14 @@ const AdminDashboard = ({ onLogout }) => {
               <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
                 {/* Section Header */}
                 <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
                         <FiUsers className="w-6 h-6 text-emerald-600" />
                       </div>
                       <div>
                         <h3 className="text-xl font-bold text-gray-900">
-                          {activeTab === 'students' ? 'Students' : 'Teachers'} ({filteredUsers.length})
+                          {activeTab === 'students' ? 'Students' : 'Teachers'} ({getFilteredUsers().length})
                         </h3>
                         <p className="text-sm text-gray-600 mt-0.5">Manage your {activeTab}</p>
                       </div>
@@ -252,6 +286,67 @@ const AdminDashboard = ({ onLogout }) => {
                       />
                     </div>
                   </div>
+
+                  {/* Filters Row */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {activeTab === 'students' && (
+                      <>
+                        {/* Class Filter */}
+                        <select
+                          value={classFilter}
+                          onChange={(e) => setClassFilter(e.target.value)}
+                          className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
+                        >
+                          <option value="all">All Classes</option>
+                          {uniqueClasses.map(cls => (
+                            <option key={cls} value={cls}>{cls}</option>
+                          ))}
+                        </select>
+
+                        {/* Division Filter */}
+                        <select
+                          value={divisionFilter}
+                          onChange={(e) => setDivisionFilter(e.target.value)}
+                          className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
+                        >
+                          <option value="all">All Divisions</option>
+                          {uniqueDivisions.map(div => (
+                            <option key={div} value={div}>{div}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+
+                    {activeTab === 'teachers' && (
+                      <>
+                        {/* Department Filter */}
+                        <select
+                          value={departmentFilter}
+                          onChange={(e) => setDepartmentFilter(e.target.value)}
+                          className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
+                        >
+                          <option value="all">All Departments</option>
+                          {uniqueDepartments.map(dept => (
+                            <option key={dept} value={dept}>{dept}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+
+                    {/* Clear Filters Button */}
+                    {(classFilter !== 'all' || divisionFilter !== 'all' || departmentFilter !== 'all') && (
+                      <button
+                        onClick={() => {
+                          setClassFilter('all');
+                          setDivisionFilter('all');
+                          setDepartmentFilter('all');
+                        }}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm hover:bg-gray-200 transition-colors font-medium"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* User Grid */}
@@ -263,20 +358,16 @@ const AdminDashboard = ({ onLogout }) => {
                   ) : (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredUsers
-                          .filter((user) =>
-                            user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            user.email.toLowerCase().includes(searchQuery.toLowerCase())
-                          )
-                          .map((user) => (
-                            <UserCard key={user.id} user={user} onDelete={handleDeleteUser} />
-                          ))}
+                        {getFilteredUsers().map((user) => (
+                          <UserCard key={user.id} user={user} onDelete={handleDeleteUser} />
+                        ))}
                       </div>
 
-                      {filteredUsers.length === 0 && (
+                      {getFilteredUsers().length === 0 && (
                         <div className="text-center py-12">
                           <FiUsers className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                           <p className="text-gray-500 text-lg">No {activeTab} found</p>
+                          <p className="text-gray-400 text-sm mt-2">Try adjusting your filters or search query</p>
                         </div>
                       )}
                     </>
@@ -322,6 +413,31 @@ const UserCard = ({ user, onDelete }) => {
         <p className="text-xs text-gray-500 flex items-center gap-1 mb-2">
           <FiMail className="w-3 h-3" /> {user.email}
         </p>
+
+        {/* Student-specific info */}
+        {user.role === 'Student' && (user.class || user.division || user.enrollmentNumber) && (
+          <div className="space-y-1 mb-2 w-full">
+            {user.class && user.division && (
+              <p className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                Class: {user.class} - {user.division}
+              </p>
+            )}
+            {user.enrollmentNumber && user.enrollmentNumber !== 'N/A' && (
+              <p className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                Enrollment: {user.enrollmentNumber}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Teacher-specific info */}
+        {user.role === 'Teacher' && user.department && user.department !== 'N/A' && (
+          <div className="mb-2 w-full">
+            <p className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+              {user.department}
+            </p>
+          </div>
+        )}
 
         <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">
           {user.role}

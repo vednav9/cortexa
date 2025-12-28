@@ -7,6 +7,7 @@ import {
   FiHelpCircle,
   FiLogOut,
   FiX,
+  FiClock,
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import axios from "axios";
@@ -23,6 +24,58 @@ export default function Sidebar({
   const { setUser } = useAuth();
   const brandColor = "#10b981";
 
+  if (loading) return null;
+
+  const userRole = user?.role;
+
+  /* ROLE → MENU ACCESS MAP */
+  const MENU_BY_ROLE = {
+    admin: ["dashboard", "addUsers", "pendingRequests", "notifications", "querydesk"],
+    student: ["dashboard", "notifications"],
+    teacher: ["dashboard", "notifications", "querydesk"],
+  };
+
+  /* BRAND COLOR */
+  const defaultColor = "#10b981";
+  const brandColor =
+    isInstitution && institution?.brandColor
+      ? institution.brandColor
+      : defaultColor;
+
+  /* MENU ITEMS */
+  const menuItems = [
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      icon: FiHome,
+      path: "/dashboard",
+    },
+    {
+      id: "addUsers",
+      label: "Add Users",
+      icon: FiUserPlus,
+      path: "/dashboard", // Keep on dashboard
+      isTab: true, // Mark as tab-based
+    },
+    {
+      id: "pendingRequests",
+      label: "Pending Requests",
+      icon: FiClock,
+      path: "/dashboard",
+      isTab: true,
+    },
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: FiBell,
+      path: "/notifications",
+    },
+    {
+      id: "querydesk",
+      label: "Query Desk",
+      icon: FiHelpCircle,
+      path: "/querydesk",
+    },
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: FiHome },
     { id: "notifications", label: "Notifications", icon: FiBell },

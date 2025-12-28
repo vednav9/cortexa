@@ -13,6 +13,9 @@ import { authenticate } from "../middleware/auth.js";
 import upload from "../middleware/upload.js";
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
+import Invitation from "../models/invitation.js";
+import Membership from "../models/membership.js";
+import Admin from "../models/admin.js";
 import fs from "fs";
 
 const router = express.Router();
@@ -29,49 +32,144 @@ router.get("/admins", authenticate, getAllInstitutionAdmins);
 router.put("/admins/:adminId/permissions", authenticate, updateAdminPermissions);
 router.delete("/admins/:adminId", authenticate, removeAdmin);
 
-// Get all students
+// Get all students (only those who accepted invitation for this institution)
 router.get("/students", authenticate, async (req, res) => {
   try {
-    const students = await Student.find()
-      .select('fullName email createdAt')
-      .sort('-createdAt');
+    const admin = await Admin.findById(req.user.userId).populate('institution');
+    
+    if (!admin || !admin.institution) {
+      return res.status(404).json({ message: 'Admin or institution not found' });
+    }
+
+    // Get all accepted invitations for this institution
+    const acceptedInvitations = await Invitation.find({
+      institution: admin.institution._id,
+      recipientType: 'Student',
+      status: 'accepted'
+    }).select('recipient');
+
+    const acceptedStudentIds = acceptedInvitations.map(inv => inv.recipient);
+
+    // Get students who have accepted invitations
+    const students = await Student.find({
+      _id: { $in: acceptedStudentIds }
+    }).select('fullName email class division enrollmentNumber createdAt');
     
     const formattedStudents = students.map(s => ({
       id: s._id,
       name: s.fullName,
       email: s.email,
+      class: s.class || 'N/A',
+      division: s.division || 'N/A',
+      enrollmentNumber: s.enrollmentNumber || 'N/A',
       logo: s.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
       role: 'Student',
       status: 'active',
       createdAt: s.createdAt
     }));
     
-    res.json({ students: formattedStudents });
+    res.json({ 
+      success: true,
+      count: formattedStudents.length,
+      students: formattedStudents 
+    });
   } catch (error) {
+    console.error('Error fetching students:', error);
     res.status(500).json({ message: 'Error fetching students', error: error.message });
   }
 });
 
-// Get all teachers
+// Get all teachers (only those who accepted invitation for this institution)
 router.get("/teachers", authenticate, async (req, res) => {
   try {
-    const teachers = await Teacher.find()
-      .select('fullName email createdAt')
-      .sort('-createdAt');
+    const admin = await Admin.findById(req.user.userId).populate('institution');
+    
+    if (!admin || !admin.institution) {
+      return res.status(404).json({ message: 'Admin or institution not found' });
+    }
+
+    // Get all accepted invitations for this institution
+    const acceptedInvitations = await Invitation.find({
+      institution: admin.institution._id,
+      recipientType: 'Teacher',
+      status: 'accepted'
+    }).select('recipient');
+
+    const acceptedTeacherIds = acceptedInvitations.map(inv => inv.recipient);
+
+    // Get teachers who have accepted invitations
+    const teachers = await Teacher.find({
+      _id: { $in: acceptedTeacherIds }
+    }).select('fullName email department specialization createdAt');
     
     const formattedTeachers = teachers.map(t => ({
       id: t._id,
       name: t.fullName,
       email: t.email,
+      department: t.department || 'N/A',
+      specialization: t.specialization || 'N/A',
       logo: t.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
       role: 'Teacher',
       status: 'active',
       createdAt: t.createdAt
     }));
     
-    res.json({ teachers: formattedTeachers });
+    res.json({ 
+      success: true,
+      count: formattedTeachers.length,
+      teachers: formattedTeachers 
+    });
   } catch (error) {
+    console.error('Error fetching teachers:', error);
     res.status(500).json({ message: 'Error fetching teachers', error: error.message });
+  }
+});
+
+// Get pending invitation requests
+router.get("/pending-requests", authenticate, async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.user.userId).populate('institution');
+    
+    if (!admin || !admin.institution) {
+      return res.status(404).json({ message: 'Admin or institution not found' });
+    }
+
+    // Get all pending invitations for this institution
+    const pendingInvitations = await Invitation.find({
+      institution: admin.institution._id,
+      status: 'pending'
+    })
+    .populate('recipient', 'fullName email class division enrollmentNumber department specialization')
+    .populate('sender', 'fullName')
+    .sort('-createdAt');
+
+    const formattedRequests = pendingInvitations.map(inv => ({
+      id: inv._id,
+      recipientId: inv.recipient._id,
+      name: inv.recipient.fullName,
+      email: inv.recipient.email,
+      type: inv.recipientType, // 'Student' or 'Teacher'
+      // Student-specific fields
+      class: inv.recipientType === 'Student' ? (inv.recipient.class || 'N/A') : undefined,
+      division: inv.recipientType === 'Student' ? (inv.recipient.division || 'N/A') : undefined,
+      enrollmentNumber: inv.recipientType === 'Student' ? (inv.recipient.enrollmentNumber || 'N/A') : undefined,
+      // Teacher-specific fields
+      department: inv.recipientType === 'Teacher' ? (inv.recipient.department || 'N/A') : undefined,
+      specialization: inv.recipientType === 'Teacher' ? (inv.recipient.specialization || 'N/A') : undefined,
+      logo: inv.recipient.fullName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+      sentBy: inv.sender ? inv.sender.fullName : 'N/A',
+      sentAt: inv.createdAt,
+      expiresAt: inv.expiresAt
+    }));
+    
+    res.json({ 
+      success: true,
+      count: formattedRequests.length,
+      pendingRequests: formattedRequests 
+    });
+  } catch (error) {
+    console.error('Error fetching pending requests:', error);
+    res.status(500).json({ message: 'Error fetching pending requests', error: error.message });
   }
 });
 
