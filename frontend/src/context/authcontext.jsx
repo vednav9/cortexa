@@ -8,21 +8,17 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchUser = async () => {
-            try {
-                const res = await axios.get(
-                    "http://localhost:5000/api/auth/me",
-                    { withCredentials: true }
-                );
+        axios
+            .get("http://localhost:5000/api/auth/me", { withCredentials: true })
+            .then(res => {
                 setUser(res.data.user);
-            } catch {
+            })
+            .catch(() => {
                 setUser(null);
-            } finally {
+            })
+            .finally(() => {
                 setLoading(false);
-            }
-        };
-
-        fetchUser();
+            });
     }, []);
 
     return (

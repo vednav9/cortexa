@@ -1,5 +1,5 @@
 import express from "express";
-import { registerTeacher, loginTeacher, logoutTeacher, getTeacherProfile } from "../controllers/teacherController.js";
+import { registerTeacher, loginTeacher, logoutTeacher, } from "../controllers/teacherController.js";
 import { authenticate } from "../middleware/auth.js";
 import Membership from "../models/membership.js";
 import Institution from "../models/institution.js";
