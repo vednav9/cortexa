@@ -1,6 +1,9 @@
 import jwt from "jsonwebtoken";
 import Teacher from "../models/teacher.js";
 import bcrypt from "bcryptjs";
+import { generateToken } from "../utils/generateToken.js";
+import { cookieOptions } from "../utils/cookieOptions.js";
+
 
 export const registerTeacher = async (req, res) => {
     try {
@@ -22,19 +25,12 @@ export const registerTeacher = async (req, res) => {
             role: role || "teacher",
         });
 
-        const token = jwt.sign(
-            { id: newTeacher._id, role: newTeacher.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
-
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+        const token = generateToken({
+            id: teacher._id,
+            role: "teacher",
         });
+
+        res.cookie("token", token, cookieOptions);
 
 
         res.status(201).json({
@@ -72,19 +68,12 @@ export const loginTeacher = async (req, res) => {
             return res.status(401).json({ success: false, message: "Invalid credentials" });
         }
 
-        const token = jwt.sign(
-            { id: teacher._id, role: teacher.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
-
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+        const token = generateToken({
+            id: teacher._id,
+            role: "teacher",
         });
+
+        res.cookie("token", token, cookieOptions);
 
 
         res.status(200).json({
@@ -105,12 +94,7 @@ export const loginTeacher = async (req, res) => {
 // ✅ LOGOUT TEACHER
 export const logoutTeacher = async (req, res) => {
     try {
-        // Clear the cookie that stores the JWT
-        res.clearCookie("token", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production", // only secure in production
-            sameSite: "strict",
-        });
+        res.clearCookie("token", cookieOptions);
 
         return res.status(200).json({
             success: true,

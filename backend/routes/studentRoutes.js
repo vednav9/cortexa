@@ -11,7 +11,7 @@ router.post("/login", loginStudent);
 router.post("/logout", logoutStudent);
 
 router.get("/check-auth", authenticate);
-router.get("/me", authenticate, getUserProfile);
+// router.get("/me", authenticate, getUserProfile);
 
 // Get student's institutions
 router.get("/institutions", authenticate, async (req, res) => {

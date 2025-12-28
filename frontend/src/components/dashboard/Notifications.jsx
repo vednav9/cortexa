@@ -14,7 +14,7 @@ function Notifications() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
-  
+
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -168,11 +168,14 @@ function Notifications() {
 
               <div className="relative z-10 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                    <HiSparkles className="w-6 h-6" />
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <FiBell className="w-6 h-6" />
                   </div>
                   <div>
                     <h1 className="text-3xl font-bold">Notifications</h1>
+                    <p className="text-sm opacity-90">
+                      Invitations, updates & announcements
+                    </p>
                   </div>
                 </div>
 
@@ -301,6 +304,6 @@ function Notifications() {
       </div>
     </div>
   );
-}
+};
 
 export default Notifications;

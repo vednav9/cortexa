@@ -24,7 +24,7 @@ const router = express.Router();
 router.post("/register", upload.single("logo"), registerAdmin);
 router.post("/login", loginAdmin);
 router.post("/logout", logoutAdmin);
-router.get("/me", authenticate, getAdminProfile);
+// router.get("/me", authenticate, getAdminProfile);
 
 // Admin management routes (Super Admin only)
 router.post("/add-admin", authenticate, addAdminToInstitution);

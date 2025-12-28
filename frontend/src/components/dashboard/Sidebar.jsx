@@ -1,30 +1,28 @@
-import React, { useContext, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+// Sidebar.jsx – Cortexa Level (UI Polished + Logout)
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiHome,
   FiBell,
-  FiUserPlus,
   FiHelpCircle,
+  FiLogOut,
   FiX,
   FiClock,
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
-import AIChat from "../ai/AIChat";
-import { InstitutionContext } from "../../App";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/authcontext";
 
 export default function Sidebar({
   isOpen,
   onClose,
-  isInstitution = false,
   activeTab,
   setActiveTab,
 }) {
-  const { institution } = useContext(InstitutionContext) || {};
-  const { user, loading } = useAuth();
-  const location = useLocation();
-  const [aiChatOpen, setAiChatOpen] = useState(false);
+  const navigate = useNavigate();
+  const { setUser } = useAuth();
+  const brandColor = "#10b981";
 
   if (loading) return null;
 
@@ -78,50 +76,30 @@ export default function Sidebar({
       icon: FiHelpCircle,
       path: "/querydesk",
     },
+  const menuItems = [
+    { id: "dashboard", label: "Dashboard", icon: FiHome },
+    { id: "notifications", label: "Notifications", icon: FiBell },
+    { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
   ];
 
-  const allowedMenuIds = MENU_BY_ROLE[userRole] || [];
-  const filteredMenuItems = menuItems.filter((item) =>
-    allowedMenuIds.includes(item.id)
-  );
-
-  /* ACTIVE STATE */
-  const isActive = (item) => {
-    // For tab-based items
-    if (item.isTab) {
-      return activeTab === item.id;
-    }
-
-    // If any tab is active, route-based items should NOT be active
-    if (activeTab) {
-      return false;
-    }
-
-    // Normal route-based active state
-    if (item.path === "/dashboard") {
-      return location.pathname === "/dashboard";
-    }
-
-    return location.pathname.startsWith(item.path) && item.path !== "#";
+  const handleItemClick = (id) => {
+    setActiveTab(id);
+    onClose?.();
   };
 
-  /* CLICK HANDLER */
-  const handleItemClick = (item, e) => {
-    // Handle Tab-based navigation (Admin Add Users)
-    if (item.isTab && setActiveTab) {
-      e.preventDefault();
-      setActiveTab(item.id);
-      onClose?.();
-      return;
+  const handleLogout = async () => {
+    try {
+      await axios.post(
+        "http://localhost:5000/api/auth/logout",
+        {},
+        { withCredentials: true }
+      );
+    } catch (err) {
+      // ignore backend failure, still logout locally
+    } finally {
+      setUser(null);
+      navigate("/login", { replace: true });
     }
-
-    // Handle regular navigation - clear activeTab
-    if (setActiveTab && !item.isTab) {
-      setActiveTab(null);
-    }
-
-    // Close sidebar on mobile
-    onClose?.();
   };
 
   return (
@@ -133,7 +111,6 @@ export default function Sidebar({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={onClose}
           />
@@ -154,7 +131,7 @@ export default function Sidebar({
           borderRightWidth: "2px",
         }}
       >
-        {/* Header */}
+        {/* HEADER */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center space-x-3">
             <div
@@ -169,66 +146,29 @@ export default function Sidebar({
               <p className="font-bold text-lg" style={{ color: brandColor }}>
                 Cortexa
               </p>
-              <p className="text-xs text-gray-500 capitalize">{userRole}</p>
+              <p className="text-xs text-gray-500">Unified Platform</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            aria-label="Close sidebar"
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100"
           >
             <FiX className="w-5 h-5 text-gray-600" />
           </button>
         </div>
 
-        {/* Menu */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {filteredMenuItems.map((item) => {
+        {/* MENU */}
+        <nav className="flex-1 p-4 space-y-2">
+          {menuItems.map((item) => {
             const Icon = item.icon;
-            const active = isActive(item);
+            const active = activeTab === item.id;
 
-            // For tab items, use button instead of Link
-            if (item.isTab) {
-              return (
-                <button
-                  key={item.id}
-                  onClick={(e) => handleItemClick(item, e)}
-                  className={`w-full relative flex items-center space-x-3 px-4 py-3 rounded-xl transition-all
-                    ${active
-                      ? "bg-emerald-50 text-emerald-600 font-semibold shadow-sm"
-                      : "text-gray-700 hover:bg-gray-50"
-                    }`}
-                  style={
-                    active
-                      ? { backgroundColor: `${brandColor}10`, color: brandColor }
-                      : {}
-                  }
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">{item.label}</p>
-                  </div>
-
-                  {active && (
-                    <motion.div
-                      layoutId="activeSidebarItem"
-                      className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full"
-                      style={{ backgroundColor: brandColor }}
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    />
-                  )}
-                </button>
-              );
-            }
-
-            // Regular Link items
             return (
-              <Link
+              <button
                 key={item.id}
-                to={item.path}
-                onClick={(e) => handleItemClick(item, e)}
-                className={`relative flex items-center space-x-3 px-4 py-3 rounded-xl transition-all
+                onClick={() => handleItemClick(item.id)}
+                className={`w-full relative flex items-center space-x-3 px-4 py-3 rounded-xl transition-all
                   ${active
                     ? "bg-emerald-50 text-emerald-600 font-semibold shadow-sm"
                     : "text-gray-700 hover:bg-gray-50"
@@ -240,33 +180,32 @@ export default function Sidebar({
                 }
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">{item.label}</p>
-                </div>
+                <span className="text-sm">{item.label}</span>
 
                 {active && (
                   <motion.div
                     layoutId="activeSidebarItem"
                     className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full"
                     style={{ backgroundColor: brandColor }}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   />
                 )}
-              </Link>
+              </button>
             );
           })}
         </nav>
-      </aside>
 
-      {/* AI Chat Modal - Only AIChat has modal support */}
-      {aiChatOpen && (
-        <AIChat
-          isOpen={aiChatOpen}
-          onClose={() => setAiChatOpen(false)}
-          institutionId={institution?.id}
-          brandColor={brandColor}
-        />
-      )}
+        {/* FOOTER ACTIONS */}
+        <div className="p-4 border-t border-gray-100">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+              text-red-600 hover:bg-red-50 font-semibold transition-all"
+          >
+            <FiLogOut className="w-5 h-5" />
+            Logout
+          </button>
+        </div>
+      </aside>
     </>
   );
 }

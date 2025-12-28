@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { generateToken } from "../utils/generateToken.js";
 import Admin from "../models/admin.js";
+import { cookieOptions } from "../utils/cookieOptions.js";
 import Institution from "../models/institution.js";
 import { uploadInstitutionLogo } from "../services/cloudflareR2.js";
 
@@ -85,8 +86,8 @@ export const registerAdmin = async (req, res) => {
       try {
         console.log("📤 Uploading logo to Cloudflare R2...");
         logo = await uploadInstitutionLogo(
-          req.file.buffer, 
-          req.file.originalname, 
+          req.file.buffer,
+          req.file.originalname,
           req.file.mimetype
         );
         console.log("✅ Logo uploaded successfully:", logo);
@@ -311,12 +312,7 @@ export const logoutAdmin = (req, res) => {
   try {
     console.log("👋 Logout request");
 
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    });
+    res.clearCookie("token", cookieOptions);
 
     res.cookie("token", "", {
       httpOnly: true,
@@ -393,7 +389,7 @@ export const addAdminToInstitution = async (req, res) => {
 
     // Get requester admin details
     const requesterAdmin = await Admin.findById(req.user.id);
-    
+
     if (!requesterAdmin) {
       return res.status(404).json({
         message: "Admin account not found"
@@ -483,7 +479,7 @@ export const getAllInstitutionAdmins = async (req, res) => {
     }
 
     const requesterAdmin = await Admin.findById(req.user.id);
-    
+
     if (!requesterAdmin) {
       return res.status(404).json({
         message: "Admin account not found"
@@ -491,9 +487,9 @@ export const getAllInstitutionAdmins = async (req, res) => {
     }
 
     // Get all admins of the same institution
-    const admins = await Admin.find({ 
+    const admins = await Admin.find({
       institution: requesterAdmin.institution,
-      isActive: true 
+      isActive: true
     })
       .select('-password')
       .populate('addedBy', 'fullName email')
@@ -537,7 +533,7 @@ export const updateAdminPermissions = async (req, res) => {
     }
 
     const requesterAdmin = await Admin.findById(req.user.id);
-    
+
     if (!requesterAdmin || !requesterAdmin.isSuperAdmin) {
       return res.status(403).json({
         message: "Only super admins can update permissions"
@@ -545,7 +541,7 @@ export const updateAdminPermissions = async (req, res) => {
     }
 
     const targetAdmin = await Admin.findById(adminId);
-    
+
     if (!targetAdmin) {
       return res.status(404).json({
         message: "Admin not found"
@@ -570,7 +566,7 @@ export const updateAdminPermissions = async (req, res) => {
       ...targetAdmin.permissions,
       ...permissions
     };
-    
+
     await targetAdmin.save();
 
     res.json({
@@ -604,7 +600,7 @@ export const removeAdmin = async (req, res) => {
     }
 
     const requesterAdmin = await Admin.findById(req.user.id);
-    
+
     if (!requesterAdmin || !requesterAdmin.isSuperAdmin) {
       return res.status(403).json({
         message: "Only super admins can remove admins"
@@ -612,7 +608,7 @@ export const removeAdmin = async (req, res) => {
     }
 
     const targetAdmin = await Admin.findById(adminId);
-    
+
     if (!targetAdmin) {
       return res.status(404).json({
         message: "Admin not found"

@@ -19,7 +19,7 @@ export const getMe = async (req, res) => {
             user = await Admin.findById(id)
                 .select("fullName email role jobTitle isSuperAdmin permissions")
                 .populate('institution', 'name slug code branding stats');
-            
+
             if (user && user.institution) {
                 user = {
                     fullName: user.fullName,
@@ -54,8 +54,15 @@ export const getMe = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            user: user,
+            user: {
+                id: user._id,
+                name: user.fullName,
+                email: user.email,
+                role: user.role,
+                institutionName: user.institutionName || null,
+            },
         });
+
     } catch (err) {
         console.error("Auth Me Error:", err);
         res.status(500).json({
