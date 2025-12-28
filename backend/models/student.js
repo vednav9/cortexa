@@ -6,7 +6,10 @@ const studentSchema = new mongoose.Schema({
     email: { type: String, unique: true, required: true },
     password: { type: String, required: true },
     role: { type: String, default: "student" },
-});
+    class: { type: String },
+    division: { type: String },
+    enrollmentNumber: { type: String }
+}, { timestamps: true });
 
 // ✅ Hash password before saving
 studentSchema.pre("save", async function (next) {

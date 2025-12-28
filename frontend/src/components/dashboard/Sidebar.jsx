@@ -7,6 +7,7 @@ import {
   FiUserPlus,
   FiHelpCircle,
   FiX,
+  FiClock,
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import AIChat from "../ai/AIChat";
@@ -31,7 +32,7 @@ export default function Sidebar({
 
   /* ROLE → MENU ACCESS MAP */
   const MENU_BY_ROLE = {
-    admin: ["dashboard", "addUsers", "notifications", "querydesk"],
+    admin: ["dashboard", "addUsers", "pendingRequests", "notifications", "querydesk"],
     student: ["dashboard", "notifications"],
     teacher: ["dashboard", "notifications", "querydesk"],
   };
@@ -57,6 +58,13 @@ export default function Sidebar({
       icon: FiUserPlus,
       path: "/dashboard", // Keep on dashboard
       isTab: true, // Mark as tab-based
+    },
+    {
+      id: "pendingRequests",
+      label: "Pending Requests",
+      icon: FiClock,
+      path: "/dashboard",
+      isTab: true,
     },
     {
       id: "notifications",

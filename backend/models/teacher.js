@@ -27,6 +27,16 @@ const teacherSchema = new mongoose.Schema(
             type: String,
             default: "teacher",
         },
+
+        department: {
+            type: String,
+            trim: true,
+        },
+
+        specialization: {
+            type: String,
+            trim: true,
+        },
     },
     { timestamps: true }
 );
