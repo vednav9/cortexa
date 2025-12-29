@@ -12,8 +12,11 @@ export const getMe = async (req, res) => {
         } else if (role === "teacher") {
             user = await Teacher.findById(id).select("fullName email role");
         } else if (role === "admin") {
-            user = await Admin.findById(id).select("fullName email role");
-        } else {
+            user = await Admin.findById(id)
+                .populate("institution")
+                .select("fullName email role institution");
+        }
+        else {
             return res.status(400).json({
                 success: false,
                 message: "Invalid role",
@@ -31,11 +34,13 @@ export const getMe = async (req, res) => {
             success: true,
             user: {
                 id: user._id,
-                name: user.fullName,   // 🔑 frontend depends on this
+                name: user.fullName,
                 email: user.email,
                 role: user.role,
+                institution: role === "admin" ? user.institution : null,
             },
         });
+
     } catch (err) {
         console.error("GET /me error:", err);
         res.status(500).json({

@@ -4,6 +4,7 @@ import {
   registerAdmin,
   loginAdmin,
   logoutAdmin,
+  getMyInstitution
 } from "../controllers/adminController.js";
 import { authenticate } from "../middleware/auth.js";
 import upload from "../middleware/upload.js";
@@ -33,5 +34,7 @@ router.get("/me", authenticate, (req, res) => {
     user: req.user,
   });
 });
+
+router.get("/institution", authenticate, getMyInstitution);
 
 export default router;

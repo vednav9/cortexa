@@ -216,6 +216,31 @@ export const loginAdmin = async (req, res) => {
 };
 
 /* =========================
+   Get ADMIN Institution
+========================= */
+
+export const getMyInstitution = async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.user.id)
+      .populate("institution");
+
+    if (!admin || !admin.institution) {
+      return res.json({ institution: null });
+    }
+
+    res.json({
+      institution: admin.institution,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Failed to fetch admin institution",
+    });
+  }
+};
+
+
+/* =========================
    LOGOUT ADMIN
 ========================= */
 export const logoutAdmin = (req, res) => {
