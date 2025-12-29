@@ -1,18 +1,36 @@
-// controllers/adminController.js
-import bcrypt from "bcryptjs";
 import Admin from "../models/admin.js";
 import Institution from "../models/institution.js";
+import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
 import { uploadInstitutionLogo } from "../services/cloudflareR2.js";
 
 // helpers
-const generateSlug = (name) =>
+const slugify = (name) =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
-const generateCode = (name) =>
-  name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 6);
+const generateUniqueCode = async (name) => {
+  const baseCode = name
+    .split(" ")
+    .map(w => w[0])
+    .join("")
+    .slice(0, 6)
+    .toUpperCase();
 
+  let code = baseCode;
+  let counter = 1;
+
+  while (await Institution.exists({ code })) {
+    code = `${baseCode}${counter}`; // NHIOTA1, NHIOTA2...
+    counter++;
+  }
+
+  return code;
+};
+
+/* =========================
+   REGISTER ADMIN + INSTITUTION
+========================= */
 export const registerAdmin = async (req, res) => {
   try {
     const {
@@ -34,7 +52,7 @@ export const registerAdmin = async (req, res) => {
       brandColor,
     } = req.body;
 
-    // 🔴 BASIC VALIDATION
+    // 🔴 REQUIRED FIELDS CHECK
     if (
       !fullName ||
       !email ||
@@ -42,6 +60,7 @@ export const registerAdmin = async (req, res) => {
       !jobTitle ||
       !phone ||
       !institutionName ||
+      !institutionType ||
       !address1 ||
       !city ||
       !state ||
@@ -54,8 +73,8 @@ export const registerAdmin = async (req, res) => {
     }
 
     // 🔴 CHECK EXISTING ADMIN
-    const existingAdmin = await Admin.findOne({ email });
-    if (existingAdmin) {
+    const exists = await Admin.findOne({ email });
+    if (exists) {
       return res.status(400).json({
         success: false,
         message: "Admin already exists",
@@ -72,11 +91,14 @@ export const registerAdmin = async (req, res) => {
       );
     }
 
+    // ✅ GENERATE UNIQUE CODE (INSIDE FUNCTION)
+    const code = await generateUniqueCode(institutionName);
+
     // 🔹 CREATE INSTITUTION
     const institution = await Institution.create({
       name: institutionName,
-      slug: customURL || generateSlug(institutionName),
-      code: generateCode(institutionName),
+      slug: customURL || slugify(institutionName),
+      code, // ✅ FIXED
       type: institutionType.toLowerCase(),
       description: description || "",
 
@@ -109,13 +131,9 @@ export const registerAdmin = async (req, res) => {
       phone,
       institution: institution._id,
       role: "admin",
-      isSuperAdmin: true,
-      authorized: true,
     });
 
-    // 🔹 LINK ADMIN ↔ INSTITUTION
     institution.admins.push(admin._id);
-    institution.superAdmin = admin._id;
     await institution.save();
 
     // 🔹 AUTH TOKEN
@@ -126,27 +144,24 @@ export const registerAdmin = async (req, res) => {
 
     res.cookie("token", token, cookieOptions);
 
-    // ✅ RESPONSE SHAPE (MATCHES FRONTEND)
     res.status(201).json({
       success: true,
       user: {
         id: admin._id,
-        name: admin.fullName, // 🔥 IMPORTANT
+        name: admin.fullName,
         email: admin.email,
         role: "admin",
       },
     });
 
-  } catch (error) {
-    console.error("❌ Admin Register Error:", error);
+  } catch (err) {
+    console.error("Admin register error:", err);
     res.status(500).json({
       success: false,
       message: "Server error during admin registration",
     });
   }
 };
-
-
 
 
 /* =========================
@@ -156,16 +171,9 @@ export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required",
-      });
-    }
-
     const admin = await Admin.findOne({ email })
       .select("+password")
-      .populate("institution", "name slug code");
+      .populate("institution", "name code");
 
     if (!admin) {
       return res.status(404).json({
@@ -174,8 +182,8 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
-    const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) {
+    const match = await bcrypt.compare(password, admin.password);
+    if (!match) {
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
@@ -189,27 +197,20 @@ export const loginAdmin = async (req, res) => {
 
     res.cookie("token", token, cookieOptions);
 
-    res.status(200).json({
+    res.json({
       success: true,
       user: {
         id: admin._id,
-        name: admin.fullName, // ✅ IMPORTANT
+        name: admin.fullName,
         email: admin.email,
         role: "admin",
-        institution: admin.institution
-          ? {
-            id: admin.institution._id,
-            name: admin.institution.name,
-            code: admin.institution.code,
-          }
-          : null,
+        institution: admin.institution,
       },
     });
-  } catch (error) {
-    console.error("Admin Login Error:", error);
+  } catch (err) {
     res.status(500).json({
       success: false,
-      message: "Server error during admin login",
+      message: "Server error during login",
     });
   }
 };
@@ -219,8 +220,5 @@ export const loginAdmin = async (req, res) => {
 ========================= */
 export const logoutAdmin = (req, res) => {
   res.clearCookie("token", cookieOptions);
-  res.status(200).json({
-    success: true,
-    message: "Admin logged out successfully",
-  });
+  res.json({ success: true });
 };
