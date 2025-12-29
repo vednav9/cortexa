@@ -1,168 +1,189 @@
 import Student from "../models/student.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { generateToken } from "../utils/generateToken.js";
+import { cookieOptions } from "../utils/cookieOptions.js";
 
-// Generate JWT Token
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-};
-
-//student register
+/* ===============================
+   REGISTER STUDENT
+================================ */
 export const registerStudent = async (req, res) => {
     try {
-        // ... existing validation code ...
-        const { fullName, email, password, role } = req.body;
+        const { fullName, email, password } = req.body;
 
+        if (!fullName || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "All fields are required",
+            });
+        }
+
+        const existingStudent = await Student.findOne({ email });
+        if (existingStudent) {
+            return res.status(400).json({
+                success: false,
+                message: "Student already exists",
+            });
+        }
 
         const newStudent = await Student.create({
             fullName,
             email,
             password,
-            role,
+            role: "student",
         });
 
-        const token = generateToken(newStudent._id);
-
-        // ✅ Set token in httpOnly cookie
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+        const token = generateToken({
+            id: newStudent._id,
+            role: "student",
         });
 
+        res.cookie("token", token, cookieOptions);
 
         res.status(201).json({
             success: true,
             message: "Registration successful",
             user: {
                 id: newStudent._id,
-                fullName: newStudent.fullName,
+                name: newStudent.fullName,
                 email: newStudent.email,
-                role: newStudent.role,
-            }
+                role: "student",
+            },
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Server error", error: error.message });
+        console.error("Register Student Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error during registration",
+        });
     }
 };
 
-
-// loginStudent controller - Updated
+/* ===============================
+   LOGIN STUDENT
+================================ */
 export const loginStudent = async (req, res) => {
     try {
         const { email, password } = req.body;
 
         if (!email || !password) {
-            return res.status(400).json({ success: false, message: "Email and password are required" });
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required",
+            });
         }
 
-        const student = await Student.findOne({ email });
+        const student = await Student.findOne({ email }).select("+password");
         if (!student) {
-            return res.status(404).json({ success: false, message: "Student not found" });
+            return res.status(404).json({
+                success: false,
+                message: "Student not found",
+            });
         }
 
-        // ✅ Compare hashed password
         const isMatch = await bcrypt.compare(password, student.password);
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: "Invalid credentials" });
+            return res.status(401).json({
+                success: false,
+                message: "Invalid credentials",
+            });
         }
 
-        const token = jwt.sign(
-            { id: student._id, role: student.role },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
-
-        // ✅ Set cookie properly
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/",
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+        const token = generateToken({
+            id: student._id,
+            role: "student",
         });
 
+        res.cookie("token", token, cookieOptions);
 
         res.status(200).json({
             success: true,
             message: "Login successful",
             user: {
-                fullName: student.fullName,
+                id: student._id,
+                name: student.fullName,
                 email: student.email,
-                role: student.role,
+                role: "student",
             },
         });
     } catch (error) {
-        console.error("Login error:", error);
-        res.status(500).json({ success: false, message: "Server error during login" });
+        console.error("Login Student Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error during login",
+        });
     }
 };
 
-// Get user info from cookie token
+/* ===============================
+   GET STUDENT PROFILE (ME)
+================================ */
 export const getUserProfile = async (req, res) => {
     try {
         const token = req.cookies.token;
+
         if (!token) {
-            return res.status(401).json({ success: false, message: "No token found" });
+            return res.status(401).json({
+                success: false,
+                message: "No token found",
+            });
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const student = await Student.findById(decoded.id).select("fullName email role");
+
+        const student = await Student.findById(decoded.id).select(
+            "fullName email role"
+        );
 
         if (!student) {
-            return res.status(404).json({ success: false, message: "User not found" });
+            return res.status(404).json({
+                success: false,
+                message: "Student not found",
+            });
         }
 
         res.status(200).json({
             success: true,
             user: {
-                fullName: student.fullName,
+                id: student._id,
+                name: student.fullName,
                 email: student.email,
                 role: student.role,
             },
         });
     } catch (error) {
-        console.error(error);
-        res.status(401).json({ success: false, message: "Invalid or expired token" });
+        console.error("Get Student Profile Error:", error);
+        res.status(401).json({
+            success: false,
+            message: "Invalid or expired token",
+        });
     }
 };
 
-//logout student
+/* ===============================
+   LOGOUT STUDENT
+================================ */
 export const logoutStudent = (req, res) => {
     try {
-        res.clearCookie("token", {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production" ? true : false,
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-            path: "/", // must match login
-        });
+        res.clearCookie("token", cookieOptions);
 
         res.cookie("token", "", {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production" ? true : false,
+            secure: process.env.NODE_ENV === "production",
             sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
             expires: new Date(0),
             path: "/",
         });
 
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
-            message: "Logged out successfully and cookie cleared",
+            message: "Logged out successfully",
         });
     } catch (error) {
-        console.error("Logout error:", error);
+        console.error("Logout Student Error:", error);
         res.status(500).json({
             success: false,
-            message: "Internal server error during logout",
+            message: "Server error during logout",
         });
     }
 };
-
-
-
-
-
-

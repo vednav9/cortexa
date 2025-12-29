@@ -30,7 +30,7 @@ const institutionSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  
+
   // Address
   address: {
     street: {
@@ -51,14 +51,14 @@ const institutionSchema = new mongoose.Schema({
     },
     zipCode: String
   },
-  
+
   // Contact Information
   contact: {
     email: String,
     phone: String,
     website: String
   },
-  
+
   // Branding
   branding: {
     logo: {
@@ -77,20 +77,20 @@ const institutionSchema = new mongoose.Schema({
     banner: String,
     favicon: String
   },
-  
+
   // Admins Array (multiple admins can manage one institution)
   admins: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin'
   }],
-  
+
   // Super Admin (first registered admin)
   superAdmin: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',
-    required: true
+    default: null
   },
-  
+
   // Students and Teachers
   students: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -100,14 +100,14 @@ const institutionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Teacher'
   }],
-  
+
   // Departments
   departments: [{
     name: String,
     code: String,
     head: String
   }],
-  
+
   // Settings
   settings: {
     allowPublicJoin: {
@@ -127,7 +127,7 @@ const institutionSchema = new mongoose.Schema({
       default: null
     }
   },
-  
+
   // Statistics
   stats: {
     totalStudents: {
@@ -147,31 +147,31 @@ const institutionSchema = new mongoose.Schema({
       default: 1
     }
   },
-  
+
   // Status
   isActive: {
     type: Boolean,
     default: true
   }
-}, { 
+}, {
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
 // Update timestamp on save
-institutionSchema.pre('save', function(next) {
+institutionSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
 // Virtual for logo initials
-institutionSchema.virtual('initials').get(function() {
+institutionSchema.virtual('initials').get(function () {
   return this.name.split(' ').map(word => word[0]).join('').substring(0, 2).toUpperCase();
 });
 
 // Method to add admin
-institutionSchema.methods.addAdmin = async function(adminId) {
+institutionSchema.methods.addAdmin = async function (adminId) {
   if (!this.admins.includes(adminId)) {
     this.admins.push(adminId);
     this.stats.totalAdmins = this.admins.length;
@@ -180,7 +180,7 @@ institutionSchema.methods.addAdmin = async function(adminId) {
 };
 
 // Method to remove admin
-institutionSchema.methods.removeAdmin = async function(adminId) {
+institutionSchema.methods.removeAdmin = async function (adminId) {
   this.admins = this.admins.filter(id => id.toString() !== adminId.toString());
   this.stats.totalAdmins = this.admins.length;
   await this.save();

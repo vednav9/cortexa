@@ -3,6 +3,8 @@ import { authenticate } from '../middleware/auth.js';
 import Invitation from '../models/invitation.js';
 import Institution from '../models/institution.js';
 import Membership from '../models/membership.js';
+import Student from '../models/student.js';
+import Teacher from '../models/teacher.js';
 
 const router = express.Router();
 
@@ -108,6 +110,26 @@ router.post('/:id/accept', authenticate, async (req, res) => {
       invitation.respondedAt = new Date();
       await invitation.save();
       return res.status(400).json({ message: 'Already a member' });
+    }
+
+    // Update user-specific fields from request body
+    if (invitation.recipientType === 'Student') {
+      const { class: className, division, enrollmentNumber } = req.body;
+      
+      // Update student with class, division, enrollmentNumber
+      await Student.findByIdAndUpdate(req.user.userId, {
+        class: className,
+        division,
+        enrollmentNumber
+      });
+    } else if (invitation.recipientType === 'Teacher') {
+      const { department, specialization } = req.body;
+      
+      // Update teacher with department, specialization
+      await Teacher.findByIdAndUpdate(req.user.userId, {
+        department,
+        specialization
+      });
     }
     
     // Create membership
