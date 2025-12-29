@@ -9,106 +9,79 @@ import {
   FiLogOut,
   FiChevronDown,
   FiSearch,
-  FiBarChart
+  FiBarChart,
+  FiCheck,
+  FiBuilding
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import Sidebar from './Sidebar';
-import AddUsersTab from './AddUsersTab';
-import PendingRequestsTab from './PendingRequestsTab';
+import CollegeAdminDashboard from '../college/CollegeAdminDashboard';
 import { adminAPI } from '../../services/api';
-import { LoadingPage, LoadingTable } from '../common/LoadingSpinner';
+import { LoadingPage } from '../common/LoadingSpinner';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { useAuth } from '../../context/authcontext';
+import { mockInstitutions } from '../../data/mockInstitutions';
 
 const AdminDashboard = ({ onLogout }) => {
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('students');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [classFilter, setClassFilter] = useState('all');
-  const [divisionFilter, setDivisionFilter] = useState('all');
-  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [selectedInstitution, setSelectedInstitution] = useState(null);
   
-  const [students, setStudents] = useState([]);
-  const [teachers, setTeachers] = useState([]);
+  const [institution, setInstitution] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // 🧪 TESTING MODE - Set to false to use real backend data
+  const [useMockData] = useState(true);
 
-  // Fetch users
+  // Fetch admin's institution from backend OR use mock data
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchInstitution = async () => {
       try {
         setLoading(true);
-        const [studentsRes, teachersRes] = await Promise.all([
-          adminAPI.getStudents(),
-          adminAPI.getTeachers()
-        ]);
-        setStudents(studentsRes.data.students || []);
-        setTeachers(teachersRes.data.teachers || []);
+        
+        if (useMockData) {
+          // 🧪 Use mock data for testing
+          console.log('🧪 Using mock institutions for testing');
+          setInstitution(mockInstitutions[0]); // Use first mock institution
+          setLoading(false);
+        } else {
+          // 🔴 Real backend call
+          const response = await adminAPI.getInstitution();
+          setInstitution(response.data.institution);
+          setLoading(false);
+        }
       } catch (err) {
-        setError(err.response?.data?.message || 'Failed to load users');
-        toast.error('Failed to load users');
-      } finally {
+        setError(err.response?.data?.message || 'Failed to load institution');
+        toast.error('Failed to load institution');
         setLoading(false);
       }
     };
-    fetchUsers();
-  }, []);
+    fetchInstitution();
+  }, [useMockData]);
 
-  const filteredUsers = activeTab === 'students' ? students : activeTab === 'teachers' ? teachers : [];
-
-  // Get unique values for filters
-  const uniqueClasses = [...new Set(students.map(s => s.class).filter(Boolean))];
-  const uniqueDivisions = [...new Set(students.map(s => s.division).filter(Boolean))];
-  const uniqueDepartments = [...new Set(teachers.map(t => t.department).filter(Boolean))];
-
-  // Apply filters
-  const getFilteredUsers = () => {
-    let filtered = filteredUsers.filter((user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  // If institution is selected, show CollegeAdminDashboard
+  if (selectedInstitution) {
+    return (
+      <CollegeAdminDashboard
+        institution={selectedInstitution}
+        onLogout={onLogout}
+        onBack={() => setSelectedInstitution(null)}
+      />
     );
+  }
 
-    if (activeTab === 'students') {
-      if (classFilter !== 'all') {
-        filtered = filtered.filter(u => u.class === classFilter);
-      }
-      if (divisionFilter !== 'all') {
-        filtered = filtered.filter(u => u.division === divisionFilter);
-      }
-    } else if (activeTab === 'teachers') {
-      if (departmentFilter !== 'all') {
-        filtered = filtered.filter(u => u.department === departmentFilter);
-      }
-    }
-
-    return filtered;
-  };
-
-  const handleDeleteUser = async (id) => {
-    try {
-      if (activeTab === 'students') {
-        await adminAPI.deleteStudent(id);
-        setStudents(prev => prev.filter(s => s.id !== id));
-      } else if (activeTab === 'teachers') {
-        await adminAPI.deleteTeacher(id);
-        setTeachers(prev => prev.filter(t => t.id !== id));
-      }
-      toast.success('User deleted successfully');
-    } catch (err) {
-      toast.error('Failed to delete user');
-    }
-  };
+  if (loading) {
+    return <LoadingPage />;
+  }
 
   return (
     <div className="flex w-full h-screen bg-gray-50 lg:pl-80">
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
       />
 
       <div className="flex-1 flex flex-col">
@@ -190,293 +163,138 @@ const AdminDashboard = ({ onLogout }) => {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'addUsers' ? (
-            <AddUsersTab />
-          ) : activeTab === 'pendingRequests' ? (
-            <PendingRequestsTab />
-          ) : (
-            <div className="max-w-7xl mx-auto space-y-6">
-              {/* Header with Stats */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-xl">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24"></div>
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Welcome Section */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-xl">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24"></div>
 
-                <div className="relative z-10">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                          <HiSparkles className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <h1 className="text-3xl font-bold">User Management</h1>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* User Type Toggle */}
-                    <div className="flex gap-2 p-1.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
-                      <button
-                        onClick={() => setActiveTab('students')}
-                        className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'students'
-                          ? 'bg-white text-emerald-600 shadow-lg'
-                          : 'text-white hover:bg-white/10'
-                          }`}
-                      >
-                        <FiUsers className="w-4 h-4" />
-                        Students
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('teachers')}
-                        className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${activeTab === 'teachers'
-                          ? 'bg-white text-emerald-600 shadow-lg'
-                          : 'text-white hover:bg-white/10'
-                          }`}
-                      >
-                        <FiUsers className="w-4 h-4" />
-                        Teachers
-                      </button>
-                    </div>
+              <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                    <HiSparkles className="w-6 h-6" />
                   </div>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-4 mt-6">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                      <p className="text-emerald-100 text-xs font-medium uppercase">Total Students</p>
-                      <p className="text-3xl font-bold mt-1">{students.length}</p>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                      <p className="text-emerald-100 text-xs font-medium uppercase">Total Teachers</p>
-                      <p className="text-3xl font-bold mt-1">{teachers.length}</p>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                      <p className="text-emerald-100 text-xs font-medium uppercase">Total Users</p>
-                      <p className="text-3xl font-bold mt-1">{students.length + teachers.length}</p>
-                    </div>
+                  <div>
+                    <h1 className="text-3xl font-bold">Welcome, {user?.fullName || 'Admin'}!</h1>
+                    <p className="text-emerald-100 mt-1">Manage your institution from here</p>
                   </div>
-                </div>
-              </div>
-
-              {/* Users Section */}
-              <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
-                {/* Section Header */}
-                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                        <FiUsers className="w-6 h-6 text-emerald-600" />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">
-                          {activeTab === 'students' ? 'Students' : 'Teachers'} ({getFilteredUsers().length})
-                        </h3>
-                        <p className="text-sm text-gray-600 mt-0.5">Manage your {activeTab}</p>
-                      </div>
-                    </div>
-
-                    {/* Search Bar */}
-                    <div className="relative">
-                      <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Search users..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent w-64"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Filters Row */}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {activeTab === 'students' && (
-                      <>
-                        {/* Class Filter */}
-                        <select
-                          value={classFilter}
-                          onChange={(e) => setClassFilter(e.target.value)}
-                          className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
-                        >
-                          <option value="all">All Classes</option>
-                          {uniqueClasses.map(cls => (
-                            <option key={cls} value={cls}>{cls}</option>
-                          ))}
-                        </select>
-
-                        {/* Division Filter */}
-                        <select
-                          value={divisionFilter}
-                          onChange={(e) => setDivisionFilter(e.target.value)}
-                          className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
-                        >
-                          <option value="all">All Divisions</option>
-                          {uniqueDivisions.map(div => (
-                            <option key={div} value={div}>{div}</option>
-                          ))}
-                        </select>
-                      </>
-                    )}
-
-                    {activeTab === 'teachers' && (
-                      <>
-                        {/* Department Filter */}
-                        <select
-                          value={departmentFilter}
-                          onChange={(e) => setDepartmentFilter(e.target.value)}
-                          className="px-4 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white"
-                        >
-                          <option value="all">All Departments</option>
-                          {uniqueDepartments.map(dept => (
-                            <option key={dept} value={dept}>{dept}</option>
-                          ))}
-                        </select>
-                      </>
-                    )}
-
-                    {/* Clear Filters Button */}
-                    {(classFilter !== 'all' || divisionFilter !== 'all' || departmentFilter !== 'all') && (
-                      <button
-                        onClick={() => {
-                          setClassFilter('all');
-                          setDivisionFilter('all');
-                          setDepartmentFilter('all');
-                        }}
-                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl text-sm hover:bg-gray-200 transition-colors font-medium"
-                      >
-                        Clear Filters
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* User Grid */}
-                <div className="p-6">
-                  {loading ? (
-                    <LoadingTable />
-                  ) : error ? (
-                    <ErrorMessage message={error} />
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {getFilteredUsers().map((user) => (
-                          <UserCard key={user.id} user={user} onDelete={handleDeleteUser} />
-                        ))}
-                      </div>
-
-                      {getFilteredUsers().length === 0 && (
-                        <div className="text-center py-12">
-                          <FiUsers className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                          <p className="text-gray-500 text-lg">No {activeTab} found</p>
-                          <p className="text-gray-400 text-sm mt-2">Try adjusting your filters or search query</p>
-                        </div>
-                      )}
-                    </>
-                  )}
                 </div>
               </div>
             </div>
-          )}
+
+            {/* My Institution Section */}
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-6 border border-emerald-200">
+                <h3 className="text-lg font-bold text-gray-800 mb-2">My Institution</h3>
+                <p className="text-sm text-gray-600">Click on your institution card to manage it</p>
+              </div>
+
+              {useMockData ? (
+                // 🧪 Show ONLY 1 mock institution for testing
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  onClick={() => setSelectedInstitution(mockInstitutions[0])}
+                  className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-emerald-300 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-4">
+                      <div 
+                        className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-2xl shadow-sm"
+                        style={{
+                          background: mockInstitutions[0].branding?.primaryColor 
+                            ? `linear-gradient(135deg, ${mockInstitutions[0].branding.primaryColor}, ${mockInstitutions[0].branding.secondaryColor || mockInstitutions[0].branding.primaryColor})` 
+                            : 'linear-gradient(135deg, #10b981, #059669)'
+                        }}
+                      >
+                        {mockInstitutions[0].code || mockInstitutions[0].name?.substring(0, 2).toUpperCase() || 'IN'}
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-bold text-gray-800 group-hover:text-emerald-600 transition-colors">
+                          {mockInstitutions[0].name}
+                        </h4>
+                        <p className="text-sm text-gray-500">{mockInstitutions[0].type || 'Institution'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg">
+                      <FiCheck className="w-4 h-4" />
+                      <span className="text-sm font-medium">Active</span>
+                    </div>
+                    {mockInstitutions[0].establishedYear && (
+                      <span className="text-sm text-gray-400">Est. {mockInstitutions[0].establishedYear}</span>
+                    )}
+                  </div>
+                </motion.div>
+              ) : institution ? (
+                // 🔴 Show single real institution from backend
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  onClick={() => setSelectedInstitution(institution)}
+                  className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-emerald-300 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-4">
+                      <div 
+                        className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-2xl shadow-sm"
+                        style={{
+                          background: `linear-gradient(135deg, ${institution.primaryColor || '#10b981'}, ${institution.secondaryColor || '#059669'})`
+                        }}
+                      >
+                        {institution.name?.substring(0, 2).toUpperCase() || 'IN'}
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-bold text-gray-800 group-hover:text-emerald-600 transition-colors">
+                          {institution.name}
+                        </h4>
+                        <p className="text-sm text-gray-500">{institution.type || 'Institution'}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg">
+                      <FiCheck className="w-4 h-4" />
+                      <span className="text-sm font-medium">Active</span>
+                    </div>
+                    {institution.establishedYear && (
+                      <span className="text-sm text-gray-400">Est. {institution.establishedYear}</span>
+                    )}
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
+                  <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FiBuilding className="w-8 h-8 text-emerald-400" />
+                  </div>
+                  <p className="text-gray-500 text-lg font-medium mb-2">No institution assigned yet</p>
+                  <p className="text-gray-400 text-sm">Contact system administrator</p>
+                </div>
+              )}
+            </div>
+
+            {/* Browse Institutions Section */}
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+                <h3 className="text-lg font-bold text-gray-800 mb-2">Browse Institutions</h3>
+                <p className="text-sm text-gray-600">Discover other institutions</p>
+              </div>
+
+              <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FiSearch className="w-8 h-8 text-blue-400" />
+                </div>
+                <p className="text-gray-500 text-lg font-medium mb-2">Coming Soon</p>
+                <p className="text-gray-400 text-sm">Browse feature will be available soon</p>
+              </div>
+            </div>
+          </div>
         </main>
       </div>
     </div>
-  );
-};
-
-const UserCard = ({ user, onDelete }) => {
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ y: -4, scale: 1.02 }}
-      className="relative bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-2xl p-5 hover:shadow-xl hover:border-emerald-200 transition-all group"
-    >
-      {/* Delete Button */}
-      <button
-        onClick={() => setShowConfirm(true)}
-        className="absolute top-3 right-3 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-600"
-      >
-        <FiX className="w-4 h-4" />
-      </button>
-
-      {/* User Info */}
-      <div className="flex flex-col items-center text-center">
-        <div className="relative mb-3">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
-            {user.logo}
-          </div>
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
-        </div>
-
-        <h3 className="text-base font-bold text-gray-800 mb-1">{user.name}</h3>
-        <p className="text-xs text-gray-500 flex items-center gap-1 mb-2">
-          <FiMail className="w-3 h-3" /> {user.email}
-        </p>
-
-        {/* Student-specific info */}
-        {user.role === 'Student' && (user.class || user.division || user.enrollmentNumber) && (
-          <div className="space-y-1 mb-2 w-full">
-            {user.class && user.division && (
-              <p className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
-                Class: {user.class} - {user.division}
-              </p>
-            )}
-            {user.enrollmentNumber && user.enrollmentNumber !== 'N/A' && (
-              <p className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
-                Enrollment: {user.enrollmentNumber}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Teacher-specific info */}
-        {user.role === 'Teacher' && user.department && user.department !== 'N/A' && (
-          <div className="mb-2 w-full">
-            <p className="text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
-              {user.department}
-            </p>
-          </div>
-        )}
-
-        <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full">
-          {user.role}
-        </span>
-      </div>
-
-      {/* Confirm Delete Modal */}
-      <AnimatePresence>
-        {showConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center p-4 z-10"
-          >
-            <p className="text-sm font-semibold text-gray-800 mb-4 text-center">
-              Delete {user.name}?
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  onDelete(user.id);
-                  setShowConfirm(false);
-                }}
-                className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
   );
 };
 

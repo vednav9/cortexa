@@ -15,16 +15,50 @@ import {
 import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../context/authcontext";
 import Sidebar from "./Sidebar";
-import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
-import MyInstitutionsTab from "./MyInstitutionsTab";
+import BrowseInstitutions from "./BrowseInstitutions";
+import MyInstitutions from "./MyInstitutions";
 import Notifications from "./Notifications";
+import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
+import toast from "react-hot-toast";
 
 const CortexaDashboard = () => {
     const { user, loading } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("dashboard");
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+    const [myInstitutions, setMyInstitutions] = useState([]);
+    const [institutionsLoading, setInstitutionsLoading] = useState(true);
     const profileMenuRef = useRef(null);
+
+    // Fetch institutions based on user role
+    useEffect(() => {
+        const fetchInstitutions = async () => {
+            if (!user || !user.role) return;
+            
+            try {
+                setInstitutionsLoading(true);
+                const role = user.role.toLowerCase();
+                
+                if (role === 'student') {
+                    const { data } = await studentAPI.getInstitutions();
+                    setMyInstitutions(data.institutions || []);
+                } else if (role === 'teacher') {
+                    const { data } = await teacherAPI.getInstitutions();
+                    setMyInstitutions(data.institutions || []);
+                } else {
+                    setMyInstitutions([]);
+                }
+            } catch (err) {
+                console.error('Failed to fetch institutions:', err);
+                toast.error('Failed to load institutions');
+                setMyInstitutions([]);
+            } finally {
+                setInstitutionsLoading(false);
+            }
+        };
+        
+        fetchInstitutions();
+    }, [user]);
 
     // Close profile menu when clicking outside
     useEffect(() => {
@@ -58,8 +92,6 @@ const CortexaDashboard = () => {
 
     if (!user) return null;
 
-    // Mock data
-    const myInstitutions = [];
     const browseCount = 5;
 
     return (
@@ -227,7 +259,7 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <MyInstitutionsTab institutions={myInstitutions} />
+                                    <MyInstitutions institutions={myInstitutions} />
                                 </div>
                             </section>
 
@@ -248,7 +280,7 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <BrowseInstitutionsTab />
+                                    <BrowseInstitutions />
                                 </div>
                             </section>
                         </div>

@@ -89,6 +89,9 @@ export const adminAPI = {
   deleteUser: (userId) => api.delete(`/admin/user/${userId}`),
   updateUser: (userId, userData) => api.put(`/admin/user/${userId}`, userData),
   
+  // Institution Management
+  getInstitution: () => api.get('/admin/institution'),
+  
   // Admin Management APIs
   addAdmin: (adminData) => api.post('/admin/add-admin', adminData),
   getAllAdmins: () => api.get('/admin/admins'),
