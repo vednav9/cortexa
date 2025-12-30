@@ -16,11 +16,8 @@ import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../context/authcontext";
 import Sidebar from "./Sidebar";
 import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
-import MyInstitutions from "./MyInstitutions";
+import MyInstitutionsTab from "./MyInstitutionsTab";
 import Notifications from "./Notifications";
-import AdminDashboard from "./AdminDashboard";
-import StudentDashboard from "./StudentDashboard";
-import TeacherDashboard from "./TeacherDashboard";
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -86,46 +83,18 @@ const CortexaDashboard = () => {
         };
     }, [profileMenuOpen]);
 
-    // Handle institution click - route to specific dashboard based on role
+    // Handle institution click - update sidebar and show institution content
     const handleInstitutionClick = (institution) => {
         setSelectedInstitution(institution);
+        // Change to institution dashboard tab
+        setActiveTab("institution-dashboard");
     };
 
-    // Handle logout from role-specific dashboard
-    const handleLogout = () => {
-        // Logout logic handled by Sidebar
+    // Handle back to main dashboard
+    const handleBackToDashboard = () => {
+        setSelectedInstitution(null);
+        setActiveTab("dashboard");
     };
-
-    // If institution is selected, show role-specific dashboard
-    if (selectedInstitution) {
-        const role = user?.role?.toLowerCase();
-        
-        if (role === 'admin') {
-            return (
-                <AdminDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        } else if (role === 'teacher') {
-            return (
-                <TeacherDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        } else if (role === 'student') {
-            return (
-                <StudentDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        }
-    }
 
     if (loading) {
         return (
@@ -152,6 +121,8 @@ const CortexaDashboard = () => {
                 onClose={() => setSidebarOpen(false)}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
+                selectedInstitution={selectedInstitution}
+                onBackToDashboard={handleBackToDashboard}
             />
 
             {/* MAIN CONTENT */}
@@ -309,7 +280,7 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <MyInstitutions 
+                                    <MyInstitutionsTab 
                                         institutions={myInstitutions} 
                                         onSelectInstitution={handleInstitutionClick}
                                     />
