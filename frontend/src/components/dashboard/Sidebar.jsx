@@ -16,6 +16,7 @@ export default function Sidebar({
   activeTab, 
   setActiveTab, 
   selectedInstitution,
+  hasAccess = false, // New prop to check if user has access
   onBackToDashboard 
 }) {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ export default function Sidebar({
 
   const brandColor = selectedInstitution?.branding?.primaryColor || "#10b981";
 
-  // Default menu items (when no institution is selected)
+  // Default menu items (when no institution is selected OR user has no access)
   const defaultMenuItems = [
     { id: "dashboard", label: "Dashboard", icon: FiHome },
     { id: "notifications", label: "Notifications", icon: FiBell },
@@ -77,7 +78,8 @@ export default function Sidebar({
     return defaultMenuItems;
   };
 
-  const menuItems = selectedInstitution ? getRoleSpecificMenuItems() : defaultMenuItems;
+  // Show role-specific menu only if institution is selected AND user has access
+  const menuItems = (selectedInstitution && hasAccess) ? getRoleSpecificMenuItems() : defaultMenuItems;
 
   const handleLogout = async () => {
     try {
@@ -125,7 +127,7 @@ export default function Sidebar({
                 background: `linear-gradient(135deg, ${brandColor}, ${brandColor}cc)`,
               }}
             >
-              {selectedInstitution ? (
+              {(selectedInstitution && hasAccess) ? (
                 <span className="text-white font-bold text-sm">
                   {selectedInstitution.code || selectedInstitution.name?.substring(0, 2).toUpperCase()}
                 </span>
@@ -134,7 +136,7 @@ export default function Sidebar({
               )}
             </div>
             <div className="flex-1 min-w-0">
-              {selectedInstitution ? (
+              {(selectedInstitution && hasAccess) ? (
                 <>
                   <p className="font-bold text-sm text-gray-800 truncate">
                     {selectedInstitution.name}
@@ -159,8 +161,8 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Back Button (when institution is selected) */}
-        {selectedInstitution && onBackToDashboard && (
+        {/* Back Button (only when institution is selected AND user has access) */}
+        {selectedInstitution && hasAccess && onBackToDashboard && (
           <div className="px-4 pt-4">
             <button
               onClick={() => {

@@ -1,5 +1,6 @@
 // CortexaDashboard.jsx – UI Polished & Consistent
 import React, { useState, useRef, useEffect } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     FiMenu,
@@ -18,11 +19,21 @@ import Sidebar from "./Sidebar";
 import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
 import MyInstitutionsTab from "./MyInstitutionsTab";
 import Notifications from "./Notifications";
+import QueryDesk from "./QueryDesk";
+import InvitePeople from "./admin/InvitePeople";
+import ManageUsers from "./admin/ManageUsers";
+import AcademicStructure from "./admin/AcademicStructure";
+import InstitutionDashboardView from "./institution/InstitutionDashboardView";
+import AnnouncementsView from "./institution/AnnouncementsView";
+import PlaceholderView from "./institution/PlaceholderView";
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
-const CortexaDashboard = () => {
+const CortexaDashboard = ({ institutionSlug }) => {
     const { user, loading } = useAuth();
+    const location = useLocation(); // Get location for query params
+    const navigate = useNavigate(); // For navigation
+    
     console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("dashboard");
@@ -30,6 +41,7 @@ const CortexaDashboard = () => {
     const [myInstitutions, setMyInstitutions] = useState([]);
     const [institutionsLoading, setInstitutionsLoading] = useState(true);
     const [selectedInstitution, setSelectedInstitution] = useState(null);
+    const [hasAccess, setHasAccess] = useState(false); // Track if user has access to selected institution
     const profileMenuRef = useRef(null);
 
     // Fetch institutions based on user role
@@ -43,13 +55,16 @@ const CortexaDashboard = () => {
                 
                 if (role === 'student') {
                     const { data } = await studentAPI.getInstitutions();
+                    console.log("Student institutions fetched:", data.institutions);
                     setMyInstitutions(data.institutions || []);
                 } else if (role === 'teacher') {
                     const { data } = await teacherAPI.getInstitutions();
+                    console.log("Teacher institutions fetched:", data.institutions);
                     setMyInstitutions(data.institutions || []);
                 } else if (role === 'admin') {
                     // Fetch admin's institution
                     const { data } = await adminAPI.getInstitution();
+                    console.log("Admin institution fetched:", data.institution);
                     setMyInstitutions(data.institution ? [data.institution] : []);
                 } else {
                     setMyInstitutions([]);
@@ -65,6 +80,39 @@ const CortexaDashboard = () => {
         
         fetchInstitutions();
     }, [user]);
+
+    // Handle institution selection from URL query params
+    useEffect(() => {
+        // Get institution from query param (e.g., /dashboard?institution=iit-bombay)
+        const searchParams = new URLSearchParams(location.search);
+        const institutionParam = searchParams.get('institution');
+        
+        if (institutionParam && myInstitutions.length > 0) {
+            const institution = myInstitutions.find(inst => {
+                const instSlug = inst.slug || inst.code?.toLowerCase().replace(/\s+/g, '-');
+                return instSlug === institutionParam || inst.code?.toLowerCase() === institutionParam.toLowerCase();
+            });
+            
+            if (institution) {
+                // User has access to this institution
+                console.log("User has access to institution:", institution);
+                setSelectedInstitution(institution);
+                setHasAccess(true);
+                setActiveTab("institution-dashboard");
+            } else {
+                // User does NOT have access - show basic view
+                console.log("User does NOT have access to institution:", institutionParam);
+                setSelectedInstitution(null);
+                setHasAccess(false);
+                setActiveTab("dashboard");
+            }
+        } else if (!institutionParam) {
+            // No institution param, clear selection
+            setSelectedInstitution(null);
+            setHasAccess(false);
+            setActiveTab("dashboard");
+        }
+    }, [location.search, myInstitutions]);
 
     // Close profile menu when clicking outside
     useEffect(() => {
@@ -83,17 +131,26 @@ const CortexaDashboard = () => {
         };
     }, [profileMenuOpen]);
 
-    // Handle institution click - update sidebar and show institution content
+    // Handle institution click - stay on dashboard, don't navigate away
     const handleInstitutionClick = (institution) => {
+        console.log("Institution clicked:", institution);
+        
+        // Set state directly instead of navigating
         setSelectedInstitution(institution);
-        // Change to institution dashboard tab
+        setHasAccess(true);
         setActiveTab("institution-dashboard");
+        
+        // Optionally update URL with query param for bookmarking
+        const institutionSlug = institution.slug || institution.code?.toLowerCase().replace(/\s+/g, '-') || institution._id;
+        window.history.pushState(null, '', `/dashboard?institution=${institutionSlug}`);
     };
 
     // Handle back to main dashboard
     const handleBackToDashboard = () => {
         setSelectedInstitution(null);
+        setHasAccess(false);
         setActiveTab("dashboard");
+        window.history.pushState(null, '', '/dashboard');
     };
 
     if (loading) {
@@ -122,6 +179,7 @@ const CortexaDashboard = () => {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 selectedInstitution={selectedInstitution}
+                hasAccess={hasAccess}
                 onBackToDashboard={handleBackToDashboard}
             />
 
@@ -317,41 +375,136 @@ const CortexaDashboard = () => {
                     {activeTab === "notifications" && <Notifications />}
 
                     {/* QUERY DESK */}
-                    {activeTab === "querydesk" && (
-                        <div className="max-w-4xl mx-auto">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden"
-                            >
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                                            <FiHelpCircle className="w-6 h-6 text-purple-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">Query Desk</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
-                                                Get help and support for your queries
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+                    {activeTab === "querydesk" && <QueryDesk institution={selectedInstitution} />}
 
-                                <div className="p-12 text-center">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-purple-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                        <FiHelpCircle className="w-10 h-10 text-purple-600" />
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                                        Coming Soon
-                                    </h3>
-                                    <p className="text-gray-500 max-w-md mx-auto">
-                                        Raise questions, support requests, or academic queries here.
-                                        This feature will be available soon.
-                                    </p>
-                                </div>
-                            </motion.div>
-                        </div>
+                    {/* INSTITUTION-SPECIFIC TABS (only if user has access) */}
+                    {selectedInstitution && hasAccess && (
+                        <>
+                            {/* Institution Dashboard */}
+                            {activeTab === "institution-dashboard" && (
+                                <InstitutionDashboardView institution={selectedInstitution} />
+                            )}
+
+                            {/* Announcements */}
+                            {activeTab === "announcements" && (
+                                <AnnouncementsView institution={selectedInstitution} />
+                            )}
+
+                            {/* ADMIN-ONLY TABS */}
+                            {user?.role?.toLowerCase() === 'admin' && (
+                                <>
+                                    {activeTab === "invite-people" && (
+                                        <InvitePeople institution={selectedInstitution} />
+                                    )}
+                                    {activeTab === "manage-users" && (
+                                        <ManageUsers institution={selectedInstitution} />
+                                    )}
+                                    {activeTab === "academic-structure" && (
+                                        <AcademicStructure institution={selectedInstitution} />
+                                    )}
+                                </>
+                            )}
+
+                            {/* TEACHER-ONLY TABS */}
+                            {user?.role?.toLowerCase() === 'teacher' && (
+                                <>
+                                    {activeTab === "see-students" && (
+                                        <PlaceholderView 
+                                            title="Students"
+                                            description="View student information and track their progress."
+                                            icon={FiUser}
+                                            color="blue"
+                                        />
+                                    )}
+                                    {activeTab === "upload-notes" && (
+                                        <PlaceholderView 
+                                            title="Upload Notes"
+                                            description="Upload and manage study materials and notes for students."
+                                            icon={FiBook}
+                                            color="emerald"
+                                        />
+                                    )}
+                                    {activeTab === "generate-mcq" && (
+                                        <PlaceholderView 
+                                            title="Generate MCQs"
+                                            description="Create multiple choice questions for assessments."
+                                            icon={FiHelpCircle}
+                                            color="purple"
+                                        />
+                                    )}
+                                    {activeTab === "voice-to-text" && (
+                                        <PlaceholderView 
+                                            title="Voice-to-Text"
+                                            description="Convert voice lectures to text notes automatically."
+                                            icon={FiHelpCircle}
+                                            color="orange"
+                                        />
+                                    )}
+                                    {activeTab === "qa-portal" && (
+                                        <PlaceholderView 
+                                            title="Q&A Portal"
+                                            description="Answer student questions and manage discussions."
+                                            icon={FiHelpCircle}
+                                            color="blue"
+                                        />
+                                    )}
+                                    {activeTab === "assessment" && (
+                                        <PlaceholderView 
+                                            title="Assessment"
+                                            description="Create and manage assessments and exams."
+                                            icon={FiHelpCircle}
+                                            color="emerald"
+                                        />
+                                    )}
+                                    {activeTab === "ai-chatbot" && (
+                                        <PlaceholderView 
+                                            title="AI Chatbot Personal"
+                                            description="Your personal AI assistant for teaching and content creation."
+                                            icon={HiSparkles}
+                                            color="purple"
+                                        />
+                                    )}
+                                </>
+                            )}
+
+                            {/* STUDENT-ONLY TABS */}
+                            {user?.role?.toLowerCase() === 'student' && (
+                                <>
+                                    {activeTab === "mcq-test" && (
+                                        <PlaceholderView 
+                                            title="MCQ Test"
+                                            description="Take multiple choice question tests and quizzes."
+                                            icon={FiHelpCircle}
+                                            color="blue"
+                                        />
+                                    )}
+                                    {activeTab === "rag-chatbot" && (
+                                        <PlaceholderView 
+                                            title="RAG Chatbot"
+                                            description="AI-powered chatbot to answer your study questions."
+                                            icon={HiSparkles}
+                                            color="purple"
+                                        />
+                                    )}
+                                    {activeTab === "qa-section" && (
+                                        <PlaceholderView 
+                                            title="Q&A Section"
+                                            description="Ask questions and get answers from teachers and peers."
+                                            icon={FiHelpCircle}
+                                            color="emerald"
+                                        />
+                                    )}
+                                    {activeTab === "assessment" && (
+                                        <PlaceholderView 
+                                            title="Assessment"
+                                            description="View and complete your assessments and exams."
+                                            icon={FiHelpCircle}
+                                            color="orange"
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </>
                     )}
                 </main>
             </div>

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { FiCheck, FiArrowRight, FiMapPin, FiUsers } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 
-export default function MyInstitutionsTab({ institutions = [] }) {
+export default function MyInstitutionsTab({ institutions = [], onSelectInstitution }) {
   if (institutions.length === 0) {
     return (
       <motion.div
@@ -83,6 +83,7 @@ export default function MyInstitutionsTab({ institutions = [] }) {
           {/* RIGHT: Primary Action */}
           <div className="flex items-center">
             <motion.button
+              onClick={() => onSelectInstitution && onSelectInstitution(institution)}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"

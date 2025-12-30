@@ -32,6 +32,7 @@ export default function InstitutionLayout() {
         return <div className="min-h-screen flex items-center justify-center">Institution not found</div>;
     }
 
+    // This layout is only for public institution pages (courses, etc.)
     return (
         <InstitutionContext.Provider value={{ institution }}>
             <InstitutionNavbar institution={institution} institutionSlug={slug} />
