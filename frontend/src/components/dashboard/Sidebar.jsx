@@ -1,24 +1,83 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiHome, FiBell, FiHelpCircle, FiLogOut, FiX } from "react-icons/fi";
+import { 
+  FiHome, FiBell, FiHelpCircle, FiLogOut, FiX, FiUsers, FiUserPlus,
+  FiBook, FiUpload, FiCheckSquare, FiMic, FiVideo, FiMessageSquare,
+  FiClipboard, FiGrid, FiArrowLeft
+} from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/authcontext";
 
-export default function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
+export default function Sidebar({ 
+  isOpen, 
+  onClose, 
+  activeTab, 
+  setActiveTab, 
+  selectedInstitution,
+  onBackToDashboard 
+}) {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
 
   if (!user) return null;
 
-  const brandColor = "#10b981"; // Emerald-500
+  const brandColor = selectedInstitution?.branding?.primaryColor || "#10b981";
 
-  const menuItems = [
+  // Default menu items (when no institution is selected)
+  const defaultMenuItems = [
     { id: "dashboard", label: "Dashboard", icon: FiHome },
     { id: "notifications", label: "Notifications", icon: FiBell },
     { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
   ];
+
+  // Role-specific menu items (when institution is selected)
+  const getRoleSpecificMenuItems = () => {
+    const role = user?.role?.toLowerCase();
+
+    if (role === 'admin') {
+      return [
+        { id: "institution-dashboard", label: "Institution Dashboard", icon: FiHome },
+        { id: "notifications", label: "Notifications", icon: FiBell },
+        { id: "announcements", label: "Announcements", icon: FiBell },
+        { id: "invite-people", label: "Invite People", icon: FiUserPlus },
+        { id: "manage-users", label: "Manage Users", icon: FiUsers },
+        { id: "academic-structure", label: "Academic Structure", icon: FiGrid },
+        { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
+      ];
+    } else if (role === 'teacher') {
+      return [
+        { id: "institution-dashboard", label: "Institution Dashboard", icon: FiHome },
+        { id: "notifications", label: "Notifications", icon: FiBell },
+        { id: "announcements", label: "Announcements", icon: FiBell },
+        { id: "see-students", label: "See Students", icon: FiUsers },
+        { id: "upload-notes", label: "Upload Notes", icon: FiUpload },
+        { id: "generate-mcq", label: "Generate MCQs", icon: FiCheckSquare },
+        { id: "voice-to-text", label: "Voice-to-Text", icon: FiMic },
+        // { id: "video-generator", label: "Video Generator", icon: FiVideo },
+        { id: "qa-portal", label: "Q&A Portal", icon: FiMessageSquare },
+        { id: "assessment", label: "Assessment", icon: FiClipboard },
+        { id: "ai-chatbot", label: "AI Chatbot Personal", icon: HiSparkles },
+        { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
+      ];
+    } else if (role === 'student') {
+      return [
+        { id: "institution-dashboard", label: "Institution Dashboard", icon: FiHome },
+        { id: "notifications", label: "Notifications", icon: FiBell },
+        { id: "announcements", label: "Announcements", icon: FiBell },
+        { id: "mcq-test", label: "MCQ Test", icon: FiCheckSquare },
+        { id: "rag-chatbot", label: "RAG Chatbot", icon: HiSparkles },
+        { id: "qa-section", label: "Q&A Section", icon: FiMessageSquare },
+        { id: "assessment", label: "Assessment", icon: FiClipboard },
+        { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
+      ];
+    }
+
+    return defaultMenuItems;
+  };
+
+  const menuItems = selectedInstitution ? getRoleSpecificMenuItems() : defaultMenuItems;
 
   const handleLogout = async () => {
     try {
@@ -66,11 +125,28 @@ export default function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
                 background: `linear-gradient(135deg, ${brandColor}, ${brandColor}cc)`,
               }}
             >
-              <HiSparkles className="w-6 h-6 text-white" />
+              {selectedInstitution ? (
+                <span className="text-white font-bold text-sm">
+                  {selectedInstitution.code || selectedInstitution.name?.substring(0, 2).toUpperCase()}
+                </span>
+              ) : (
+                <HiSparkles className="w-6 h-6 text-white" />
+              )}
             </div>
-            <div>
-              <p className="font-bold text-lg text-emerald-600">Cortexa</p>
-              <p className="text-xs text-gray-500 capitalize">{user?.role || "User"}</p>
+            <div className="flex-1 min-w-0">
+              {selectedInstitution ? (
+                <>
+                  <p className="font-bold text-sm text-gray-800 truncate">
+                    {selectedInstitution.name}
+                  </p>
+                  <p className="text-xs text-gray-500 capitalize">{user?.role || "User"}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-lg text-emerald-600">Cortexa</p>
+                  <p className="text-xs text-gray-500 capitalize">{user?.role || "User"}</p>
+                </>
+              )}
             </div>
           </div>
 
@@ -82,6 +158,22 @@ export default function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
             <FiX className="w-5 h-5 text-gray-600" />
           </button>
         </div>
+
+        {/* Back Button (when institution is selected) */}
+        {selectedInstitution && onBackToDashboard && (
+          <div className="px-4 pt-4">
+            <button
+              onClick={() => {
+                onBackToDashboard();
+                onClose?.();
+              }}
+              className="w-full flex items-center space-x-2 px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <FiArrowLeft className="w-4 h-4" />
+              <span className="text-sm font-medium">Back to Dashboard</span>
+            </button>
+          </div>
+        )}
 
         {/* Menu Items */}
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
