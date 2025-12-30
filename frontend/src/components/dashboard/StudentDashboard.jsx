@@ -4,14 +4,14 @@ import { FiMenu, FiUser, FiLogOut, FiSettings, FiChevronDown, FiSearch } from 'r
 import { HiSparkles } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import Sidebar from './Sidebar';
-import BrowseInstitutionsTab from './BrowseInstitutionsTab';
-import MyInstitutionsTab from './MyInstitutionsTab';
+import BrowseInstitutions from './BrowseInstitutions';
+import MyInstitutions from './MyInstitutions';
 import { studentAPI } from '../../services/api';
 import { LoadingPage } from '../common/LoadingSpinner';
 import { ErrorPage } from '../common/ErrorMessage';
 import { useAuth } from '../../context/authcontext';
 
-const StudentDashboard = ({ onLogout }) => {
+const StudentDashboard = ({ institution, onLogout, onBack }) => {
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('access');
@@ -240,9 +240,9 @@ const StudentDashboard = ({ onLogout }) => {
             </div>
 
             {/* Tab Content */}
-            {activeTab === 'access' && <BrowseInstitutionsTab />}
+            {activeTab === 'access' && <BrowseInstitutions />}
             {activeTab === 'institutions' && (
-              <MyInstitutionsTab 
+              <MyInstitutions
                 institutions={myInstitutions}
                 onLeaveInstitution={handleLeaveInstitution}
               />
