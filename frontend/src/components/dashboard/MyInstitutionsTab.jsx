@@ -1,48 +1,114 @@
-// MyInstitutionsTab.jsx - Refined version
+// MyInstitutionsTab.jsx – Single Institution (Admin-Owned) - Redesigned
 import React from "react";
-import { motion } from 'framer-motion';
-import { FiCheck } from 'react-icons/fi';
+import { motion } from "framer-motion";
+import { FiCheck, FiArrowRight, FiMapPin, FiUsers } from "react-icons/fi";
+import { HiSparkles } from "react-icons/hi";
 
 export default function MyInstitutionsTab({ institutions = [] }) {
-  return (
-    <div className="space-y-6">
-      {institutions.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {institutions.map((institution, index) => (
-            <motion.div
-              key={institution.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md hover:border-emerald-300 transition-all cursor-pointer"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-green-500 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm">
-                    {institution.logo}
-                  </div>
-                  <div>
-                    <h4 className="text-base font-bold text-gray-800">{institution.name}</h4>
-                    <p className="text-sm text-gray-500">{institution.role}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg w-fit">
-                <FiCheck className="w-4 h-4" />
-                <span className="text-sm font-medium capitalize">{institution.status}</span>
-              </div>
-            </motion.div>
-          ))}
+  if (institutions.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="text-center py-20 bg-white border-2 border-gray-100 rounded-2xl"
+      >
+        <div className="w-20 h-20 bg-gradient-to-br from-emerald-100 to-green-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+          <HiSparkles className="w-10 h-10 text-emerald-500" />
         </div>
-      ) : (
-        <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
-          <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FiCheck className="w-8 h-8 text-emerald-400" />
+        <h3 className="text-xl font-bold text-gray-800 mb-2">No Institution Linked</h3>
+        <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">
+          This account is not associated with any institution yet.
+        </p>
+        <div className="flex items-center justify-center gap-6 text-sm text-gray-400">
+          <div className="flex items-center gap-2">
+            <FiMapPin className="w-4 h-4" />
+            <span>Explore</span>
           </div>
-          <p className="text-gray-500 text-lg font-medium mb-2">No institutions joined yet</p>
-          <p className="text-gray-400 text-sm">Browse colleges to get started</p>
+          <div className="flex items-center gap-2">
+            <FiUsers className="w-4 h-4" />
+            <span>Join</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <FiCheck className="w-4 h-4" />
+            <span>Connect</span>
+          </div>
         </div>
-      )}
-    </div>
+      </motion.div>
+    );
+  }
+
+  const institution = institutions[0];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="relative overflow-hidden bg-white border-2 border-gray-100 rounded-2xl shadow-lg hover:shadow-xl hover:border-emerald-200 transition-all"
+    >
+      {/* Background Accent Circles */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50/50 rounded-full -mr-32 -mt-32"></div>
+      <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50/50 rounded-full -ml-24 -mb-24"></div>
+
+      <div className="relative z-10 p-8">
+        {/* Main Content */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          {/* LEFT: Institution Identity */}
+          <div className="flex items-center gap-5">
+            {/* Logo */}
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg flex-shrink-0">
+              {institution.logo}
+            </div>
+
+            {/* Info */}
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-1 leading-tight">
+                {institution.name}
+              </h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Your Role: <span className="font-semibold text-gray-800">{institution.role}</span>
+              </p>
+
+              {/* Status Badge */}
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-semibold text-green-700 capitalize">
+                  {institution.status === "active" ? "Active Institution" : institution.status}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Primary Action */}
+          <div className="flex items-center">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+            >
+              Go to Dashboard
+              <FiArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Optional: Quick Stats or Info */}
+        <div className="mt-6 pt-6 border-t-2 border-gray-100 grid grid-cols-3 gap-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">0</p>
+            <p className="text-xs text-gray-500 mt-1">Total Students</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">0</p>
+            <p className="text-xs text-gray-500 mt-1">Teachers</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-900">0</p>
+            <p className="text-xs text-gray-500 mt-1">Courses</p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
   );
 }

@@ -1,20 +1,20 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { InstitutionContext } from '../../App';
 import { Link } from 'react-router-dom';
 import { FiBook, FiUsers, FiTrendingUp, FiAward, FiMapPin, FiMail, FiPhone, FiGlobe, FiCalendar } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import api from '../../services/api';
+import { InstitutionContext } from '../../context/InstitutionContext';
 
 export default function InstitutionHome() {
   const { institution } = useContext(InstitutionContext);
   const [institutionData, setInstitutionData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (institution?.slug) {
-      fetchInstitutionData();
-    }
-  }, [institution?.slug]);
+  // useEffect(() => {
+  //   if (institution?.slug) {
+  //     fetchInstitutionData();
+  //   }
+  // }, [institution?.slug]);
 
   const fetchInstitutionData = async () => {
     try {
@@ -45,11 +45,11 @@ export default function InstitutionHome() {
       {/* Hero Section with Banner */}
       <div className="relative h-[500px] overflow-hidden">
         {/* Banner Image */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ 
-            backgroundImage: institution.branding?.banner 
-              ? `url(${institution.branding.banner})` 
+          style={{
+            backgroundImage: institution.branding?.banner
+              ? `url(${institution.branding.banner})`
               : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
           }}
         >
@@ -58,7 +58,7 @@ export default function InstitutionHome() {
 
         {/* Hero Content */}
         <div className="relative h-full max-w-7xl mx-auto px-4 flex items-center">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
@@ -66,11 +66,11 @@ export default function InstitutionHome() {
           >
             {/* Logo */}
             {institution.branding?.logo && (
-              <motion.img 
+              <motion.img
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                src={institution.branding.logo} 
+                src={institution.branding.logo}
                 alt={institution.name}
                 className="h-24 w-24 mb-6 rounded-xl shadow-2xl bg-white/10 backdrop-blur-sm p-2"
               />
@@ -79,7 +79,7 @@ export default function InstitutionHome() {
             <h1 className="text-6xl font-bold mb-4 leading-tight">
               {institution.name}
             </h1>
-            
+
             {institution.tagline && (
               <p className="text-2xl mb-6 text-gray-200 italic">
                 "{institution.tagline}"
@@ -91,10 +91,10 @@ export default function InstitutionHome() {
             </p>
 
             <div className="flex flex-wrap gap-4">
-              <Link 
+              <Link
                 to={`/${institution.slug}/courses`}
                 className="px-8 py-4 rounded-xl font-bold text-white shadow-xl hover:shadow-2xl transition-all transform hover:scale-105"
-                style={{ 
+                style={{
                   background: `linear-gradient(135deg, ${brandColor}, ${accentColor})`
                 }}
               >
@@ -103,8 +103,8 @@ export default function InstitutionHome() {
                   Explore Courses
                 </span>
               </Link>
-              
-              <Link 
+
+              <Link
                 to={`/${institution.slug}/login`}
                 className="px-8 py-4 bg-white/10 backdrop-blur-md border-2 border-white/30 rounded-xl font-bold text-white hover:bg-white/20 transition-all"
               >
@@ -140,7 +140,7 @@ export default function InstitutionHome() {
       <div className="max-w-7xl mx-auto px-4 py-16">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* About */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
@@ -178,7 +178,7 @@ export default function InstitutionHome() {
           </motion.div>
 
           {/* Contact */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.4 }}
@@ -200,7 +200,7 @@ export default function InstitutionHome() {
                   </div>
                 </a>
               )}
-              
+
               {institution.contact?.phone && (
                 <a href={`tel:${institution.contact.phone}`} className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
@@ -212,7 +212,7 @@ export default function InstitutionHome() {
                   </div>
                 </a>
               )}
-              
+
               {institution.contact?.website && (
                 <a href={institution.contact.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
@@ -253,7 +253,7 @@ export default function InstitutionHome() {
                   onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div 
+                    <div
                       className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg"
                       style={{ backgroundColor: brandColor }}
                     >

@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { InstitutionContext } from '../../App';
+import { InstitutionContext } from '../../context/InstitutionContext';
 import { useParams, Link } from 'react-router-dom';
 import { FiBook, FiClock, FiUsers, FiStar, FiAward, FiCheckCircle, FiArrowLeft, FiCalendar } from 'react-icons/fi';
 import { motion } from 'framer-motion';
@@ -50,7 +50,7 @@ export default function CourseDetails() {
         <div className="text-center">
           <FiBook className="w-20 h-20 text-gray-300 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-800 mb-2">Course not found</h2>
-          <Link 
+          <Link
             to={`/${institution.slug}/courses`}
             className="text-blue-600 hover:underline"
           >
@@ -64,14 +64,14 @@ export default function CourseDetails() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
-      <div 
+      <div
         className="text-white py-12"
-        style={{ 
+        style={{
           background: `linear-gradient(135deg, ${brandColor}, ${accentColor})`
         }}
       >
         <div className="max-w-7xl mx-auto px-4">
-          <Link 
+          <Link
             to={`/${institution.slug}/courses`}
             className="inline-flex items-center gap-2 text-white/80 hover:text-white mb-6 transition-colors"
           >
@@ -157,7 +157,7 @@ export default function CourseDetails() {
                   {course.topics.map((topic, index) => (
                     <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                           style={{ backgroundColor: brandColor }}>
+                        style={{ backgroundColor: brandColor }}>
                         {index + 1}
                       </div>
                       <span className="text-gray-700">{topic}</span>
@@ -232,7 +232,7 @@ export default function CourseDetails() {
                 )}
               </div>
 
-              <button 
+              <button
                 className="w-full mt-6 py-3 rounded-xl font-bold text-white shadow-lg hover:shadow-xl transition-all"
                 style={{ backgroundColor: brandColor }}
               >

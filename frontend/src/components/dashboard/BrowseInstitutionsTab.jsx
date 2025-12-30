@@ -5,7 +5,7 @@ import { FiSearch, FiMapPin, FiUsers, FiBook, FiExternalLink, FiChevronDown, FiL
 import { institutionAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
-export default function BrowseInstitutionsTab() {
+export default function BrowseInstitutionsTab({ excludeInstitutionId }) {
   const [filters, setFilters] = useState({
     type: 'all',
     sortBy: 'name'
@@ -24,7 +24,14 @@ export default function BrowseInstitutionsTab() {
       try {
         setLoading(true);
         const response = await institutionAPI.browse();
+
+        let data = response.data.institutions || [];
+
         setInstitutions(response.data.institutions || []);
+
+
+        setInstitutions(data);
+
       } catch (error) {
         console.error('Error fetching institutions:', error);
         toast.error('Failed to load institutions');
@@ -58,6 +65,14 @@ export default function BrowseInstitutionsTab() {
   const filteredInstitutions = useMemo(() => {
     let results = institutions;
 
+    // ✅ EXCLUDE LOGGED-IN ADMIN'S INSTITUTION
+    if (excludeInstitutionId) {
+      const excludedId = excludeInstitutionId.toString();
+      results = results.filter(
+        (inst) => inst._id?.toString() !== excludedId
+      );
+    }
+
     if (filters.type !== 'all') {
       results = results.filter(inst => inst.type === filters.type);
     }
@@ -82,7 +97,7 @@ export default function BrowseInstitutionsTab() {
     });
 
     return results;
-  }, [filters, searchQuery, institutions]);
+  }, [institutions, filters, searchQuery, excludeInstitutionId]);
 
   const typeOptions = [
     { value: 'all', label: 'All Types' },
@@ -314,12 +329,12 @@ export default function BrowseInstitutionsTab() {
 
                   {/* Actions */}
                   <div className="flex items-center space-x-3">
-                    <button
+                    {/* <button
                       className="px-5 py-2.5 rounded-lg font-medium text-white transition-all hover:shadow-md"
                       style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
                     >
                       Request Access
-                    </button>
+                    </button> */}
                     <a
                       href={`/${institution.slug}`}
                       className="px-5 py-2.5 rounded-lg font-medium border-2 transition-all flex items-center space-x-2 hover:bg-gray-50"
