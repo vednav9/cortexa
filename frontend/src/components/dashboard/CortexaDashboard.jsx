@@ -18,6 +18,9 @@ import Sidebar from "./Sidebar";
 import BrowseInstitutions from "./BrowseInstitutions";
 import MyInstitutions from "./MyInstitutions";
 import Notifications from "./Notifications";
+import AdminDashboard from "./AdminDashboard";
+import StudentDashboard from "./StudentDashboard";
+import TeacherDashboard from "./TeacherDashboard";
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
@@ -28,6 +31,7 @@ const CortexaDashboard = () => {
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [myInstitutions, setMyInstitutions] = useState([]);
     const [institutionsLoading, setInstitutionsLoading] = useState(true);
+    const [selectedInstitution, setSelectedInstitution] = useState(null);
     const profileMenuRef = useRef(null);
 
     // Fetch institutions based on user role
@@ -45,6 +49,10 @@ const CortexaDashboard = () => {
                 } else if (role === 'teacher') {
                     const { data } = await teacherAPI.getInstitutions();
                     setMyInstitutions(data.institutions || []);
+                } else if (role === 'admin') {
+                    // Fetch admin's institution
+                    const { data } = await adminAPI.getInstitution();
+                    setMyInstitutions(data.institution ? [data.institution] : []);
                 } else {
                     setMyInstitutions([]);
                 }
@@ -76,6 +84,47 @@ const CortexaDashboard = () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [profileMenuOpen]);
+
+    // Handle institution click - route to specific dashboard based on role
+    const handleInstitutionClick = (institution) => {
+        setSelectedInstitution(institution);
+    };
+
+    // Handle logout from role-specific dashboard
+    const handleLogout = () => {
+        // Logout logic handled by Sidebar
+    };
+
+    // If institution is selected, show role-specific dashboard
+    if (selectedInstitution) {
+        const role = user?.role?.toLowerCase();
+        
+        if (role === 'admin') {
+            return (
+                <AdminDashboard 
+                    institution={selectedInstitution}
+                    onLogout={handleLogout}
+                    onBack={() => setSelectedInstitution(null)}
+                />
+            );
+        } else if (role === 'teacher') {
+            return (
+                <TeacherDashboard 
+                    institution={selectedInstitution}
+                    onLogout={handleLogout}
+                    onBack={() => setSelectedInstitution(null)}
+                />
+            );
+        } else if (role === 'student') {
+            return (
+                <StudentDashboard 
+                    institution={selectedInstitution}
+                    onLogout={handleLogout}
+                    onBack={() => setSelectedInstitution(null)}
+                />
+            );
+        }
+    }
 
     if (loading) {
         return (
@@ -259,7 +308,10 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <MyInstitutions institutions={myInstitutions} />
+                                    <MyInstitutions 
+                                        institutions={myInstitutions} 
+                                        onSelectInstitution={handleInstitutionClick}
+                                    />
                                 </div>
                             </section>
 

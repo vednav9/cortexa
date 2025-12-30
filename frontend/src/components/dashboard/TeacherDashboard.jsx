@@ -11,7 +11,7 @@ import { LoadingPage } from '../common/LoadingSpinner';
 import { ErrorPage } from '../common/ErrorMessage';
 import { useAuth } from '../../context/authcontext';
 
-const TeacherDashboard = ({ onLogout }) => {
+const TeacherDashboard = ({ institution, onLogout, onBack }) => {
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('access');
