@@ -15,7 +15,7 @@ import {
 import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../context/authcontext";
 import Sidebar from "./Sidebar";
-import BrowseInstitutions from "./BrowseInstitutions";
+import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
 import MyInstitutions from "./MyInstitutions";
 import Notifications from "./Notifications";
 import AdminDashboard from "./AdminDashboard";
@@ -141,22 +141,6 @@ const CortexaDashboard = () => {
     }
 
     if (!user) return null;
-
-
-    const myInstitutions =
-        user?.role === "admin" && user?.institution
-            ? [
-                {
-                    id: user.institution._id,
-                    name: user.institution.name,
-                    role: "Admin",
-                    status: "active",
-                    logo:
-                        user.institution.code ||
-                        user.institution.name.slice(0, 2).toUpperCase(),
-                },
-            ]
-            : [];
 
     const browseCount = 5;
 
