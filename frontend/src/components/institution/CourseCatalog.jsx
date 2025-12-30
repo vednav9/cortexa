@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { InstitutionContext } from '../../App';
+import { InstitutionContext } from '../../context/InstitutionContext';
 import { Link } from 'react-router-dom';
 import { FiBook, FiClock, FiUsers, FiStar, FiSearch, FiFilter } from 'react-icons/fi';
 import { motion } from 'framer-motion';
@@ -37,7 +37,7 @@ export default function CourseCatalog() {
 
   const filteredCourses = courses.filter(course => {
     const matchesSearch = course.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         course.code?.toLowerCase().includes(searchTerm.toLowerCase());
+      course.code?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = selectedDept === 'all' || course.department === selectedDept;
     return matchesSearch && matchesDept;
   });
@@ -45,9 +45,9 @@ export default function CourseCatalog() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
-      <div 
+      <div
         className="text-white py-16"
-        style={{ 
+        style={{
           background: `linear-gradient(135deg, ${brandColor}, ${accentColor})`
         }}
       >
@@ -66,7 +66,7 @@ export default function CourseCatalog() {
 
       {/* Filters */}
       <div className="max-w-7xl mx-auto px-4 -mt-8">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -111,7 +111,7 @@ export default function CourseCatalog() {
             <p className="text-gray-600">Loading courses...</p>
           </div>
         ) : filteredCourses.length === 0 ? (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center py-20 bg-white rounded-2xl shadow-lg"
@@ -119,8 +119,8 @@ export default function CourseCatalog() {
             <FiBook className="w-20 h-20 text-gray-300 mx-auto mb-4" />
             <h3 className="text-2xl font-bold text-gray-800 mb-2">No courses found</h3>
             <p className="text-gray-600">
-              {searchTerm || selectedDept !== 'all' 
-                ? 'Try adjusting your filters' 
+              {searchTerm || selectedDept !== 'all'
+                ? 'Try adjusting your filters'
                 : 'Courses will be available soon'}
             </p>
           </motion.div>
@@ -138,9 +138,9 @@ export default function CourseCatalog() {
                   className="block bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all overflow-hidden group h-full"
                 >
                   {/* Course Header */}
-                  <div 
+                  <div
                     className="p-6 text-white relative overflow-hidden"
-                    style={{ 
+                    style={{
                       background: `linear-gradient(135deg, ${brandColor}, ${accentColor})`
                     }}
                   >
@@ -187,7 +187,7 @@ export default function CourseCatalog() {
                       )}
                     </div>
 
-                    <button 
+                    <button
                       className="mt-4 w-full py-2 rounded-lg font-semibold text-white transition-all group-hover:shadow-lg"
                       style={{ backgroundColor: brandColor }}
                     >

@@ -7,6 +7,11 @@ import Login from "./pages/Login";
 import SignUp from "./pages/SignUp";
 import InstituteSignUp from "./pages/InstituteSignUp";
 import NotFound from "./pages/NotFound";
+import InstitutionLayout from "./layout/InstitutionLayout";
+import InstitutionHome from "./components/institution/InstitutionHome";
+import CourseCatalog from "./components/institution/CourseCatalog";
+import CourseDetails from "./components/institution/CourseDetails";
+
 
 // Dashboard
 import CortexaDashboard from "./components/dashboard/CortexaDashboard";
@@ -45,7 +50,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-black flex flex-col">
+        <div className="min-h-screen flex flex-col">
           <Navbar />
 
           <main className="flex-1">
@@ -66,6 +71,13 @@ function App() {
                 }
               />
 
+              {/* Institution Routes */}   {/* PUBLIC INSTITUTION ROUTES */}
+              <Route path="/:slug" element={<InstitutionLayout />}>
+                <Route index element={<InstitutionHome />} />
+                <Route path="courses" element={<CourseCatalog />} />
+                <Route path="courses/:courseCode" element={<CourseDetails />} />
+              </Route>
+
               {/* Fallback */}
               <Route path="/404" element={<NotFound />} />
               <Route path="*" element={<NotFound />} />
@@ -73,6 +85,9 @@ function App() {
           </main>
         </div>
       </Router>
+
+
+
     </AuthProvider>
   );
 }

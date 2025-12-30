@@ -26,6 +26,7 @@ import toast from "react-hot-toast";
 
 const CortexaDashboard = () => {
     const { user, loading } = useAuth();
+    console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("dashboard");
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -140,6 +141,22 @@ const CortexaDashboard = () => {
     }
 
     if (!user) return null;
+
+
+    const myInstitutions =
+        user?.role === "admin" && user?.institution
+            ? [
+                {
+                    id: user.institution._id,
+                    name: user.institution.name,
+                    role: "Admin",
+                    status: "active",
+                    logo:
+                        user.institution.code ||
+                        user.institution.name.slice(0, 2).toUpperCase(),
+                },
+            ]
+            : [];
 
     const browseCount = 5;
 
@@ -332,7 +349,10 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <BrowseInstitutions />
+                                    <BrowseInstitutionsTab
+                                        excludeInstitutionId={user?.institution?._id}
+                                    />
+
                                 </div>
                             </section>
                         </div>
