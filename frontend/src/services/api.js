@@ -139,4 +139,26 @@ export const notificationAPI = {
   delete: (id) => invitationAPI.delete(id),
 };
 
+// ============================================
+// ANNOUNCEMENT APIs
+// ============================================
+export const announcementAPI = {
+  getAll: (institutionId, params) => api.get(`/announcements/${institutionId}`, { params }),
+  create: (data) => api.post('/announcements', data),
+  update: (id, data) => api.put(`/announcements/${id}`, data),
+  delete: (id) => api.delete(`/announcements/${id}`),
+  markAsViewed: (id) => api.post(`/announcements/${id}/view`),
+};
+
+// ============================================
+// USER MANAGEMENT APIs
+// ============================================
+export const userManagementAPI = {
+  getAll: (institutionId, params) => api.get(`/admin/institutions/${institutionId}/users`, { params }),
+  add: (institutionId, data) => api.post(`/admin/institutions/${institutionId}/users`, data),
+  update: (userId, data) => api.put(`/admin/users/${userId}`, data),
+  delete: (userId, role) => api.delete(`/admin/users/${userId}/${role}`),
+  toggleStatus: (userId, role) => api.patch(`/admin/users/${userId}/${role}/status`),
+};
+
 export default api;

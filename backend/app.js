@@ -10,6 +10,7 @@ import airouter from "./routes/aiRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import institutionRoutes from "./routes/institutionRoutes.js";
 import invitationRoutes from "./routes/invitationRoutes.js";
+import announcementRoutes from "./routes/announcementRoutes.js";
 
 //testing
 // Load environment variables
@@ -50,6 +51,7 @@ app.use('/api/ai', airouter);
 app.use("/api/auth", authRoutes);
 app.use("/api/institutions", institutionRoutes);
 app.use("/api/invitations", invitationRoutes);
+app.use("/api/announcements", announcementRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
