@@ -1,9 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  FiHome, FiBell, FiHelpCircle, FiLogOut, FiX, FiUsers, FiUserPlus,
-  FiBook, FiUpload, FiCheckSquare, FiMic, FiVideo, FiMessageSquare,
-  FiClipboard, FiGrid, FiArrowLeft
+  FiHome, FiBell, FiHelpCircle, FiLogOut, FiX
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useNavigate } from "react-router-dom";
@@ -14,72 +12,19 @@ export default function Sidebar({
   isOpen, 
   onClose, 
   activeTab, 
-  setActiveTab, 
-  selectedInstitution,
-  hasAccess = false, // New prop to check if user has access
-  onBackToDashboard 
+  setActiveTab
 }) {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
 
   if (!user) return null;
 
-  const brandColor = selectedInstitution?.branding?.primaryColor || "#10b981";
-
-  // Default menu items (when no institution is selected OR user has no access)
-  const defaultMenuItems = [
+  // Universal menu items for all users (Cortexa Dashboard)
+  const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: FiHome },
     { id: "notifications", label: "Notifications", icon: FiBell },
     { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
   ];
-
-  // Role-specific menu items (when institution is selected)
-  const getRoleSpecificMenuItems = () => {
-    const role = user?.role?.toLowerCase();
-
-    if (role === 'admin') {
-      return [
-        { id: "institution-dashboard", label: "Institution Dashboard", icon: FiHome },
-        { id: "notifications", label: "Notifications", icon: FiBell },
-        { id: "announcements", label: "Announcements", icon: FiBell },
-        { id: "invite-people", label: "Invite People", icon: FiUserPlus },
-        { id: "manage-users", label: "Manage Users", icon: FiUsers },
-        { id: "academic-structure", label: "Academic Structure", icon: FiGrid },
-        { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
-      ];
-    } else if (role === 'teacher') {
-      return [
-        { id: "institution-dashboard", label: "Institution Dashboard", icon: FiHome },
-        { id: "notifications", label: "Notifications", icon: FiBell },
-        { id: "announcements", label: "Announcements", icon: FiBell },
-        { id: "see-students", label: "See Students", icon: FiUsers },
-        { id: "upload-notes", label: "Upload Notes", icon: FiUpload },
-        { id: "generate-mcq", label: "Generate MCQs", icon: FiCheckSquare },
-        { id: "voice-to-text", label: "Voice-to-Text", icon: FiMic },
-        // { id: "video-generator", label: "Video Generator", icon: FiVideo },
-        { id: "qa-portal", label: "Q&A Portal", icon: FiMessageSquare },
-        { id: "assessment", label: "Assessment", icon: FiClipboard },
-        { id: "ai-chatbot", label: "AI Chatbot Personal", icon: HiSparkles },
-        { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
-      ];
-    } else if (role === 'student') {
-      return [
-        { id: "institution-dashboard", label: "Institution Dashboard", icon: FiHome },
-        { id: "notifications", label: "Notifications", icon: FiBell },
-        { id: "announcements", label: "Announcements", icon: FiBell },
-        { id: "mcq-test", label: "MCQ Test", icon: FiCheckSquare },
-        { id: "rag-chatbot", label: "RAG Chatbot", icon: HiSparkles },
-        { id: "qa-section", label: "Q&A Section", icon: FiMessageSquare },
-        { id: "assessment", label: "Assessment", icon: FiClipboard },
-        { id: "querydesk", label: "Query Desk", icon: FiHelpCircle },
-      ];
-    }
-
-    return defaultMenuItems;
-  };
-
-  // Show role-specific menu only if institution is selected AND user has access
-  const menuItems = (selectedInstitution && hasAccess) ? getRoleSpecificMenuItems() : defaultMenuItems;
 
   const handleLogout = async () => {
     try {
@@ -115,40 +60,20 @@ export default function Sidebar({
           ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
         style={{
-          borderRightColor: `${brandColor}20`,
+          borderRightColor: "#10b98120",
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center space-x-3">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
-              style={{
-                background: `linear-gradient(135deg, ${brandColor}, ${brandColor}cc)`,
-              }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-emerald-500 to-green-600"
             >
-              {(selectedInstitution && hasAccess) ? (
-                <span className="text-white font-bold text-sm">
-                  {selectedInstitution.code || selectedInstitution.name?.substring(0, 2).toUpperCase()}
-                </span>
-              ) : (
-                <HiSparkles className="w-6 h-6 text-white" />
-              )}
+              <HiSparkles className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              {(selectedInstitution && hasAccess) ? (
-                <>
-                  <p className="font-bold text-sm text-gray-800 truncate">
-                    {selectedInstitution.name}
-                  </p>
-                  <p className="text-xs text-gray-500 capitalize">{user?.role || "User"}</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-bold text-lg text-emerald-600">Cortexa</p>
-                  <p className="text-xs text-gray-500 capitalize">{user?.role || "User"}</p>
-                </>
-              )}
+              <p className="font-bold text-lg text-emerald-600">Cortexa</p>
+              <p className="text-xs text-gray-500 capitalize">{user?.role || "User"}</p>
             </div>
           </div>
 
@@ -160,22 +85,6 @@ export default function Sidebar({
             <FiX className="w-5 h-5 text-gray-600" />
           </button>
         </div>
-
-        {/* Back Button (only when institution is selected AND user has access) */}
-        {selectedInstitution && hasAccess && onBackToDashboard && (
-          <div className="px-4 pt-4">
-            <button
-              onClick={() => {
-                onBackToDashboard();
-                onClose?.();
-              }}
-              className="w-full flex items-center space-x-2 px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <FiArrowLeft className="w-4 h-4" />
-              <span className="text-sm font-medium">Back to Dashboard</span>
-            </button>
-          </div>
-        )}
 
         {/* Menu Items */}
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
@@ -200,11 +109,6 @@ export default function Sidebar({
                     : "text-gray-700 hover:bg-gray-50"
                   }
                 `}
-                style={
-                  active
-                    ? { backgroundColor: `${brandColor}10`, color: brandColor }
-                    : {}
-                }
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
                 <div className="flex-1 text-left">
@@ -215,8 +119,7 @@ export default function Sidebar({
                 {active && (
                   <motion.div
                     layoutId="activeSidebarItem"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full"
-                    style={{ backgroundColor: brandColor }}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-emerald-500"
                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   />
                 )}
@@ -225,23 +128,17 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Footer - User Info & Logout */}
-        <div className="border-t border-gray-100">
-
-
-
-          {/* Logout Button */}
-          <div className="p-4">
-            <motion.button
-              onClick={handleLogout}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all font-semibold text-sm shadow-sm hover:shadow-md"
-            >
-              <FiLogOut className="w-4 h-4" />
-              <span>Logout</span>
-            </motion.button>
-          </div>
+        {/* Footer - Logout */}
+        <div className="border-t border-gray-100 p-4">
+          <motion.button
+            onClick={handleLogout}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all font-semibold text-sm shadow-sm hover:shadow-md"
+          >
+            <FiLogOut className="w-4 h-4" />
+            <span>Logout</span>
+          </motion.button>
         </div>
       </aside>
     </>

@@ -329,12 +329,6 @@ export default function BrowseInstitutionsTab({ excludeInstitutionId }) {
 
                   {/* Actions */}
                   <div className="flex items-center space-x-3">
-                    {/* <button
-                      className="px-5 py-2.5 rounded-lg font-medium text-white transition-all hover:shadow-md"
-                      style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
-                    >
-                      Request Access
-                    </button> */}
                     <a
                       href={`/${institution.slug}`}
                       className="px-5 py-2.5 rounded-lg font-medium border-2 transition-all flex items-center space-x-2 hover:bg-gray-50"

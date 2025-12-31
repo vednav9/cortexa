@@ -1,6 +1,5 @@
 // CortexaDashboard.jsx – UI Polished & Consistent
 import React, { useState, useRef, useEffect } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     FiMenu,
@@ -20,19 +19,12 @@ import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
 import MyInstitutionsTab from "./MyInstitutionsTab";
 import Notifications from "./Notifications";
 import QueryDesk from "./QueryDesk";
-import InvitePeople from "./admin/InvitePeople";
-import ManageUsers from "./admin/ManageUsers";
-import AcademicStructure from "./admin/AcademicStructure";
-import InstitutionDashboardView from "./institution/InstitutionDashboardView";
-import AnnouncementsView from "./institution/AnnouncementsView";
-import PlaceholderView from "./institution/PlaceholderView";
+
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
-const CortexaDashboard = ({ institutionSlug }) => {
+const CortexaDashboard = () => {
     const { user, loading } = useAuth();
-    const location = useLocation(); // Get location for query params
-    const navigate = useNavigate(); // For navigation
     
     console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -40,8 +32,6 @@ const CortexaDashboard = ({ institutionSlug }) => {
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [myInstitutions, setMyInstitutions] = useState([]);
     const [institutionsLoading, setInstitutionsLoading] = useState(true);
-    const [selectedInstitution, setSelectedInstitution] = useState(null);
-    const [hasAccess, setHasAccess] = useState(false); // Track if user has access to selected institution
     const profileMenuRef = useRef(null);
 
     // Fetch institutions based on user role
@@ -81,39 +71,6 @@ const CortexaDashboard = ({ institutionSlug }) => {
         fetchInstitutions();
     }, [user]);
 
-    // Handle institution selection from URL query params
-    useEffect(() => {
-        // Get institution from query param (e.g., /dashboard?institution=iit-bombay)
-        const searchParams = new URLSearchParams(location.search);
-        const institutionParam = searchParams.get('institution');
-        
-        if (institutionParam && myInstitutions.length > 0) {
-            const institution = myInstitutions.find(inst => {
-                const instSlug = inst.slug || inst.code?.toLowerCase().replace(/\s+/g, '-');
-                return instSlug === institutionParam || inst.code?.toLowerCase() === institutionParam.toLowerCase();
-            });
-            
-            if (institution) {
-                // User has access to this institution
-                console.log("User has access to institution:", institution);
-                setSelectedInstitution(institution);
-                setHasAccess(true);
-                setActiveTab("institution-dashboard");
-            } else {
-                // User does NOT have access - show basic view
-                console.log("User does NOT have access to institution:", institutionParam);
-                setSelectedInstitution(null);
-                setHasAccess(false);
-                setActiveTab("dashboard");
-            }
-        } else if (!institutionParam) {
-            // No institution param, clear selection
-            setSelectedInstitution(null);
-            setHasAccess(false);
-            setActiveTab("dashboard");
-        }
-    }, [location.search, myInstitutions]);
-
     // Close profile menu when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -130,28 +87,6 @@ const CortexaDashboard = ({ institutionSlug }) => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [profileMenuOpen]);
-
-    // Handle institution click - stay on dashboard, don't navigate away
-    const handleInstitutionClick = (institution) => {
-        console.log("Institution clicked:", institution);
-        
-        // Set state directly instead of navigating
-        setSelectedInstitution(institution);
-        setHasAccess(true);
-        setActiveTab("institution-dashboard");
-        
-        // Optionally update URL with query param for bookmarking
-        const institutionSlug = institution.slug || institution.code?.toLowerCase().replace(/\s+/g, '-') || institution._id;
-        window.history.pushState(null, '', `/dashboard?institution=${institutionSlug}`);
-    };
-
-    // Handle back to main dashboard
-    const handleBackToDashboard = () => {
-        setSelectedInstitution(null);
-        setHasAccess(false);
-        setActiveTab("dashboard");
-        window.history.pushState(null, '', '/dashboard');
-    };
 
     if (loading) {
         return (
@@ -178,9 +113,6 @@ const CortexaDashboard = ({ institutionSlug }) => {
                 onClose={() => setSidebarOpen(false)}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
-                selectedInstitution={selectedInstitution}
-                hasAccess={hasAccess}
-                onBackToDashboard={handleBackToDashboard}
             />
 
             {/* MAIN CONTENT */}
@@ -284,228 +216,136 @@ const CortexaDashboard = ({ institutionSlug }) => {
                 <main className="flex-1 overflow-y-auto p-6">
                     {/* DASHBOARD TAB */}
                     {activeTab === "dashboard" && (
-                        <div className="max-w-7xl mx-auto space-y-6">
-                            {/* Hero Header with Stats */}
-                            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-xl">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
-                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24"></div>
+                                <div className="max-w-7xl mx-auto space-y-6">
+                                    {/* Hero Header with Stats */}
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-2xl"
+                                    >
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -ml-24 -mb-24"></div>
+                                        <div className="absolute top-1/2 left-1/2 w-32 h-32 bg-white/5 rounded-full blur-2xl transform -translate-x-1/2 -translate-y-1/2"></div>
 
-                                <div className="relative z-10">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                                            <HiSparkles className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h1 className="text-3xl font-bold">Welcome to Cortexa</h1>
-                                            <p className="text-emerald-100 text-sm mt-1">
-                                                A unified platform to discover institutions and manage your academic access
-                                            </p>
-                                        </div>
-                                    </div>
+                                        <div className="relative z-10">
+                                            <div className="flex items-center gap-3 mb-6">
+                                                <motion.div
+                                                    animate={{ rotate: [0, 10, -10, 0] }}
+                                                    transition={{ duration: 2, repeat: Infinity }}
+                                                    className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg"
+                                                >
+                                                    <HiSparkles className="w-7 h-7" />
+                                                </motion.div>
+                                                <div>
+                                                    <h1 className="text-3xl font-bold">Welcome to Cortexa</h1>
+                                                    <p className="text-emerald-50 text-sm mt-1">
+                                                        A unified platform to discover institutions and manage your academic access
+                                                    </p>
+                                                </div>
+                                            </div>
 
-                                    {/* Stats */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">My Institutions</p>
-                                            <p className="text-3xl font-bold mt-1">{myInstitutions.length}</p>
+                                            {/* Stats */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                <motion.div
+                                                    whileHover={{ scale: 1.03, y: -2 }}
+                                                    className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                                >
+                                                    <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">My Institutions</p>
+                                                    <p className="text-4xl font-bold mt-2">{myInstitutions.length}</p>
+                                                    <p className="text-emerald-100 text-xs mt-1">Active memberships</p>
+                                                </motion.div>
+                                                <motion.div
+                                                    whileHover={{ scale: 1.03, y: -2 }}
+                                                    className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                                >
+                                                    <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Available</p>
+                                                    <p className="text-4xl font-bold mt-2">{browseCount}</p>
+                                                    <p className="text-emerald-100 text-xs mt-1">Discover more</p>
+                                                </motion.div>
+                                                <motion.div
+                                                    whileHover={{ scale: 1.03, y: -2 }}
+                                                    className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                                >
+                                                    <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Notifications</p>
+                                                    <p className="text-4xl font-bold mt-2">0</p>
+                                                    <p className="text-emerald-100 text-xs mt-1">All caught up!</p>
+                                                </motion.div>
+                                            </div>
                                         </div>
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">Available</p>
-                                            <p className="text-3xl font-bold mt-1">{browseCount}</p>
+                                    </motion.div>
+
+                                    {/* MY INSTITUTIONS */}
+                                    <motion.section
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5, delay: 0.1 }}
+                                        className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg hover:shadow-xl transition-shadow overflow-hidden"
+                                    >
+                                        <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-emerald-50 to-green-50">
+                                            <div className="flex items-center gap-4">
+                                                <motion.div
+                                                    whileHover={{ rotate: [0, -10, 10, 0] }}
+                                                    transition={{ duration: 0.5 }}
+                                                    className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg"
+                                                >
+                                                    <FiBook className="w-7 h-7 text-white" />
+                                                </motion.div>
+                                                <div>
+                                                    <h2 className="text-2xl font-bold text-gray-900">My Institutions</h2>
+                                                    <p className="text-sm text-gray-600 mt-1">
+                                                        Institutions you are currently associated with
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">Notifications</p>
-                                            <p className="text-3xl font-bold mt-1">0</p>
+
+                                        <div className="p-6">
+                                            <MyInstitutionsTab 
+                                                institutions={myInstitutions}
+                                            />
                                         </div>
-                                    </div>
+                                    </motion.section>
+
+                                    {/* BROWSE INSTITUTIONS */}
+                                    <motion.section
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5, delay: 0.2 }}
+                                        className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg hover:shadow-xl transition-shadow overflow-hidden"
+                                    >
+                                        <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
+                                            <div className="flex items-center gap-4">
+                                                <motion.div
+                                                    whileHover={{ rotate: [0, -10, 10, 0] }}
+                                                    transition={{ duration: 0.5 }}
+                                                    className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg"
+                                                >
+                                                    <FiGrid className="w-7 h-7 text-white" />
+                                                </motion.div>
+                                                <div>
+                                                    <h2 className="text-2xl font-bold text-gray-900">Browse Institutions</h2>
+                                                    <p className="text-sm text-gray-600 mt-1">
+                                                        Discover universities, colleges, and learning platforms
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6">
+                                            <BrowseInstitutionsTab
+                                                excludeInstitutionId={user?.institution?._id}
+                                            />
+                                        </div>
+                                    </motion.section>
                                 </div>
-                            </div>
-
-                            {/* MY INSTITUTIONS */}
-                            <section className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                            <FiBook className="w-6 h-6 text-emerald-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">My Institutions</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
-                                                Institutions you are currently associated with
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-6">
-                                    <MyInstitutionsTab 
-                                        institutions={myInstitutions} 
-                                        onSelectInstitution={handleInstitutionClick}
-                                    />
-                                </div>
-                            </section>
-
-                            {/* BROWSE INSTITUTIONS */}
-                            <section className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                            <FiGrid className="w-6 h-6 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">Browse Institutions</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
-                                                Discover universities, colleges, and learning platforms
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-6">
-                                    <BrowseInstitutionsTab
-                                        excludeInstitutionId={user?.institution?._id}
-                                    />
-
-                                </div>
-                            </section>
-                        </div>
-                    )}
-
-                    {/* NOTIFICATIONS TAB */}
-                    {activeTab === "notifications" && <Notifications />}
-
-                    {/* QUERY DESK */}
-                    {activeTab === "querydesk" && <QueryDesk institution={selectedInstitution} />}
-
-                    {/* INSTITUTION-SPECIFIC TABS (only if user has access) */}
-                    {selectedInstitution && hasAccess && (
-                        <>
-                            {/* Institution Dashboard */}
-                            {activeTab === "institution-dashboard" && (
-                                <InstitutionDashboardView institution={selectedInstitution} />
                             )}
 
-                            {/* Announcements */}
-                            {activeTab === "announcements" && (
-                                <AnnouncementsView institution={selectedInstitution} />
-                            )}
+                            {/* NOTIFICATIONS TAB */}
+                            {activeTab === "notifications" && <Notifications />}
 
-                            {/* ADMIN-ONLY TABS */}
-                            {user?.role?.toLowerCase() === 'admin' && (
-                                <>
-                                    {activeTab === "invite-people" && (
-                                        <InvitePeople institution={selectedInstitution} />
-                                    )}
-                                    {activeTab === "manage-users" && (
-                                        <ManageUsers institution={selectedInstitution} />
-                                    )}
-                                    {activeTab === "academic-structure" && (
-                                        <AcademicStructure institution={selectedInstitution} />
-                                    )}
-                                </>
-                            )}
-
-                            {/* TEACHER-ONLY TABS */}
-                            {user?.role?.toLowerCase() === 'teacher' && (
-                                <>
-                                    {activeTab === "see-students" && (
-                                        <PlaceholderView 
-                                            title="Students"
-                                            description="View student information and track their progress."
-                                            icon={FiUser}
-                                            color="blue"
-                                        />
-                                    )}
-                                    {activeTab === "upload-notes" && (
-                                        <PlaceholderView 
-                                            title="Upload Notes"
-                                            description="Upload and manage study materials and notes for students."
-                                            icon={FiBook}
-                                            color="emerald"
-                                        />
-                                    )}
-                                    {activeTab === "generate-mcq" && (
-                                        <PlaceholderView 
-                                            title="Generate MCQs"
-                                            description="Create multiple choice questions for assessments."
-                                            icon={FiHelpCircle}
-                                            color="purple"
-                                        />
-                                    )}
-                                    {activeTab === "voice-to-text" && (
-                                        <PlaceholderView 
-                                            title="Voice-to-Text"
-                                            description="Convert voice lectures to text notes automatically."
-                                            icon={FiHelpCircle}
-                                            color="orange"
-                                        />
-                                    )}
-                                    {activeTab === "qa-portal" && (
-                                        <PlaceholderView 
-                                            title="Q&A Portal"
-                                            description="Answer student questions and manage discussions."
-                                            icon={FiHelpCircle}
-                                            color="blue"
-                                        />
-                                    )}
-                                    {activeTab === "assessment" && (
-                                        <PlaceholderView 
-                                            title="Assessment"
-                                            description="Create and manage assessments and exams."
-                                            icon={FiHelpCircle}
-                                            color="emerald"
-                                        />
-                                    )}
-                                    {activeTab === "ai-chatbot" && (
-                                        <PlaceholderView 
-                                            title="AI Chatbot Personal"
-                                            description="Your personal AI assistant for teaching and content creation."
-                                            icon={HiSparkles}
-                                            color="purple"
-                                        />
-                                    )}
-                                </>
-                            )}
-
-                            {/* STUDENT-ONLY TABS */}
-                            {user?.role?.toLowerCase() === 'student' && (
-                                <>
-                                    {activeTab === "mcq-test" && (
-                                        <PlaceholderView 
-                                            title="MCQ Test"
-                                            description="Take multiple choice question tests and quizzes."
-                                            icon={FiHelpCircle}
-                                            color="blue"
-                                        />
-                                    )}
-                                    {activeTab === "rag-chatbot" && (
-                                        <PlaceholderView 
-                                            title="RAG Chatbot"
-                                            description="AI-powered chatbot to answer your study questions."
-                                            icon={HiSparkles}
-                                            color="purple"
-                                        />
-                                    )}
-                                    {activeTab === "qa-section" && (
-                                        <PlaceholderView 
-                                            title="Q&A Section"
-                                            description="Ask questions and get answers from teachers and peers."
-                                            icon={FiHelpCircle}
-                                            color="emerald"
-                                        />
-                                    )}
-                                    {activeTab === "assessment" && (
-                                        <PlaceholderView 
-                                            title="Assessment"
-                                            description="View and complete your assessments and exams."
-                                            icon={FiHelpCircle}
-                                            color="orange"
-                                        />
-                                    )}
-                                </>
-                            )}
-                        </>
-                    )}
+                            {/* QUERY DESK */}
+                            {activeTab === "querydesk" && <QueryDesk />}
                 </main>
             </div>
         </div>
