@@ -116,7 +116,9 @@ export default function InstitutionLayout() {
                 />
                 
                 {/* Page Content */}
-                <Outlet context={{ hasAccess }} />
+                <div className="relative z-10">
+                    <Outlet context={{ hasAccess }} />
+                </div>
             </div>
         </InstitutionContext.Provider>
     );
