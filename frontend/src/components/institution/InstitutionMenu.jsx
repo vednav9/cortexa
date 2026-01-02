@@ -1,5 +1,5 @@
 // InstitutionMenu.jsx - Role-based dropdown menu for institution pages
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -19,15 +19,16 @@ import {
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 
-export default function InstitutionMenu({ 
-  userRole, 
-  hasAccess, 
-  brandColor = "#10b981" 
+export default function InstitutionMenu({
+  userRole,
+  hasAccess,
+  brandColor = "#10b981",
 }) {
   const [openDropdown, setOpenDropdown] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { slug } = useParams();
+  const menuRef = useRef(null);
 
   // Get menu items based on role
   const getMenuItems = () => {
@@ -40,7 +41,7 @@ export default function InstitutionMenu({
           id: "institution-dashboard",
           label: "Institution Dashboard",
           icon: FiHome,
-          items: []
+          items: [],
         },
         {
           id: "academic-structure",
@@ -50,37 +51,37 @@ export default function InstitutionMenu({
             { id: "departments", label: "Departments", icon: FiBook },
             { id: "courses", label: "Courses", icon: FiBook },
             { id: "faculty", label: "Faculty", icon: FiUsers },
-          ]
-        }
+          ],
+        },
       ];
     }
 
     // ADMIN Menu
-    if (role === 'admin') {
+    if (role === "admin") {
       return [
         {
           id: "institution-dashboard",
           label: "Institution Dashboard",
           icon: FiHome,
-          items: []
+          items: [],
         },
         {
           id: "announcements",
           label: "Announcements",
           icon: FiBell,
-          items: []
+          items: [],
         },
         {
           id: "invite-people",
           label: "Invite People",
           icon: FiUserPlus,
-          items: []
+          items: [],
         },
         {
           id: "manage-users",
           label: "Manage Users",
           icon: FiUsers,
-          items: []
+          items: [],
         },
         {
           id: "academic-structure",
@@ -90,129 +91,130 @@ export default function InstitutionMenu({
             { id: "departments", label: "Departments", icon: FiBook },
             { id: "courses", label: "Courses", icon: FiBook },
             { id: "semesters", label: "Semesters", icon: FiClipboard },
-            { id: "calendar", label: "Calendar Events", icon: FiBell },
-          ]
+            { id: "calendar", label: "Academic Calendar", icon: FiBell },
+            { id: "faculty", label: "Faculty", icon: FiUsers },
+          ],
         },
         {
           id: "query-desk",
           label: "Query Desk",
           icon: FiHelpCircle,
-          items: []
-        }
+          items: [],
+        },
       ];
     }
 
     // TEACHER Menu
-    if (role === 'teacher') {
+    if (role === "teacher") {
       return [
         {
           id: "institution-dashboard",
           label: "Institution Dashboard",
           icon: FiHome,
-          items: []
+          items: [],
         },
         {
           id: "announcements",
           label: "Announcements",
           icon: FiBell,
-          items: []
+          items: [],
         },
         {
           id: "see-students",
           label: "See Students",
           icon: FiUsers,
-          items: []
+          items: [],
         },
         {
           id: "upload-notes",
           label: "Upload Notes",
           icon: FiUpload,
-          items: []
+          items: [],
         },
         {
           id: "generate-mcq",
           label: "Generate MCQs",
           icon: FiCheckSquare,
-          items: []
+          items: [],
         },
         {
           id: "voice-to-text",
           label: "Voice-to-Text",
           icon: FiMic,
-          items: []
+          items: [],
         },
         {
           id: "qa-portal",
           label: "Q&A Portal",
           icon: FiMessageSquare,
-          items: []
+          items: [],
         },
         {
           id: "assessment",
           label: "Assessment",
           icon: FiClipboard,
-          items: []
+          items: [],
         },
         {
           id: "ai-chatbot",
           label: "AI Chatbot Personal",
           icon: HiSparkles,
-          items: []
+          items: [],
         },
         {
           id: "query-desk",
           label: "Query Desk",
           icon: FiHelpCircle,
-          items: []
-        }
+          items: [],
+        },
       ];
     }
 
     // STUDENT Menu
-    if (role === 'student') {
+    if (role === "student") {
       return [
         {
           id: "institution-dashboard",
           label: "Institution Dashboard",
           icon: FiHome,
-          items: []
+          items: [],
         },
         {
           id: "announcements",
           label: "Announcements",
           icon: FiBell,
-          items: []
+          items: [],
         },
         {
           id: "mcq-test",
           label: "MCQ Test",
           icon: FiCheckSquare,
-          items: []
+          items: [],
         },
         {
           id: "rag-chatbot",
           label: "RAG Chatbot",
           icon: HiSparkles,
-          items: []
+          items: [],
         },
         {
           id: "qa-section",
           label: "Q&A Section",
           icon: FiMessageSquare,
-          items: []
+          items: [],
         },
         {
           id: "assessment",
           label: "Assessment",
           icon: FiClipboard,
-          items: []
+          items: [],
         },
         {
           id: "query-desk",
           label: "Query Desk",
           icon: FiHelpCircle,
-          items: []
-        }
+          items: [],
+        },
       ];
     }
 
@@ -222,7 +224,7 @@ export default function InstitutionMenu({
         id: "institution-dashboard",
         label: "Institution Dashboard",
         icon: FiHome,
-        items: []
+        items: [],
       },
       {
         id: "academic-structure",
@@ -231,8 +233,9 @@ export default function InstitutionMenu({
         items: [
           { id: "departments", label: "Departments", icon: FiBook },
           { id: "courses", label: "Courses", icon: FiBook },
-        ]
-      }
+          { id: "faculty", label: "Faculty", icon: FiUsers },
+        ],
+      },
     ];
   };
 
@@ -240,18 +243,18 @@ export default function InstitutionMenu({
 
   // Determine active view from current location
   const getCurrentView = () => {
-    const path = location.pathname.replace(`/${slug}`, '') || '/';
-    if (path === '/' || path === '') return 'institution-dashboard';
-    
+    const path = location.pathname.replace(`/${slug}`, "") || "/";
+    if (path === "/" || path === "") return "institution-dashboard";
+
     // Remove leading slash and get the path
-    const cleanPath = path.replace(/^\//, '');
-    
+    const cleanPath = path.replace(/^\//, "");
+
     // Check if it's a nested route (e.g., academic-structure/departments)
-    if (cleanPath.includes('/')) {
-      const parts = cleanPath.split('/');
+    if (cleanPath.includes("/")) {
+      const parts = cleanPath.split("/");
       return `${parts[0]}-${parts[1]}`; // e.g., "academic-structure-departments"
     }
-    
+
     return cleanPath;
   };
 
@@ -259,11 +262,11 @@ export default function InstitutionMenu({
 
   const handleMenuClick = (item) => {
     if (item.items && item.items.length > 0) {
-      // Toggle dropdown
+      // Toggle dropdown for items with sub-items
       setOpenDropdown(openDropdown === item.id ? null : item.id);
     } else {
-      // Navigate to the route
-      if (item.id === 'institution-dashboard') {
+      // Navigate to the route for items without sub-items
+      if (item.id === "institution-dashboard") {
         navigate(`/${slug}`);
       } else {
         navigate(`/${slug}/${item.id}`);
@@ -278,30 +281,50 @@ export default function InstitutionMenu({
     setOpenDropdown(null);
   };
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
-    <div className="bg-white border-b-2 border-gray-100 shadow-sm sticky top-[72px] z-30">
+    <div className="bg-white border-b-2 border-gray-100 shadow-sm sticky top-[72px] z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav className="flex items-center space-x-1 overflow-x-auto py-3 scrollbar-hide">
+        <nav
+          ref={menuRef}
+          className="flex items-center space-x-1 overflow-x-auto py-3 scrollbar-hide relative z-50"
+        >
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeView === item.id || activeView?.startsWith(`${item.id}-`);
+            const isActive =
+              activeView === item.id || activeView?.startsWith(`${item.id}-`);
             const isOpen = openDropdown === item.id;
             const hasSubItems = item.items && item.items.length > 0;
 
             return (
-              <div key={item.id} className="relative">
+              <div 
+                key={item.id} 
+                className="relative z-50"
+                onMouseEnter={() => hasSubItems && setOpenDropdown(item.id)}
+                onMouseLeave={() => hasSubItems && setOpenDropdown(null)}
+              >
                 {/* Main Menu Button */}
                 <motion.button
                   onClick={() => handleMenuClick(item)}
-                  onMouseEnter={() => hasSubItems && setOpenDropdown(item.id)}
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.97 }}
                   className={`
                     flex items-center space-x-2 px-4 py-2.5 rounded-xl
                     transition-all duration-200 whitespace-nowrap
-                    ${isActive
-                      ? "font-semibold shadow-md"
-                      : "text-gray-700 hover:bg-gray-50 font-medium"
+                    ${
+                      isActive
+                        ? "font-semibold shadow-md"
+                        : "text-gray-700 hover:bg-gray-50 font-medium"
                     }
                   `}
                   style={
@@ -327,45 +350,34 @@ export default function InstitutionMenu({
 
                 {/* Dropdown Menu */}
                 <AnimatePresence>
-                  {isOpen && hasSubItems && (
+                  {hasSubItems && isOpen && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      onMouseLeave={() => setOpenDropdown(null)}
-                      className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border-2 border-gray-100 overflow-hidden z-50"
+                      className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border-2 border-gray-100 overflow-hidden z-[9999]"
                     >
                       <div className="py-2">
-                        {item.items.map((subItem, index) => {
+                        {item.items.map((subItem) => {
                           const SubIcon = subItem.icon;
-                          const isSubActive = activeView === `${item.id}-${subItem.id}`;
+                          const isSubActive =
+                            activeView === `${item.id}-${subItem.id}`;
 
                           return (
-                            <motion.button
+                            <button
                               key={subItem.id}
                               onClick={() => handleSubItemClick(item.id, subItem)}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.05 }}
-                              whileHover={{ x: 4, backgroundColor: `${brandColor}08` }}
                               className={`
                                 w-full flex items-center space-x-3 px-4 py-3
-                                transition-all text-left
-                                ${isSubActive
-                                  ? "font-semibold"
-                                  : "text-gray-700"
-                                }
+                                text-left transition-all hover:bg-gray-50
+                                ${isSubActive ? "font-semibold" : "text-gray-700"}
                               `}
-                              style={
-                                isSubActive
-                                  ? { color: brandColor }
-                                  : {}
-                              }
+                              style={isSubActive ? { color: brandColor } : {}}
                             >
                               <SubIcon className="w-4 h-4" />
                               <span className="text-sm">{subItem.label}</span>
-                            </motion.button>
+                            </button>
                           );
                         })}
                       </div>
