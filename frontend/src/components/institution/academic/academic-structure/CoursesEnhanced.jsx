@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiBook, FiPlus, FiEdit2, FiTrash2, FiX, FiSearch, FiFilter, FiUsers } from 'react-icons/fi';
+import { FiBook, FiPlus, FiEdit2, FiTrash2, FiX, FiSearch, FiFilter, FiAward, FiUsers, FiClock } from 'react-icons/fi';
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
@@ -16,6 +16,7 @@ function Courses() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('');
   const [filterSemester, setFilterSemester] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -41,14 +42,11 @@ function Courses() {
         academicAPI.getDepartments(institution._id),
         academicAPI.getSemesters(institution._id),
       ]);
-      setCourses(Array.isArray(coursesRes.data) ? coursesRes.data : []);
-      setDepartments(Array.isArray(deptsRes.data) ? deptsRes.data : []);
-      setSemesters(Array.isArray(semsRes.data) ? semsRes.data : []);
+      setCourses(coursesRes.data);
+      setDepartments(deptsRes.data);
+      setSemesters(semsRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
-      setCourses([]);
-      setDepartments([]);
-      setSemesters([]);
     } finally {
       setLoading(false);
     }
@@ -116,15 +114,13 @@ function Courses() {
     setEditingCourse(null);
   };
 
-  const filteredCourses = Array.isArray(courses) 
-    ? courses.filter(course => {
-        const matchesSearch = course.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                             course.code?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesDept = !filterDepartment || course.department?._id === filterDepartment;
-        const matchesSem = !filterSemester || course.semester === filterSemester;
-        return matchesSearch && matchesDept && matchesSem;
-      })
-    : [];
+  const filteredCourses = courses.filter(course => {
+    const matchesSearch = course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         course.code.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDept = !filterDepartment || course.department._id === filterDepartment;
+    const matchesSem = !filterSemester || course.semester === filterSemester;
+    return matchesSearch && matchesDept && matchesSem;
+  });
 
   if (loading) {
     return (
@@ -155,53 +151,81 @@ function Courses() {
               className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all shadow-sm hover:shadow-md"
             />
           </div>
-          {hasAccess && (
+          <div className="flex gap-3">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => openModal()}
-              className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl hover:from-green-700 hover:to-green-800 transition-all shadow-lg hover:shadow-xl font-medium"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-5 py-3 border-2 border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-medium text-gray-700"
             >
-              <FiPlus className="w-5 h-5" /> Add Course
+              <FiFilter className="w-5 h-5" /> Filters
             </motion.button>
-          )}
+            {hasAccess && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => openModal()}
+                className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl hover:from-green-700 hover:to-green-800 transition-all shadow-lg hover:shadow-xl font-medium"
+              >
+                <FiPlus className="w-5 h-5" /> Add Course
+              </motion.button>
+            )}
+          </div>
         </div>
 
         {/* Filters */}
-        <div className="flex gap-4 items-center flex-wrap">
-          <FiFilter className="text-gray-500" />
-          <select
-            value={filterDepartment}
-            onChange={(e) => setFilterDepartment(e.target.value)}
-            className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-          >
-            <option value="">All Departments</option>
-            {departments.map(dept => (
-              <option key={dept._id} value={dept._id}>{dept.name}</option>
-            ))}
-          </select>
-          <select
-            value={filterSemester}
-            onChange={(e) => setFilterSemester(e.target.value)}
-            className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-          >
-            <option value="">All Semesters</option>
-            {semesters.map(sem => (
-              <option key={sem._id} value={sem._id}>{sem.name}</option>
-            ))}
-          </select>
-          {(filterDepartment || filterSemester) && (
-            <button
-              onClick={() => {
-                setFilterDepartment('');
-                setFilterSemester('');
-              }}
-              className="text-sm text-gray-600 hover:text-gray-900 underline"
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
             >
-              Clear Filters
-            </button>
+              <div className="flex flex-wrap gap-4 p-4 bg-gray-50 rounded-xl border-2 border-gray-200">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                  <select
+                    value={filterDepartment}
+                    onChange={(e) => setFilterDepartment(e.target.value)}
+                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                  >
+                    <option value="">All Departments</option>
+                    {departments.map(dept => (
+                      <option key={dept._id} value={dept._id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Semester</label>
+                  <select
+                    value={filterSemester}
+                    onChange={(e) => setFilterSemester(e.target.value)}
+                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                  >
+                    <option value="">All Semesters</option>
+                    {semesters.map(sem => (
+                      <option key={sem._id} value={sem._id}>{sem.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setFilterDepartment('');
+                      setFilterSemester('');
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium"
+                  >
+                    Clear Filters
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
 
       {/* Courses Grid */}
@@ -241,33 +265,30 @@ function Courses() {
               )}
             </div>
 
-            <h3 className="text-xl font-bold text-gray-900 mb-1">{course.name}</h3>
-            <p className="text-sm text-green-600 font-semibold mb-3 bg-green-50 px-2 py-1 rounded-md inline-block">{course.code}</p>
+            <div className="mb-4">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">{course.name}</h3>
+              <p className="text-sm text-green-600 font-semibold bg-green-50 px-2 py-1 rounded-md inline-block">{course.code}</p>
+            </div>
+
             {course.description && (
               <p className="text-gray-600 text-sm mb-4 line-clamp-2">{course.description}</p>
             )}
 
-            <div className="flex items-center gap-3 text-sm text-gray-600 border-t border-gray-200 pt-4 mt-4 flex-wrap">
+            <div className="flex flex-wrap gap-2 mb-4">
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg">
-                <FiBook className="w-4 h-4 text-blue-600" />
+                <FiAward className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-600">{course.credits} Credits</span>
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 rounded-lg">
                 <FiUsers className="w-4 h-4 text-purple-600" />
-                <span className="text-sm font-medium text-purple-600">
-                  {course.enrolledStudents?.length || 0}/{course.maxCapacity}
-                </span>
+                <span className="text-sm font-medium text-purple-600">Max {course.maxCapacity}</span>
               </div>
             </div>
 
-            {course.department && (
-              <div className="mt-4 p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200">
-                <p className="text-xs text-gray-600 font-semibold mb-1">DEPARTMENT</p>
-                <p className="text-sm font-bold text-gray-800">
-                  {course.department.name || course.department}
-                </p>
-              </div>
-            )}
+            <div className="pt-4 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-1">DEPARTMENT</p>
+              <p className="text-sm font-bold text-gray-800">{course.department?.name || 'N/A'}</p>
+            </div>
           </motion.div>
         ))}
       </div>
@@ -287,7 +308,7 @@ function Courses() {
           <p className="text-gray-600 mb-6 max-w-md mx-auto">
             {searchQuery || filterDepartment || filterSemester
               ? 'Try adjusting your filters to find what you\'re looking for.'
-              : 'Get started by creating your first course to organize your curriculum.'}
+              : 'Get started by creating your first course to begin the curriculum.'}
           </p>
           {!searchQuery && !filterDepartment && !filterSemester && hasAccess && (
             <motion.button
@@ -332,7 +353,7 @@ function Courses() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Course Code *
@@ -373,24 +394,11 @@ function Courses() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="e.g., Introduction to Programming"
+                    placeholder="e.g., Introduction to Computer Science"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    rows={3}
-                    placeholder="Brief description of the course..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Department *
@@ -410,16 +418,30 @@ function Courses() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Max Capacity
+                      Max Capacity *
                     </label>
                     <input
                       type="number"
+                      required
                       min="1"
                       value={formData.maxCapacity}
                       onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Brief description of the course..."
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-4">
