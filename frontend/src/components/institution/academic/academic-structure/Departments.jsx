@@ -29,9 +29,11 @@ function Departments() {
     try {
       setLoading(true);
       const response = await academicAPI.getDepartments(institution._id);
-      setDepartments(response.data);
+      // Ensure we always set an array
+      setDepartments(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching departments:', error);
+      setDepartments([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -88,10 +90,13 @@ function Departments() {
     setFormData({ name: '', code: '', description: '' });
   };
 
-  const filteredDepartments = departments.filter(dept =>
-    dept.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    dept.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Ensure departments is always an array before filtering
+  const filteredDepartments = Array.isArray(departments) 
+    ? departments.filter(dept =>
+        dept.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dept.code.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : [];
 
   if (loading) {
     return (
@@ -110,24 +115,26 @@ function Departments() {
       description="Manage academic departments and their structure"
     >
       {/* Header Actions */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+      <div className="mb-8 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div className="relative flex-1 max-w-md">
-          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
             placeholder="Search departments..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm hover:shadow-md"
           />
         </div>
         {hasAccess && (
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => openModal()}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl font-medium"
           >
-            <FiPlus /> Add Department
-          </button>
+            <FiPlus className="w-5 h-5" /> Add Department
+          </motion.button>
         )}
       </div>
 
@@ -139,51 +146,60 @@ function Departments() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-6"
+            whileHover={{ y: -4 }}
+            className="bg-gradient-to-br from-white to-blue-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border border-blue-100/50"
           >
             <div className="flex justify-between items-start mb-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <FiLayers className="text-blue-600 text-xl" />
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <FiLayers className="text-white text-2xl" />
               </div>
               {hasAccess && (
                 <div className="flex gap-2">
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => openModal(dept)}
                     className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                   >
-                    <FiEdit2 />
-                  </button>
-                  <button
+                    <FiEdit2 className="w-4 h-4" />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => handleDelete(dept._id)}
                     className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
-                    <FiTrash2 />
-                  </button>
+                    <FiTrash2 className="w-4 h-4" />
+                  </motion.button>
                 </div>
               )}
             </div>
 
-            <h3 className="text-xl font-bold text-gray-800 mb-1">{dept.name}</h3>
-            <p className="text-sm text-blue-600 font-medium mb-3">{dept.code}</p>
+            <h3 className="text-xl font-bold text-gray-900 mb-1">{dept.name}</h3>
+            <p className="text-sm text-blue-600 font-semibold mb-3 bg-blue-50 px-2 py-1 rounded-md inline-block">{dept.code}</p>
             {dept.description && (
-              <p className="text-gray-600 text-sm mb-4">{dept.description}</p>
+              <p className="text-gray-600 text-sm mb-4 line-clamp-2">{dept.description}</p>
             )}
 
-            <div className="flex items-center gap-4 text-sm text-gray-500 border-t pt-4">
-              <div className="flex items-center gap-1">
-                <FiUsers />
-                <span>{dept.faculty?.length || 0} Faculty</span>
+            <div className="flex items-center gap-4 text-sm text-gray-600 border-t border-gray-200 pt-4 mt-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <FiUsers className="w-4 h-4 text-blue-600" />
+                </div>
+                <span className="font-medium">{dept.faculty?.length || 0} Faculty</span>
               </div>
-              <div className="flex items-center gap-1">
-                <FiUsers />
-                <span>{dept.students?.length || 0} Students</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <FiUsers className="w-4 h-4 text-green-600" />
+                </div>
+                <span className="font-medium">{dept.students?.length || 0} Students</span>
               </div>
             </div>
 
             {dept.headOfDepartment && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Head of Department</p>
-                <p className="text-sm font-medium text-gray-800">
+              <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
+                <p className="text-xs text-purple-600 font-semibold mb-1">HEAD OF DEPARTMENT</p>
+                <p className="text-sm font-bold text-gray-800">
                   {dept.headOfDepartment.name || dept.headOfDepartment.email}
                 </p>
               </div>
@@ -193,9 +209,33 @@ function Departments() {
       </div>
 
       {filteredDepartments.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          {searchQuery ? 'No departments found matching your search.' : 'No departments created yet.'}
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-16 px-4"
+        >
+          <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FiLayers className="w-12 h-12 text-blue-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-2">
+            {searchQuery ? 'No departments found' : 'No departments yet'}
+          </h3>
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            {searchQuery
+              ? 'Try adjusting your search to find what you\'re looking for.'
+              : 'Get started by creating your first department to organize your institution.'}
+          </p>
+          {!searchQuery && hasAccess && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => openModal()}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl font-medium"
+            >
+              <FiPlus className="w-5 h-5" /> Create First Department
+            </motion.button>
+          )}
+        </motion.div>
       )}
 
       {/* Add/Edit Modal */}
