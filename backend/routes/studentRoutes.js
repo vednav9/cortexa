@@ -26,6 +26,7 @@ router.get("/institutions", authenticate, async (req, res) => {
       id: m.institution._id,
       name: m.institution.name,
       code: m.institution.code,
+      slug: m.institution.slug || m.institution.code?.toLowerCase().replace(/\s+/g, '-'),
       logo: m.institution.logo || m.institution.initials,
       role: m.role,
       status: m.status,

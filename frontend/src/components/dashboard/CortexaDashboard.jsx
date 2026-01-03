@@ -16,23 +16,22 @@ import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../context/authcontext";
 import Sidebar from "./Sidebar";
 import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
-import MyInstitutions from "./MyInstitutions";
+import MyInstitutionsTab from "./MyInstitutionsTab";
 import Notifications from "./Notifications";
-import AdminDashboard from "./AdminDashboard";
-import StudentDashboard from "./StudentDashboard";
-import TeacherDashboard from "./TeacherDashboard";
+import QueryDesk from "./QueryDesk";
+
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
 const CortexaDashboard = () => {
     const { user, loading } = useAuth();
+    
     console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("dashboard");
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [myInstitutions, setMyInstitutions] = useState([]);
     const [institutionsLoading, setInstitutionsLoading] = useState(true);
-    const [selectedInstitution, setSelectedInstitution] = useState(null);
     const profileMenuRef = useRef(null);
 
     // Fetch institutions based on user role
@@ -46,13 +45,16 @@ const CortexaDashboard = () => {
                 
                 if (role === 'student') {
                     const { data } = await studentAPI.getInstitutions();
+                    console.log("Student institutions fetched:", data.institutions);
                     setMyInstitutions(data.institutions || []);
                 } else if (role === 'teacher') {
                     const { data } = await teacherAPI.getInstitutions();
+                    console.log("Teacher institutions fetched:", data.institutions);
                     setMyInstitutions(data.institutions || []);
                 } else if (role === 'admin') {
                     // Fetch admin's institution
                     const { data } = await adminAPI.getInstitution();
+                    console.log("Admin institution fetched:", data.institution);
                     setMyInstitutions(data.institution ? [data.institution] : []);
                 } else {
                     setMyInstitutions([]);
@@ -85,47 +87,6 @@ const CortexaDashboard = () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [profileMenuOpen]);
-
-    // Handle institution click - route to specific dashboard based on role
-    const handleInstitutionClick = (institution) => {
-        setSelectedInstitution(institution);
-    };
-
-    // Handle logout from role-specific dashboard
-    const handleLogout = () => {
-        // Logout logic handled by Sidebar
-    };
-
-    // If institution is selected, show role-specific dashboard
-    if (selectedInstitution) {
-        const role = user?.role?.toLowerCase();
-        
-        if (role === 'admin') {
-            return (
-                <AdminDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        } else if (role === 'teacher') {
-            return (
-                <TeacherDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        } else if (role === 'student') {
-            return (
-                <StudentDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        }
-    }
 
     if (loading) {
         return (
@@ -255,133 +216,136 @@ const CortexaDashboard = () => {
                 <main className="flex-1 overflow-y-auto p-6">
                     {/* DASHBOARD TAB */}
                     {activeTab === "dashboard" && (
-                        <div className="max-w-7xl mx-auto space-y-6">
-                            {/* Hero Header with Stats */}
-                            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-xl">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
-                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24"></div>
+                                <div className="max-w-7xl mx-auto space-y-6">
+                                    {/* Hero Header with Stats */}
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-2xl"
+                                    >
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -ml-24 -mb-24"></div>
+                                        <div className="absolute top-1/2 left-1/2 w-32 h-32 bg-white/5 rounded-full blur-2xl transform -translate-x-1/2 -translate-y-1/2"></div>
 
-                                <div className="relative z-10">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                                            <HiSparkles className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h1 className="text-3xl font-bold">Welcome to Cortexa</h1>
-                                            <p className="text-emerald-100 text-sm mt-1">
-                                                A unified platform to discover institutions and manage your academic access
-                                            </p>
-                                        </div>
-                                    </div>
+                                        <div className="relative z-10">
+                                            <div className="flex items-center gap-3 mb-6">
+                                                <motion.div
+                                                    animate={{ rotate: [0, 10, -10, 0] }}
+                                                    transition={{ duration: 2, repeat: Infinity }}
+                                                    className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg"
+                                                >
+                                                    <HiSparkles className="w-7 h-7" />
+                                                </motion.div>
+                                                <div>
+                                                    <h1 className="text-3xl font-bold">Welcome to Cortexa</h1>
+                                                    <p className="text-emerald-50 text-sm mt-1">
+                                                        A unified platform to discover institutions and manage your academic access
+                                                    </p>
+                                                </div>
+                                            </div>
 
-                                    {/* Stats */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">My Institutions</p>
-                                            <p className="text-3xl font-bold mt-1">{myInstitutions.length}</p>
+                                            {/* Stats */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                <motion.div
+                                                    whileHover={{ scale: 1.03, y: -2 }}
+                                                    className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                                >
+                                                    <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">My Institutions</p>
+                                                    <p className="text-4xl font-bold mt-2">{myInstitutions.length}</p>
+                                                    <p className="text-emerald-100 text-xs mt-1">Active memberships</p>
+                                                </motion.div>
+                                                <motion.div
+                                                    whileHover={{ scale: 1.03, y: -2 }}
+                                                    className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                                >
+                                                    <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Available</p>
+                                                    <p className="text-4xl font-bold mt-2">{browseCount}</p>
+                                                    <p className="text-emerald-100 text-xs mt-1">Discover more</p>
+                                                </motion.div>
+                                                <motion.div
+                                                    whileHover={{ scale: 1.03, y: -2 }}
+                                                    className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                                >
+                                                    <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Notifications</p>
+                                                    <p className="text-4xl font-bold mt-2">0</p>
+                                                    <p className="text-emerald-100 text-xs mt-1">All caught up!</p>
+                                                </motion.div>
+                                            </div>
                                         </div>
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">Available</p>
-                                            <p className="text-3xl font-bold mt-1">{browseCount}</p>
+                                    </motion.div>
+
+                                    {/* MY INSTITUTIONS */}
+                                    <motion.section
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5, delay: 0.1 }}
+                                        className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg hover:shadow-xl transition-shadow overflow-hidden"
+                                    >
+                                        <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-emerald-50 to-green-50">
+                                            <div className="flex items-center gap-4">
+                                                <motion.div
+                                                    whileHover={{ rotate: [0, -10, 10, 0] }}
+                                                    transition={{ duration: 0.5 }}
+                                                    className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg"
+                                                >
+                                                    <FiBook className="w-7 h-7 text-white" />
+                                                </motion.div>
+                                                <div>
+                                                    <h2 className="text-2xl font-bold text-gray-900">My Institutions</h2>
+                                                    <p className="text-sm text-gray-600 mt-1">
+                                                        Institutions you are currently associated with
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">Notifications</p>
-                                            <p className="text-3xl font-bold mt-1">0</p>
+
+                                        <div className="p-6">
+                                            <MyInstitutionsTab 
+                                                institutions={myInstitutions}
+                                            />
                                         </div>
-                                    </div>
+                                    </motion.section>
+
+                                    {/* BROWSE INSTITUTIONS */}
+                                    <motion.section
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5, delay: 0.2 }}
+                                        className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg hover:shadow-xl transition-shadow overflow-hidden"
+                                    >
+                                        <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
+                                            <div className="flex items-center gap-4">
+                                                <motion.div
+                                                    whileHover={{ rotate: [0, -10, 10, 0] }}
+                                                    transition={{ duration: 0.5 }}
+                                                    className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg"
+                                                >
+                                                    <FiGrid className="w-7 h-7 text-white" />
+                                                </motion.div>
+                                                <div>
+                                                    <h2 className="text-2xl font-bold text-gray-900">Browse Institutions</h2>
+                                                    <p className="text-sm text-gray-600 mt-1">
+                                                        Discover universities, colleges, and learning platforms
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6">
+                                            <BrowseInstitutionsTab
+                                                excludeInstitutionId={user?.institution?._id}
+                                            />
+                                        </div>
+                                    </motion.section>
                                 </div>
-                            </div>
+                            )}
 
-                            {/* MY INSTITUTIONS */}
-                            <section className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                            <FiBook className="w-6 h-6 text-emerald-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">My Institutions</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
-                                                Institutions you are currently associated with
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+                            {/* NOTIFICATIONS TAB */}
+                            {activeTab === "notifications" && <Notifications />}
 
-                                <div className="p-6">
-                                    <MyInstitutions 
-                                        institutions={myInstitutions} 
-                                        onSelectInstitution={handleInstitutionClick}
-                                    />
-                                </div>
-                            </section>
-
-                            {/* BROWSE INSTITUTIONS */}
-                            <section className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                            <FiGrid className="w-6 h-6 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">Browse Institutions</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
-                                                Discover universities, colleges, and learning platforms
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-6">
-                                    <BrowseInstitutionsTab
-                                        excludeInstitutionId={user?.institution?._id}
-                                    />
-
-                                </div>
-                            </section>
-                        </div>
-                    )}
-
-                    {/* NOTIFICATIONS TAB */}
-                    {activeTab === "notifications" && <Notifications />}
-
-                    {/* QUERY DESK */}
-                    {activeTab === "querydesk" && (
-                        <div className="max-w-4xl mx-auto">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden"
-                            >
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                                            <FiHelpCircle className="w-6 h-6 text-purple-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">Query Desk</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
-                                                Get help and support for your queries
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="p-12 text-center">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-purple-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                        <FiHelpCircle className="w-10 h-10 text-purple-600" />
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                                        Coming Soon
-                                    </h3>
-                                    <p className="text-gray-500 max-w-md mx-auto">
-                                        Raise questions, support requests, or academic queries here.
-                                        This feature will be available soon.
-                                    </p>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
+                            {/* QUERY DESK */}
+                            {activeTab === "querydesk" && <QueryDesk />}
                 </main>
             </div>
         </div>

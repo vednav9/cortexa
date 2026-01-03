@@ -58,7 +58,11 @@ export default function MyInstitutionsTab({ institutions = [] }) {
           <div className="flex items-center gap-5">
             {/* Logo */}
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg flex-shrink-0">
-              {institution.logo}
+              {institution.branding?.logo ? (
+                    <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover rounded-lg" />
+                  ) : (
+                    institution.code || institution.name.substring(0, 2).toUpperCase()
+                  )}
             </div>
 
             {/* Info */}
@@ -74,7 +78,7 @@ export default function MyInstitutionsTab({ institutions = [] }) {
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-sm font-semibold text-green-700 capitalize">
-                  {institution.status === "active" ? "Active Institution" : institution.status}
+                  Active
                 </span>
               </div>
             </div>
@@ -82,14 +86,15 @@ export default function MyInstitutionsTab({ institutions = [] }) {
 
           {/* RIGHT: Primary Action */}
           <div className="flex items-center">
-            <motion.button
+            <motion.a
+              href={`/${institution.slug}`}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
             >
               Go to Dashboard
               <FiArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-            </motion.button>
+            </motion.a>
           </div>
         </div>
 

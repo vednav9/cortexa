@@ -30,6 +30,44 @@ router.get('/browse', async (req, res) => {
 });
 
 // Get institution by slug (PUBLIC - for institution pages)
+// Support both /slug/:slug and /:slug for flexibility
+router.get('/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    
+    // Try to find institution by slug
+    let institution = await Institution.findOne({ slug })
+      .select('name slug code type description address contact branding stats departments established');
+    
+    // If not found by slug, try by code (case-insensitive)
+    if (!institution) {
+      institution = await Institution.findOne({ 
+        code: new RegExp(`^${slug}$`, 'i') 
+      }).select('name slug code type description address contact branding stats departments established');
+    }
+    
+    if (!institution) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Institution not found' 
+      });
+    }
+    
+    res.json({ 
+      success: true,
+      institution 
+    });
+  } catch (error) {
+    console.error('❌ Error fetching institution by slug:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching institution', 
+      error: error.message 
+    });
+  }
+});
+
+// LEGACY: Get institution by slug (PUBLIC - for institution pages)
 router.get('/slug/:slug', async (req, res) => {
   try {
     // Mock data mapping for now
