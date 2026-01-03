@@ -136,7 +136,7 @@ export default function InstitutionLayout() {
                 
                 {/* Page Content */}
                 <div className="relative z-0">
-                    <Outlet context={{ hasAccess }} />
+                    <Outlet context={{ hasAccess, institution }} />
                 </div>
 
                 {/* Scroll to Top Button */}
