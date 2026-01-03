@@ -51,7 +51,7 @@ export default function InstitutionNavbar({
 
   return (
     <nav
-      className="bg-white border-b-2 shadow-sm sticky top-0 z-40"
+      className="bg-white border-b-2 shadow-sm z-50"
       style={{ borderBottomColor: `${brandColor}20` }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -153,7 +153,7 @@ export default function InstitutionNavbar({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -10, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border-2 border-gray-100 overflow-hidden"
+                  className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border-2 border-gray-100 overflow-hidden z-[200]"
                 >
                   {/* User Info Header */}
                   <div

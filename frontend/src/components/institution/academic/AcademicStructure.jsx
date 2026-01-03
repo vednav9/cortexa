@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { FiBookOpen, FiLayers, FiBook, FiCalendar, FiClock, FiUsers } from 'react-icons/fi';
 import { motion } from 'framer-motion';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useParams } from 'react-router-dom';
 import { academicAPI } from '../../../services/api';
 
 export default function AcademicStructure() {
   const { hasAccess, institution } = useOutletContext();
   const navigate = useNavigate();
+  const { slug } = useParams();
   const [stats, setStats] = useState({
     departments: 0,
     courses: 0,
@@ -136,7 +137,7 @@ export default function AcademicStructure() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                onClick={() => navigate(section.path)}
+                onClick={() => navigate(`/${slug}/academic-structure/${section.path}`)}
                 className={`${colorVariants[section.color]} rounded-xl p-6 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md`}
               >
                 <section.icon className="text-4xl mb-4" />

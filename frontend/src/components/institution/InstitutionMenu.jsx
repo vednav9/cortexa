@@ -1,6 +1,7 @@
 // InstitutionMenu.jsx - Role-based dropdown menu for institution pages
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiHome,
@@ -25,10 +26,12 @@ export default function InstitutionMenu({
   brandColor = "#10b981",
 }) {
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const navigate = useNavigate();
   const location = useLocation();
   const { slug } = useParams();
-  const menuRef = useRef(null);
+  const menuRefs = useRef({});
+  const dropdownRef = useRef(null);
 
   // Get menu items based on role
   const getMenuItems = () => {
@@ -262,6 +265,15 @@ export default function InstitutionMenu({
 
   const handleMenuClick = (item) => {
     if (item.items && item.items.length > 0) {
+      // Calculate dropdown position
+      const buttonElement = menuRefs.current[item.id];
+      if (buttonElement) {
+        const rect = buttonElement.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY + 8,
+          left: rect.left + window.scrollX,
+        });
+      }
       // Toggle dropdown for items with sub-items
       setOpenDropdown(openDropdown === item.id ? null : item.id);
     } else {
@@ -281,113 +293,160 @@ export default function InstitutionMenu({
     setOpenDropdown(null);
   };
 
+  // Close dropdown when clicking outside - FIXED: Include dropdown ref
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+    const handleClickOutside = (event) => {
+      // Check if click is outside both menu buttons AND dropdown
+      const clickedOutsideButtons = Object.values(menuRefs.current).every(
+        (ref) => ref && !ref.contains(event.target)
+      );
+      
+      const clickedOutsideDropdown = 
+        !dropdownRef.current || !dropdownRef.current.contains(event.target);
+
+      if (clickedOutsideButtons && clickedOutsideDropdown && openDropdown) {
         setOpenDropdown(null);
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [openDropdown]);
+
+  // Update dropdown position on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (openDropdown) {
+        const buttonElement = menuRefs.current[openDropdown];
+        if (buttonElement) {
+          const rect = buttonElement.getBoundingClientRect();
+          setDropdownPosition({
+            top: rect.bottom + window.scrollY + 8,
+            left: rect.left + window.scrollX,
+          });
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [openDropdown]);
 
   return (
-    <div className="bg-white border-b-2 border-gray-100 shadow-sm sticky top-[72px] z-40">
+    <div className="bg-white border-b-2 border-gray-100 shadow-sm z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav
-          ref={menuRef}
-          className="flex items-center space-x-1 overflow-x-auto py-3 scrollbar-hide relative z-50"
-        >
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              activeView === item.id || activeView?.startsWith(`${item.id}-`);
-            const isOpen = openDropdown === item.id;
-            const hasSubItems = item.items && item.items.length > 0;
+        <div className="overflow-x-auto scrollbar-hide">
+          <nav className="flex items-center space-x-1 py-3">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                activeView === item.id || activeView?.startsWith(`${item.id}-`);
+              const isOpen = openDropdown === item.id;
+              const hasSubItems = item.items && item.items.length > 0;
 
-            return (
-              <div 
-                key={item.id} 
-                className="relative z-50"
-                onMouseEnter={() => hasSubItems && setOpenDropdown(item.id)}
-                onMouseLeave={() => hasSubItems && setOpenDropdown(null)}
-              >
-                {/* Main Menu Button */}
-                <motion.button
-                  onClick={() => handleMenuClick(item)}
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.97 }}
-                  className={`
-                    flex items-center space-x-2 px-4 py-2.5 rounded-xl
-                    transition-all duration-200 whitespace-nowrap
-                    ${
+              return (
+                <div key={item.id}>
+                  {/* Main Menu Button */}
+                  <motion.button
+                    ref={(el) => (menuRefs.current[item.id] = el)}
+                    onClick={() => handleMenuClick(item)}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.97 }}
+                    className={`
+                      flex items-center space-x-2 px-4 py-2.5 rounded-xl
+                      transition-all duration-200 whitespace-nowrap
+                      ${
+                        isActive
+                          ? "font-semibold shadow-md"
+                          : "text-gray-700 hover:bg-gray-50 font-medium"
+                      }
+                    `}
+                    style={
                       isActive
-                        ? "font-semibold shadow-md"
-                        : "text-gray-700 hover:bg-gray-50 font-medium"
+                        ? {
+                            backgroundColor: `${brandColor}15`,
+                            color: brandColor,
+                          }
+                        : {}
                     }
-                  `}
-                  style={
-                    isActive
-                      ? {
-                          backgroundColor: `${brandColor}15`,
-                          color: brandColor,
-                        }
-                      : {}
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-sm">{item.label}</span>
-                  {hasSubItems && (
-                    <motion.div
-                      animate={{ rotate: isOpen ? 180 : 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <FiChevronDown className="w-3.5 h-3.5" />
-                    </motion.div>
-                  )}
-                </motion.button>
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="text-sm">{item.label}</span>
+                    {hasSubItems && (
+                      <motion.div
+                        animate={{ rotate: isOpen ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <FiChevronDown className="w-3.5 h-3.5" />
+                      </motion.div>
+                    )}
+                  </motion.button>
 
-                {/* Dropdown Menu */}
-                <AnimatePresence>
-                  {hasSubItems && isOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl shadow-xl border-2 border-gray-100 overflow-hidden z-[9999]"
-                    >
-                      <div className="py-2">
-                        {item.items.map((subItem) => {
-                          const SubIcon = subItem.icon;
-                          const isSubActive =
-                            activeView === `${item.id}-${subItem.id}`;
+                  {/* Dropdown Menu - Rendered via Portal */}
+                  {hasSubItems &&
+                    isOpen &&
+                    createPortal(
+                      <AnimatePresence>
+                        <motion.div
+                          ref={dropdownRef}
+                          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
+                          style={{
+                            position: "absolute",
+                            top: `${dropdownPosition.top}px`,
+                            left: `${dropdownPosition.left}px`,
+                            zIndex: 200,
+                          }}
+                          className="w-56 bg-white rounded-xl shadow-xl border-2 border-gray-100 overflow-hidden"
+                        >
+                          <div className="py-2">
+                            {item.items.map((subItem) => {
+                              const SubIcon = subItem.icon;
+                              const isSubActive =
+                                activeView === `${item.id}-${subItem.id}`;
 
-                          return (
-                            <button
-                              key={subItem.id}
-                              onClick={() => handleSubItemClick(item.id, subItem)}
-                              className={`
-                                w-full flex items-center space-x-3 px-4 py-3
-                                text-left transition-all hover:bg-gray-50
-                                ${isSubActive ? "font-semibold" : "text-gray-700"}
-                              `}
-                              style={isSubActive ? { color: brandColor } : {}}
-                            >
-                              <SubIcon className="w-4 h-4" />
-                              <span className="text-sm">{subItem.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })}
-        </nav>
+                              return (
+                                <motion.button
+                                  key={subItem.id}
+                                  onClick={() =>
+                                    handleSubItemClick(item.id, subItem)
+                                  }
+                                  whileHover={{
+                                    x: 4,
+                                    backgroundColor: `${brandColor}05`,
+                                  }}
+                                  className={`
+                                    w-full flex items-center space-x-3 px-4 py-3
+                                    text-left transition-all
+                                    ${
+                                      isSubActive
+                                        ? "font-semibold"
+                                        : "text-gray-700 hover:text-gray-900"
+                                    }
+                                  `}
+                                  style={
+                                    isSubActive ? { color: brandColor } : {}
+                                  }
+                                >
+                                  <SubIcon className="w-4 h-4" />
+                                  <span className="text-sm">
+                                    {subItem.label}
+                                  </span>
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      </AnimatePresence>,
+                      document.body
+                    )}
+                </div>
+              );
+            })}
+          </nav>
+        </div>
       </div>
     </div>
   );
