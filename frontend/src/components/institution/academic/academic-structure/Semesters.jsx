@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiClock, FiPlus, FiEdit2, FiTrash2, FiX, FiCheck } from 'react-icons/fi';
+import { FiClock, FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiCalendar } from 'react-icons/fi';
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
@@ -30,9 +30,10 @@ function Semesters() {
     try {
       setLoading(true);
       const response = await academicAPI.getSemesters(institution._id);
-      setSemesters(response.data);
+      setSemesters(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching semesters:', error);
+      setSemesters([]);
     } finally {
       setLoading(false);
     }
@@ -108,13 +109,15 @@ function Semesters() {
   return (
     <GenericPage title="Semesters" icon={FiClock} description="Manage academic semesters and terms">
       {hasAccess && (
-        <div className="mb-6">
-          <button
+        <div className="mb-8">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => openModal()}
-            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl font-medium"
           >
-            <FiPlus /> Add Semester
-          </button>
+            <FiPlus className="w-5 h-5" /> Add Semester
+          </motion.button>
         </div>
       )}
 
@@ -125,41 +128,76 @@ function Semesters() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            className={`bg-white rounded-xl shadow-sm p-6 ${sem.isActive ? 'ring-2 ring-purple-500' : ''}`}
+            whileHover={{ y: -4 }}
+            className={`bg-gradient-to-br from-white to-purple-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border ${
+              sem.isActive ? 'border-purple-400 ring-2 ring-purple-400 ring-offset-2' : 'border-purple-100/50'
+            }`}
           >
             <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-xl font-bold text-gray-800">{sem.name}</h3>
-                <p className="text-sm text-purple-600">{sem.academicYear}</p>
+              <div className="flex-1">
+                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg mb-3">
+                  <FiClock className="text-white text-2xl" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-1">{sem.name}</h3>
+                <p className="text-sm text-purple-600 font-semibold bg-purple-50 px-2 py-1 rounded-md inline-block">
+                  {sem.academicYear}
+                </p>
                 {sem.isActive && (
-                  <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                    <FiCheck /> Active
-                  </span>
+                  <div className="mt-2">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs rounded-full shadow-md">
+                      <FiCheck className="w-3 h-3" /> Active Semester
+                    </span>
+                  </div>
                 )}
               </div>
               {hasAccess && (
                 <div className="flex gap-2">
-                  <button onClick={() => openModal(sem)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg">
-                    <FiEdit2 />
-                  </button>
-                  <button onClick={() => handleDelete(sem._id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
-                    <FiTrash2 />
-                  </button>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => openModal(sem)}
+                    className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                  >
+                    <FiEdit2 className="w-4 h-4" />
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleDelete(sem._id)}
+                    className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                  </motion.button>
                 </div>
               )}
             </div>
 
-            <div className="space-y-2 text-sm text-gray-600">
-              <div>
-                <span className="font-medium">Start: </span>
-                {new Date(sem.startDate).toLocaleDateString()}
+            <div className="space-y-3 border-t border-gray-200 pt-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <FiCalendar className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500">Start Date</p>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {new Date(sem.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="font-medium">End: </span>
-                {new Date(sem.endDate).toLocaleDateString()}
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <FiCalendar className="w-4 h-4 text-orange-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500">End Date</p>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {new Date(sem.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
               </div>
-              <div className="pt-2 border-t">
-                <span className="font-medium">{sem.courses?.length || 0} courses</span>
+              <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
+                <p className="text-xs text-purple-600 font-semibold mb-1">COURSES</p>
+                <p className="text-lg font-bold text-gray-800">{sem.courses?.length || 0}</p>
               </div>
             </div>
           </motion.div>
@@ -167,7 +205,29 @@ function Semesters() {
       </div>
 
       {semesters.length === 0 && (
-        <div className="text-center py-12 text-gray-500">No semesters created yet.</div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-16 px-4"
+        >
+          <div className="w-24 h-24 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FiClock className="w-12 h-12 text-purple-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-2">No semesters yet</h3>
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            Get started by creating your first semester to organize your academic calendar.
+          </p>
+          {hasAccess && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => openModal()}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl font-medium"
+            >
+              <FiPlus className="w-5 h-5" /> Create First Semester
+            </motion.button>
+          )}
+        </motion.div>
       )}
 
       <AnimatePresence>

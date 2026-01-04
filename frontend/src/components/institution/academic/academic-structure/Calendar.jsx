@@ -40,9 +40,10 @@ function Calendar() {
     try {
       setLoading(true);
       const response = await academicAPI.getCalendarEvents(institution._id);
-      setEvents(response.data);
+      setEvents(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error:', error);
+      setEvents([]);
     } finally {
       setLoading(false);
     }
@@ -120,50 +121,87 @@ function Calendar() {
   return (
     <GenericPage title="Academic Calendar" icon={FiCalendar} description="Manage events, exams, and deadlines">
       {hasAccess && (
-        <div className="mb-6">
-          <button onClick={() => openModal()} className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700">
-            <FiPlus /> Add Event
-          </button>
+        <div className="mb-8">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => openModal()}
+            className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg hover:shadow-xl font-medium"
+          >
+            <FiPlus className="w-5 h-5" /> Add Event
+          </motion.button>
         </div>
       )}
 
       <div className="space-y-4">
-        {events.map((event) => {
-          const color = eventColors[event.eventType] || 'gray';
+        {events.map((event, index) => {
+          const colorMap = {
+            class: { bg: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-800' },
+            exam: { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-600', badge: 'bg-red-100 text-red-800' },
+            holiday: { bg: 'bg-green-50', border: 'border-green-500', text: 'text-green-600', badge: 'bg-green-100 text-green-800' },
+            event: { bg: 'bg-purple-50', border: 'border-purple-500', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-800' },
+            deadline: { bg: 'bg-orange-50', border: 'border-orange-500', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-800' },
+          };
+          const colors = colorMap[event.eventType] || colorMap.event;
+          
           return (
             <motion.div
               key={event._id}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className={`bg-white rounded-xl shadow-sm p-6 border-l-4 border-${color}-500`}
+              transition={{ delay: index * 0.05 }}
+              whileHover={{ x: 4 }}
+              className={`bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 p-6 border-l-4 ${colors.border}`}
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
                     <h3 className="text-lg font-bold text-gray-800">{event.title}</h3>
-                    <span className={`px-2 py-1 bg-${color}-100 text-${color}-800 text-xs rounded-full`}>
+                    <span className={`px-3 py-1 ${colors.badge} text-xs rounded-full font-semibold uppercase`}>
                       {event.eventType}
                     </span>
                     {event.targetAudience !== 'all' && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                      <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs rounded-full font-semibold capitalize">
                         {event.targetAudience}
                       </span>
                     )}
                   </div>
-                  {event.description && <p className="text-gray-600 mb-3">{event.description}</p>}
-                  <div className="flex gap-4 text-sm text-gray-500">
-                    <div>📅 {new Date(event.startDate).toLocaleDateString()}</div>
-                    {event.location && <div>📍 {event.location}</div>}
+                  {event.description && (
+                    <p className="text-gray-600 mb-4 line-clamp-2">{event.description}</p>
+                  )}
+                  <div className="flex gap-4 text-sm">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
+                      <FiCalendar className={`w-4 h-4 ${colors.text}`} />
+                      <span className="font-medium text-gray-700">
+                        {new Date(event.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                    {event.location && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
+                        <span>📍</span>
+                        <span className="font-medium text-gray-700">{event.location}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {hasAccess && (
-                  <div className="flex gap-2">
-                    <button onClick={() => openModal(event)} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg">
-                      <FiEdit2 />
-                    </button>
-                    <button onClick={() => handleDelete(event._id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
-                      <FiTrash2 />
-                    </button>
+                  <div className="flex gap-2 ml-4">
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => openModal(event)}
+                      className="p-2 text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                    >
+                      <FiEdit2 className="w-4 h-4" />
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleDelete(event._id)}
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <FiTrash2 className="w-4 h-4" />
+                    </motion.button>
                   </div>
                 )}
               </div>
@@ -172,7 +210,31 @@ function Calendar() {
         })}
       </div>
 
-      {events.length === 0 && <div className="text-center py-12 text-gray-500">No events scheduled yet.</div>}
+      {events.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-16 px-4"
+        >
+          <div className="w-24 h-24 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FiCalendar className="w-12 h-12 text-orange-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-800 mb-2">No events scheduled yet</h3>
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            Start organizing your academic calendar by adding events, exams, and important deadlines.
+          </p>
+          {hasAccess && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => openModal()}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg hover:shadow-xl font-medium"
+            >
+              <FiPlus className="w-5 h-5" /> Create First Event
+            </motion.button>
+          )}
+        </motion.div>
+      )}
 
       <AnimatePresence>
         {showModal && (
