@@ -1,6 +1,8 @@
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
 import Admin from "../models/admin.js";
+import CortexaAdmin from "../models/cortexaAdmin.js";
+
 
 export const getMe = async (req, res) => {
     try {
@@ -15,6 +17,9 @@ export const getMe = async (req, res) => {
             user = await Admin.findById(id)
                 .populate("institution")
                 .select("fullName email role institution");
+        }
+        else if (role === "cortexa_admin") {
+            user = await CortexaAdmin.findById(id).select("fullName email role");
         }
         else {
             return res.status(400).json({

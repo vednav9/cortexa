@@ -44,12 +44,12 @@ import Faculty from "./components/institution/academic/academic-structure/Facult
 
 // Dashboard
 import CortexaDashboard from "./components/dashboard/CortexaDashboard";
-
+import CortexaAdminLogin from "./components/dashboard/cortexaAdminLogin";
 // Layout
 import Navbar from "./components/Navbar";
 
 // Auth
-import { AuthProvider, useAuth } from "./context/authcontext";
+import { useAuth } from "./context/authcontext";
 
 /* ===========================
    Protected Route (OLD STYLE)
@@ -77,68 +77,69 @@ const ProtectedRoute = ({ children }) => {
 =========================== */
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen flex flex-col">
-          <Navbar />
 
-          <main className="flex-1">
-            <Routes>
-              {/* Public */}
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<SignUp />} />
-              <Route path="/institute-signup" element={<InstituteSignUp />} />
+    <Router>
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
 
-              {/* Protected */}
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <CortexaDashboard />
-                  </ProtectedRoute>
-                }
-              />
+        <main className="flex-1">
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/cortexaAdminLogin" element={<CortexaAdminLogin />} />
+            <Route path="/signup" element={<SignUp />} />
+            <Route path="/institute-signup" element={<InstituteSignUp />} />
 
-              {/* Institution Routes */}   {/* PUBLIC INSTITUTION ROUTES */}
-              <Route path="/:slug" element={<InstitutionLayout />}>
-                <Route index element={<InstitutionHome />} />
-                <Route path="announcements" element={<Announcements />} />
-                <Route path="invite-people" element={<InvitePeople />} />
-                <Route path="manage-users" element={<ManageUsers />} />
-                <Route path="query-desk" element={<QueryDesk />} />
-                <Route path="academic-structure" element={<AcademicStructure />} />
-                
-                {/* Academic Structure Nested Routes */}
-                <Route path="academic-structure/departments" element={<Departments />} />
-                <Route path="academic-structure/courses" element={<AcademicCourses />} />
-                <Route path="academic-structure/semesters" element={<Semesters />} />
-                <Route path="academic-structure/calendar" element={<Calendar />} />
-                <Route path="academic-structure/faculty" element={<Faculty />} />
-                
-                <Route path="see-students" element={<SeeStudents />} />
-                <Route path="upload-notes" element={<UploadNotes />} />
-                <Route path="generate-mcq" element={<GenerateMCQ />} />
-                <Route path="voice-to-text" element={<VoiceToText />} />
-                <Route path="qa-portal" element={<QAPortal />} />
-                <Route path="assessment" element={<Assessment />} />
-                <Route path="ai-chatbot" element={<AIChatbot />} />
-                <Route path="rag-chatbot" element={<RAGChatbot />} />
-                <Route path="courses" element={<CourseCatalog />} />
-                <Route path="courses/:courseCode" element={<CourseDetails />} />
-              </Route>
+            {/* Protected */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <CortexaDashboard />
+                </ProtectedRoute>
+              }
+            />
 
-              {/* Fallback */}
-              <Route path="/404" element={<NotFound />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
-        </div>
-      </Router>
+            {/* Institution Routes */}   {/* PUBLIC INSTITUTION ROUTES */}
+            <Route path="/:slug" element={<InstitutionLayout />}>
+              <Route index element={<InstitutionHome />} />
+              <Route path="announcements" element={<Announcements />} />
+              <Route path="invite-people" element={<InvitePeople />} />
+              <Route path="manage-users" element={<ManageUsers />} />
+              <Route path="query-desk" element={<QueryDesk />} />
+              <Route path="academic-structure" element={<AcademicStructure />} />
+
+              {/* Academic Structure Nested Routes */}
+              <Route path="academic-structure/departments" element={<Departments />} />
+              <Route path="academic-structure/courses" element={<AcademicCourses />} />
+              <Route path="academic-structure/semesters" element={<Semesters />} />
+              <Route path="academic-structure/calendar" element={<Calendar />} />
+              <Route path="academic-structure/faculty" element={<Faculty />} />
+
+              <Route path="see-students" element={<SeeStudents />} />
+              <Route path="upload-notes" element={<UploadNotes />} />
+              <Route path="generate-mcq" element={<GenerateMCQ />} />
+              <Route path="voice-to-text" element={<VoiceToText />} />
+              <Route path="qa-portal" element={<QAPortal />} />
+              <Route path="assessment" element={<Assessment />} />
+              <Route path="ai-chatbot" element={<AIChatbot />} />
+              <Route path="rag-chatbot" element={<RAGChatbot />} />
+              <Route path="courses" element={<CourseCatalog />} />
+              <Route path="courses/:courseCode" element={<CourseDetails />} />
+            </Route>
+
+            {/* Fallback */}
+            <Route path="/404" element={<NotFound />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
 
 
 
-    </AuthProvider>
+
   );
 }
 
