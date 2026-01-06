@@ -11,6 +11,7 @@ import authRoutes from "./routes/authRoutes.js";
 import institutionRoutes from "./routes/institutionRoutes.js";
 import invitationRoutes from "./routes/invitationRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
+import academicRoutes from "./routes/academicRoutes.js";
 import cortexaAdminRoutes from "./routes/cortexaAdminRoutes.js";
 
 
@@ -44,6 +45,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/institutions", institutionRoutes);
 app.use("/api/invitations", invitationRoutes);
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/academic", academicRoutes);
 app.use("/api/cortexa-admin", cortexaAdminRoutes);
 
 

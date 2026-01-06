@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Outlet, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { FiAlertCircle } from "react-icons/fi";
+import { motion, AnimatePresence } from "framer-motion";
+import { FiAlertCircle, FiArrowUp } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import api from "../services/api";
 import { InstitutionContext } from "../context/InstitutionContext";
@@ -16,6 +16,7 @@ export default function InstitutionLayout() {
     const [institution, setInstitution] = useState(null);
     const [loading, setLoading] = useState(true);
     const [hasAccess, setHasAccess] = useState(false);
+    const [showScrollTop, setShowScrollTop] = useState(false);
 
     useEffect(() => {
         const fetchInstitution = async () => {
@@ -38,6 +39,24 @@ export default function InstitutionLayout() {
 
         fetchInstitution();
     }, [slug, user]);
+
+    // Handle scroll to show/hide scroll-to-top button
+    useEffect(() => {
+        const handleScroll = () => {
+            if (window.scrollY > 300) {
+                setShowScrollTop(true);
+            } else {
+                setShowScrollTop(false);
+            }
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
     // Back to Cortexa Dashboard
     const handleBackToDashboard = () => {
@@ -116,7 +135,30 @@ export default function InstitutionLayout() {
                 />
                 
                 {/* Page Content */}
-                <Outlet context={{ hasAccess }} />
+                <div className="relative z-0">
+                    <Outlet context={{ hasAccess, institution }} />
+                </div>
+
+                {/* Scroll to Top Button */}
+                <AnimatePresence>
+                    {showScrollTop && (
+                        <motion.button
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={scrollToTop}
+                            className="fixed bottom-6 right-6 w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-white z-[300] transition-all hover:shadow-2xl"
+                            style={{
+                                background: `linear-gradient(135deg, ${brandColor}, ${brandColor}dd)`
+                            }}
+                            aria-label="Scroll to top"
+                        >
+                            <FiArrowUp className="w-5 h-5" />
+                        </motion.button>
+                    )}
+                </AnimatePresence>
             </div>
         </InstitutionContext.Provider>
     );

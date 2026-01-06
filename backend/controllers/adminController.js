@@ -496,3 +496,172 @@ export const toggleUserStatus = async (req, res) => {
     res.status(500).json({ message: "Failed to toggle user status" });
   }
 };
+
+// Bulk add multiple users
+export const bulkAddUsers = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const { users } = req.body;
+
+    console.log('Bulk upload request:', {
+      institutionId,
+      userId: req.user.id,
+      userRole: req.user.role,
+      usersCount: users?.length
+    });
+
+    // Verify admin permissions
+    const admin = await Admin.findById(req.user.id);
+    if (!admin) {
+      console.error('Admin not found:', req.user.id);
+      return res.status(403).json({ message: "Admin not found" });
+    }
+
+    console.log('Admin institution:', admin.institution.toString());
+    console.log('Requested institution:', institutionId);
+
+    if (admin.institution.toString() !== institutionId) {
+      console.error('Institution mismatch:', {
+        adminInstitution: admin.institution.toString(),
+        requestedInstitution: institutionId
+      });
+      return res.status(403).json({ 
+        message: "Access denied - Institution mismatch",
+        adminInstitution: admin.institution.toString(),
+        requestedInstitution: institutionId
+      });
+    }
+
+    // Validate institution exists
+    const institution = await Institution.findById(institutionId);
+    if (!institution) {
+      return res.status(404).json({ message: "Institution not found" });
+    }
+
+    // Validate users array
+    if (!Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({ message: "Users array is required and must not be empty" });
+    }
+
+    const results = {
+      successCount: 0,
+      errors: []
+    };
+
+    // Process each user
+    for (let i = 0; i < users.length; i++) {
+      const userData = users[i];
+      
+      try {
+        // Validate required fields
+        if (!userData.fullName || !userData.email || !userData.mobile || !userData.department || !userData.username || !userData.role) {
+          results.errors.push({
+            index: i,
+            email: userData.email || 'unknown',
+            error: 'Missing required fields'
+          });
+          continue;
+        }
+
+        // Check for duplicate email in database
+        const existingStudent = await Student.findOne({ email: userData.email });
+        const existingTeacher = await Teacher.findOne({ email: userData.email });
+        const existingAdmin = await Admin.findOne({ email: userData.email });
+
+        if (existingStudent || existingTeacher || existingAdmin) {
+          results.errors.push({
+            index: i,
+            email: userData.email,
+            error: 'Email already exists'
+          });
+          continue;
+        }
+
+        // Generate default password
+        const defaultPassword = 'Welcome@123';
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+        // Create user based on role
+        if (userData.role === 'student') {
+          // Validate student-specific fields
+          if (!userData.year || !userData.division) {
+            results.errors.push({
+              index: i,
+              email: userData.email,
+              error: 'Year and division are required for students'
+            });
+            continue;
+          }
+
+          await Student.create({
+            fullName: userData.fullName,
+            email: userData.email,
+            password: hashedPassword,
+            username: userData.username,
+            phone: userData.mobile,
+            department: userData.department,
+            institution: institutionId,
+            year: userData.year,
+            division: userData.division,
+            status: 'active'
+          });
+
+          results.successCount++;
+
+        } else if (userData.role === 'teacher') {
+          // Validate teacher-specific fields
+          if (!userData.jobTitle || !userData.qualifications) {
+            results.errors.push({
+              index: i,
+              email: userData.email,
+              error: 'Job title and qualifications are required for teachers'
+            });
+            continue;
+          }
+
+          await Teacher.create({
+            fullName: userData.fullName,
+            email: userData.email,
+            password: hashedPassword,
+            username: userData.username,
+            phone: userData.mobile,
+            department: userData.department,
+            institution: institutionId,
+            jobTitle: userData.jobTitle,
+            qualifications: userData.qualifications,
+            specialization: userData.specialization || '',
+            status: 'active'
+          });
+
+          results.successCount++;
+
+        } else {
+          results.errors.push({
+            index: i,
+            email: userData.email,
+            error: 'Invalid role. Must be student or teacher'
+          });
+        }
+
+      } catch (error) {
+        results.errors.push({
+          index: i,
+          email: userData.email || 'unknown',
+          error: error.message
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk upload completed. ${results.successCount} users added successfully.`,
+      successCount: results.successCount,
+      errors: results.errors,
+      totalProcessed: users.length
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to bulk add users" });
+  }
+};

@@ -86,6 +86,7 @@ export const adminAPI = {
   bulkUpload: (formData) => api.post('/admin/bulk-upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  bulkAddUsers: (institutionId, usersData) => api.post(`/admin/institutions/${institutionId}/users/bulk`, usersData),
   deleteUser: (userId) => api.delete(`/admin/user/${userId}`),
   updateUser: (userId, userData) => api.put(`/admin/user/${userId}`, userData),
   
@@ -159,6 +160,38 @@ export const userManagementAPI = {
   update: (userId, data) => api.put(`/admin/users/${userId}`, data),
   delete: (userId, role) => api.delete(`/admin/users/${userId}/${role}`),
   toggleStatus: (userId, role) => api.patch(`/admin/users/${userId}/${role}/status`),
+};
+
+// ============================================
+// ACADEMIC STRUCTURE APIs
+// ============================================
+export const academicAPI = {
+  // Departments
+  getDepartments: (institutionId) => api.get(`/academic/institutions/${institutionId}/departments`),
+  createDepartment: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/departments`, data),
+  updateDepartment: (departmentId, data) => api.put(`/academic/departments/${departmentId}`, data),
+  deleteDepartment: (departmentId) => api.delete(`/academic/departments/${departmentId}`),
+
+  // Courses
+  getCourses: (institutionId, params) => api.get(`/academic/institutions/${institutionId}/courses`, { params }),
+  createCourse: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/courses`, data),
+  updateCourse: (courseId, data) => api.put(`/academic/courses/${courseId}`, data),
+  deleteCourse: (courseId) => api.delete(`/academic/courses/${courseId}`),
+
+  // Semesters
+  getSemesters: (institutionId) => api.get(`/academic/institutions/${institutionId}/semesters`),
+  createSemester: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/semesters`, data),
+  updateSemester: (semesterId, data) => api.put(`/academic/semesters/${semesterId}`, data),
+  deleteSemester: (semesterId) => api.delete(`/academic/semesters/${semesterId}`),
+
+  // Academic Calendar
+  getCalendarEvents: (institutionId, params) => api.get(`/academic/institutions/${institutionId}/calendar`, { params }),
+  createCalendarEvent: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/calendar`, data),
+  updateCalendarEvent: (eventId, data) => api.put(`/academic/calendar/${eventId}`, data),
+  deleteCalendarEvent: (eventId) => api.delete(`/academic/calendar/${eventId}`),
+
+  // Faculty
+  getFaculty: (institutionId, params) => api.get(`/academic/institutions/${institutionId}/faculty`, { params }),
 };
 
 export default api;

@@ -23,6 +23,18 @@ const teacherSchema = new mongoose.Schema(
             select: false, // hidden by default
         },
 
+        username: {
+            type: String,
+            required: [true, "Username is required"],
+            unique: true,
+            trim: true,
+        },
+
+        phone: {
+            type: String,
+            required: [true, "Phone number is required"],
+        },
+
         role: {
             type: String,
             default: "teacher",
@@ -30,12 +42,37 @@ const teacherSchema = new mongoose.Schema(
 
         department: {
             type: String,
+            required: [true, "Department is required"],
+            trim: true,
+        },
+
+        institution: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Institution",
+            required: [true, "Institution is required"],
+        },
+
+        jobTitle: {
+            type: String,
+            required: [true, "Job title is required"],
+            trim: true,
+        },
+
+        qualifications: {
+            type: String,
+            required: [true, "Qualifications are required"],
             trim: true,
         },
 
         specialization: {
             type: String,
             trim: true,
+        },
+
+        status: {
+            type: String,
+            enum: ["active", "inactive"],
+            default: "active",
         },
     },
     { timestamps: true }
