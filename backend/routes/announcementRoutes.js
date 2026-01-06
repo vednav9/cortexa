@@ -65,7 +65,7 @@ router.post('/', authenticate, async (req, res) => {
 
     const announcement = await Announcement.create({
       institution,
-      author: req.user._id,
+      author: req.user.id,
       authorType: req.user.role === 'admin' ? 'Admin' : 'Teacher',
       title,
       content,
@@ -107,7 +107,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     // Check if user is the author
-    if (announcement.author.toString() !== req.user._id.toString()) {
+    if (announcement.author.toString() !== req.user.id.toString()) {
       return res.status(403).json({ 
         success: false,
         message: 'You can only edit your own announcements' 
@@ -148,7 +148,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     }
 
     // Check if user is the author
-    if (announcement.author.toString() !== req.user._id.toString()) {
+    if (announcement.author.toString() !== req.user.id.toString()) {
       return res.status(403).json({ 
         success: false,
         message: 'You can only delete your own announcements' 
@@ -178,7 +178,7 @@ router.post('/:id/view', authenticate, async (req, res) => {
     await Announcement.findByIdAndUpdate(id, {
       $addToSet: {
         viewedBy: {
-          user: req.user._id,
+          user: req.user.id,
           userType: req.user.role.charAt(0).toUpperCase() + req.user.role.slice(1),
           viewedAt: new Date()
         }

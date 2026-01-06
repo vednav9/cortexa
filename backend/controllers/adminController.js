@@ -503,10 +503,33 @@ export const bulkAddUsers = async (req, res) => {
     const { institutionId } = req.params;
     const { users } = req.body;
 
+    console.log('Bulk upload request:', {
+      institutionId,
+      userId: req.user.id,
+      userRole: req.user.role,
+      usersCount: users?.length
+    });
+
     // Verify admin permissions
     const admin = await Admin.findById(req.user.id);
-    if (!admin || admin.institution.toString() !== institutionId) {
-      return res.status(403).json({ message: "Access denied" });
+    if (!admin) {
+      console.error('Admin not found:', req.user.id);
+      return res.status(403).json({ message: "Admin not found" });
+    }
+
+    console.log('Admin institution:', admin.institution.toString());
+    console.log('Requested institution:', institutionId);
+
+    if (admin.institution.toString() !== institutionId) {
+      console.error('Institution mismatch:', {
+        adminInstitution: admin.institution.toString(),
+        requestedInstitution: institutionId
+      });
+      return res.status(403).json({ 
+        message: "Access denied - Institution mismatch",
+        adminInstitution: admin.institution.toString(),
+        requestedInstitution: institutionId
+      });
     }
 
     // Validate institution exists
