@@ -9,7 +9,8 @@ import {
   addUser,
   updateUser,
   deleteUser,
-  toggleUserStatus
+  toggleUserStatus,
+  bulkAddUsers
 } from "../controllers/adminController.js";
 import { authenticate } from "../middleware/auth.js";
 import upload from "../middleware/upload.js";
@@ -38,6 +39,9 @@ router.get("/institutions/:institutionId/users", authenticate, getUsers);
 
 // Add new user to institution
 router.post("/institutions/:institutionId/users", authenticate, addUser);
+
+// Bulk add multiple users to institution
+router.post("/institutions/:institutionId/users/bulk", authenticate, bulkAddUsers);
 
 // Update user
 router.put("/users/:userId", authenticate, updateUser);

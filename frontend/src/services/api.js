@@ -86,6 +86,7 @@ export const adminAPI = {
   bulkUpload: (formData) => api.post('/admin/bulk-upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  bulkAddUsers: (institutionId, usersData) => api.post(`/admin/institutions/${institutionId}/users/bulk`, usersData),
   deleteUser: (userId) => api.delete(`/admin/user/${userId}`),
   updateUser: (userId, userData) => api.put(`/admin/user/${userId}`, userData),
   
