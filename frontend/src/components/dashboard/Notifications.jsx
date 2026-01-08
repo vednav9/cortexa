@@ -11,9 +11,18 @@ import toast from "react-hot-toast";
 import { invitationAPI } from "../../services/api";
 import { LoadingPage } from "../common/LoadingSpinner";
 
-const Notifications = () => {
+const Notifications = ({ realtimeInvites = [], clearUnread }) => {
     const [invitations, setInvitations] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [initialized, setInitialized] = useState(false);
+
+
+    /* ============================
+    CLEAR UNREAD COUNT (ON OPEN)
+ ============================ */
+    useEffect(() => {
+        clearUnread?.();
+    }, []);
 
     /* ============================
        FETCH INVITATIONS
@@ -22,16 +31,26 @@ const Notifications = () => {
         const fetchInvitations = async () => {
             try {
                 const { data } = await invitationAPI.getAll("pending");
-                setInvitations(data?.invitations || []);
+
+                const apiInvites = data?.invitations || [];
+                const merged = [...realtimeInvites, ...apiInvites];
+
+                const unique = Array.from(
+                    new Map(merged.map((i) => [i._id, i])).values()
+                );
+
+                setInvitations(unique);
             } catch (err) {
                 toast.error("Failed to load invitations");
             } finally {
-                setLoading(false);
+                setInitialized(true); // ✅ IMPORTANT
             }
         };
 
         fetchInvitations();
-    }, []);
+    }, [realtimeInvites]);
+
+
 
     /* ============================
        ACTION HANDLERS
@@ -39,12 +58,18 @@ const Notifications = () => {
     const handleAccept = async (id) => {
         try {
             await invitationAPI.accept(id);
-            setInvitations((prev) => prev.filter((i) => i._id !== id));
+
             toast.success("Invitation accepted");
+
+            // 🔔 notify dashboard to refresh institution
+            window.dispatchEvent(new Event("institution-updated"));
+
+            setInvitations((prev) => prev.filter((i) => i._id !== id));
         } catch {
             toast.error("Failed to accept invitation");
         }
     };
+
 
     const handleReject = async (id) => {
         try {
@@ -56,9 +81,9 @@ const Notifications = () => {
         }
     };
 
-    if (loading) {
-        return <LoadingPage message="Loading notifications..." />;
-    }
+    // if (loading) {
+    //     return <LoadingPage message="Loading notifications..." />;
+    // }
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
@@ -86,67 +111,73 @@ const Notifications = () => {
             {/* ============================
          INVITATIONS
       ============================ */}
-            {invitations.length > 0 ? (
+            {/* INVITATIONS LIST */}
+            {initialized && invitations.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {invitations.map((inv, index) => (
                         <motion.div
                             key={inv._id}
-                            initial={{ opacity: 0, y: 20 }}
+                            initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            className="bg-white border-2 border-emerald-100 rounded-2xl p-6 hover:shadow-lg hover:border-emerald-300 transition-all"
+                            className="bg-white border border-gray-200 rounded-2xl p-5
+             hover:shadow-md transition-all pointer-events-auto"
                         >
                             {/* HEADER */}
-                            <div className="flex items-start gap-4 mb-4">
-                                <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold">
                                     {inv.institution?.name?.slice(0, 2).toUpperCase()}
                                 </div>
 
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="text-lg font-bold text-gray-900 truncate">
+                                <div className="flex-1">
+                                    <h4 className="text-base font-semibold text-gray-900 leading-tight">
                                         {inv.institution?.name}
                                     </h4>
-                                    <p className="text-sm text-gray-600 flex items-center gap-1 truncate">
-                                        <FiMail className="w-4 h-4" />
-                                        {inv.sender?.email}
-                                    </p>
-                                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                                        <FiClock className="w-4 h-4" />
-                                        {new Date(inv.createdAt).toLocaleDateString()}
+                                    <p className="text-xs text-gray-500">
+                                        Invited by {inv.sender?.email}
                                     </p>
                                 </div>
+
+                                <span className="text-xs text-gray-400">
+                                    {new Date(inv.createdAt).toLocaleDateString()}
+                                </span>
                             </div>
 
                             {/* MESSAGE */}
                             {inv.message && (
-                                <p className="text-sm text-gray-600 mb-4 italic">
+                                <p className="text-sm text-gray-600 italic mb-4">
                                     “{inv.message}”
                                 </p>
                             )}
 
                             {/* ACTIONS */}
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                                 <button
                                     onClick={() => handleAccept(inv._id)}
-                                    className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+                                    className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600
+                 text-white rounded-lg text-sm font-semibold
+                 relative z-10 pointer-events-auto"
                                 >
-                                    <FiCheck /> Accept
+                                    Accept
                                 </button>
 
                                 <button
                                     onClick={() => handleReject(inv._id)}
-                                    className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-red-50 hover:text-red-600 flex items-center justify-center gap-2 transition-all"
+                                    className="flex-1 py-2.5 border border-gray-300
+                 text-gray-700 rounded-lg text-sm font-semibold
+                 hover:bg-gray-50
+                 relative z-10 pointer-events-auto"
                                 >
-                                    <FiX /> Decline
+                                    Decline
                                 </button>
                             </div>
                         </motion.div>
+
                     ))}
                 </div>
-            ) : (
-                /* ============================
-                   EMPTY STATE
-                ============================ */
+            )}
+            {/* EMPTY STATE */}
+            {initialized && invitations.length === 0 && (
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}

@@ -107,6 +107,145 @@ class AIService {
       return { status: 'unavailable', error: error.message };
     }
   }
+
+  // ========================================
+  // VOICE-TO-TEXT METHODS
+  // ========================================
+
+  /**
+   * Transcribe audio and upload to RAG system
+   * Complete workflow: Upload → Transcribe → Format → Add to RAG
+   */
+  async transcribeAndUpload(fileBuffer, fileName, metadata = {}) {
+    try {
+      const formData = new FormData();
+      formData.append('audio_file', fileBuffer, {
+        filename: fileName,
+        contentType: 'audio/wav' // or detect from file
+      });
+      
+      // Add metadata
+      if (metadata.lecture_title) formData.append('lecture_title', metadata.lecture_title);
+      if (metadata.teacher_id) formData.append('teacher_id', metadata.teacher_id);
+      if (metadata.institution_id) formData.append('institution_id', metadata.institution_id);
+      if (metadata.course_id) formData.append('course_id', metadata.course_id);
+
+      const response = await axios.post(`${AI_API_URL}/speech/transcribe-and-upload`, formData, {
+        headers: {
+          ...formData.getHeaders()
+        },
+        timeout: LONG_TIMEOUT, // 5 minutes for audio processing
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Transcription error:', error.response?.data || error.message);
+      throw new Error(`Transcription failed: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  /**
+   * Upload audio only (without transcription)
+   */
+  async uploadAudio(fileBuffer, fileName, metadata = {}) {
+    try {
+      const formData = new FormData();
+      formData.append('file', fileBuffer, {
+        filename: fileName,
+        contentType: 'audio/wav'
+      });
+      
+      if (metadata.teacher_id) formData.append('teacher_id', metadata.teacher_id);
+      if (metadata.lecture_title) formData.append('lecture_title', metadata.lecture_title);
+
+      const response = await axios.post(`${AI_API_URL}/speech/upload-audio`, formData, {
+        headers: {
+          ...formData.getHeaders()
+        },
+        timeout: 60000, // 1 minute for upload
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Audio upload failed: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  /**
+   * Transcribe existing audio file
+   */
+  async transcribe(audioFilename, options = {}) {
+    try {
+      const response = await axios.post(`${AI_API_URL}/speech/transcribe`, {
+        audio_filename: audioFilename,
+        include_timestamps: options.include_timestamps !== false,
+        format_text: options.format_text !== false,
+        export_format: options.export_format || 'both'
+      }, {
+        timeout: LONG_TIMEOUT
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Transcription failed: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
+  /**
+   * List all transcripts
+   */
+  async listTranscripts() {
+    try {
+      const response = await axios.get(`${AI_API_URL}/speech/transcripts`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch transcripts');
+    }
+  }
+
+  /**
+   * List all audio files
+   */
+  async listAudioFiles() {
+    try {
+      const response = await axios.get(`${AI_API_URL}/speech/audio-files`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch audio files');
+    }
+  }
+
+  /**
+   * Get download URL for transcript
+   */
+  getTranscriptDownloadUrl(filename) {
+    return `${AI_API_URL}/speech/download/${filename}`;
+  }
+
+  /**
+   * Delete audio file
+   */
+  async deleteAudio(filename) {
+    try {
+      const response = await axios.delete(`${AI_API_URL}/speech/audio/${filename}`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to delete audio');
+    }
+  }
+
+  /**
+   * Delete transcript
+   */
+  async deleteTranscript(filename) {
+    try {
+      const response = await axios.delete(`${AI_API_URL}/speech/transcript/${filename}`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to delete transcript');
+    }
+  }
 }
 
 const aiService = new AIService();

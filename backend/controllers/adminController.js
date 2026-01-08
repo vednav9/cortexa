@@ -30,6 +30,16 @@ const generateUniqueCode = async (name) => {
   return code;
 };
 
+const getInstitutionStats = async (institutionId) => {
+  const [students, teachers] = await Promise.all([
+    Student.countDocuments({ institution: institutionId }),
+    Teacher.countDocuments({ institution: institutionId }),
+  ]);
+
+  return { students, teachers };
+};
+
+
 /* =========================
    REGISTER ADMIN + INSTITUTION
 ========================= */
@@ -220,26 +230,40 @@ export const loginAdmin = async (req, res) => {
 /* =========================
    Get ADMIN Institution
 ========================= */
-
 export const getMyInstitution = async (req, res) => {
   try {
-    const admin = await Admin.findById(req.user.id)
-      .populate("institution");
+    const admin = await Admin.findById(req.user.id).populate("institution");
 
     if (!admin || !admin.institution) {
       return res.json({ institution: null });
     }
 
+    const institutionId = admin.institution._id;
+
+    // 🔥 DYNAMIC COUNTS
+    const [studentsCount, teachersCount] = await Promise.all([
+      Student.countDocuments({ institution: institutionId }),
+      Teacher.countDocuments({ institution: institutionId }),
+    ]);
+
     res.json({
-      institution: admin.institution,
+      institution: {
+        ...admin.institution.toObject(),
+        stats: {
+          students: studentsCount,
+          teachers: teachersCount,
+          courses: 0, // placeholder for future
+        },
+      },
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      message: "Failed to fetch admin institution",
-    });
+  } catch (error) {
+    console.error("getMyInstitution error:", error);
+    res.status(500).json({ message: "Failed to fetch institution" });
   }
 };
+
+
+
 
 
 /* =========================
@@ -260,58 +284,56 @@ export const getUsers = async (req, res) => {
     const { institutionId } = req.params;
     const { role, status, department, search } = req.query;
 
-    // Verify admin belongs to this institution
+    // 🔐 verify admin
     const admin = await Admin.findById(req.user.id);
-    if (admin.institution.toString() !== institutionId) {
+    if (!admin || admin.institution.toString() !== institutionId) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    let query = { institution: institutionId };
+    const baseQuery = { institution: institutionId };
 
-    // Apply filters
-    if (status) query.status = status;
-    if (department) query.department = department;
+    if (status) baseQuery.status = status;
+    if (department) baseQuery.department = department;
 
-    // Build search query
     if (search) {
-      query.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+      baseQuery.$or = [
+        { fullName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } }
       ];
     }
 
     let users = [];
 
-    // Fetch based on role filter
-    if (!role || role === 'all') {
-      const [students, teachers, admins] = await Promise.all([
-        Student.find(query).select('-password').lean(),
-        Teacher.find(query).select('-password').lean(),
-        Admin.find({ institution: institutionId }).select('-password').lean()
+    if (!role || role === "all") {
+      const [students, teachers] = await Promise.all([
+        Student.find(baseQuery).lean(),
+        Teacher.find(baseQuery).lean()
       ]);
-      
+
       users = [
-        ...students.map(s => ({ ...s, role: 'student' })),
-        ...teachers.map(t => ({ ...t, role: 'teacher' })),
-        ...admins.map(a => ({ ...a, role: 'admin' }))
+        ...students.map(u => ({ ...u, role: "student" })),
+        ...teachers.map(u => ({ ...u, role: "teacher" }))
       ];
-    } else if (role === 'student') {
-      const students = await Student.find(query).select('-password').lean();
-      users = students.map(s => ({ ...s, role: 'student' }));
-    } else if (role === 'teacher') {
-      const teachers = await Teacher.find(query).select('-password').lean();
-      users = teachers.map(t => ({ ...t, role: 'teacher' }));
-    } else if (role === 'admin') {
-      const admins = await Admin.find({ institution: institutionId }).select('-password').lean();
-      users = admins.map(a => ({ ...a, role: 'admin' }));
+    }
+
+    if (role === "student") {
+      users = (await Student.find(baseQuery).lean())
+        .map(u => ({ ...u, role: "student" }));
+    }
+
+    if (role === "teacher") {
+      users = (await Teacher.find(baseQuery).lean())
+        .map(u => ({ ...u, role: "teacher" }));
     }
 
     res.json({ success: true, users });
+
   } catch (err) {
-    console.error(err);
+    console.error("getUsers error:", err);
     res.status(500).json({ message: "Failed to fetch users" });
   }
 };
+
 
 // Add new user
 export const addUser = async (req, res) => {
@@ -397,7 +419,7 @@ export const updateUser = async (req, res) => {
 
     // Verify admin permissions
     const admin = await Admin.findById(req.user.id);
-    
+
     let updatedUser;
     const updateData = { fullName, email, phone, department, status };
 
@@ -434,7 +456,7 @@ export const deleteUser = async (req, res) => {
 
     // Verify admin permissions
     const admin = await Admin.findById(req.user.id);
-    
+
     let deletedUser;
 
     if (role === 'student') {
@@ -497,171 +519,211 @@ export const toggleUserStatus = async (req, res) => {
   }
 };
 
-// Bulk add multiple users
-export const bulkAddUsers = async (req, res) => {
+// // Bulk add multiple users
+// export const bulkAddUsers = async (req, res) => {
+//   try {
+//     const { institutionId } = req.params;
+//     const { users } = req.body;
+
+//     console.log('Bulk upload request:', {
+//       institutionId,
+//       userId: req.user.id,
+//       userRole: req.user.role,
+//       usersCount: users?.length
+//     });
+
+//     // Verify admin permissions
+//     const admin = await Admin.findById(req.user.id);
+//     if (!admin) {
+//       console.error('Admin not found:', req.user.id);
+//       return res.status(403).json({ message: "Admin not found" });
+//     }
+
+//     console.log('Admin institution:', admin.institution.toString());
+//     console.log('Requested institution:', institutionId);
+
+//     if (admin.institution.toString() !== institutionId) {
+//       console.error('Institution mismatch:', {
+//         adminInstitution: admin.institution.toString(),
+//         requestedInstitution: institutionId
+//       });
+//       return res.status(403).json({ 
+//         message: "Access denied - Institution mismatch",
+//         adminInstitution: admin.institution.toString(),
+//         requestedInstitution: institutionId
+//       });
+//     }
+
+//     // Validate institution exists
+//     const institution = await Institution.findById(institutionId);
+//     if (!institution) {
+//       return res.status(404).json({ message: "Institution not found" });
+//     }
+
+//     // Validate users array
+//     if (!Array.isArray(users) || users.length === 0) {
+//       return res.status(400).json({ message: "Users array is required and must not be empty" });
+//     }
+
+//     const results = {
+//       successCount: 0,
+//       errors: []
+//     };
+
+//     // Process each user
+//     for (let i = 0; i < users.length; i++) {
+//       const userData = users[i];
+
+//       try {
+//         // Validate required fields
+//         if (!userData.fullName || !userData.email || !userData.mobile || !userData.department || !userData.username || !userData.role) {
+//           results.errors.push({
+//             index: i,
+//             email: userData.email || 'unknown',
+//             error: 'Missing required fields'
+//           });
+//           continue;
+//         }
+
+//         // Check for duplicate email in database
+//         const existingStudent = await Student.findOne({ email: userData.email });
+//         const existingTeacher = await Teacher.findOne({ email: userData.email });
+//         const existingAdmin = await Admin.findOne({ email: userData.email });
+
+//         if (existingStudent || existingTeacher || existingAdmin) {
+//           results.errors.push({
+//             index: i,
+//             email: userData.email,
+//             error: 'Email already exists'
+//           });
+//           continue;
+//         }
+
+//         // Generate default password
+//         const defaultPassword = 'Welcome@123';
+//         const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+//         // Create user based on role
+//         if (userData.role === 'student') {
+//           // Validate student-specific fields
+//           if (!userData.year || !userData.division) {
+//             results.errors.push({
+//               index: i,
+//               email: userData.email,
+//               error: 'Year and division are required for students'
+//             });
+//             continue;
+//           }
+
+//           await Student.create({
+//             fullName: userData.fullName,
+//             email: userData.email,
+//             password: hashedPassword,
+//             username: userData.username,
+//             phone: userData.mobile,
+//             department: userData.department,
+//             institution: institutionId,
+//             year: userData.year,
+//             division: userData.division,
+//             status: 'active'
+//           });
+
+//           results.successCount++;
+
+//         } else if (userData.role === 'teacher') {
+//           // Validate teacher-specific fields
+//           if (!userData.jobTitle || !userData.qualifications) {
+//             results.errors.push({
+//               index: i,
+//               email: userData.email,
+//               error: 'Job title and qualifications are required for teachers'
+//             });
+//             continue;
+//           }
+
+//           await Teacher.create({
+//             fullName: userData.fullName,
+//             email: userData.email,
+//             password: hashedPassword,
+//             username: userData.username,
+//             phone: userData.mobile,
+//             department: userData.department,
+//             institution: institutionId,
+//             jobTitle: userData.jobTitle,
+//             qualifications: userData.qualifications,
+//             specialization: userData.specialization || '',
+//             status: 'active'
+//           });
+
+//           results.successCount++;
+
+//         } else {
+//           results.errors.push({
+//             index: i,
+//             email: userData.email,
+//             error: 'Invalid role. Must be student or teacher'
+//           });
+//         }
+
+//       } catch (error) {
+//         results.errors.push({
+//           index: i,
+//           email: userData.email || 'unknown',
+//           error: error.message
+//         });
+//       }
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: `Bulk upload completed. ${results.successCount} users added successfully.`,
+//       successCount: results.successCount,
+//       errors: results.errors,
+//       totalProcessed: users.length
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Failed to bulk add users" });
+//   }
+// };
+
+
+export const removeUserFromInstitution = async (req, res) => {
   try {
-    const { institutionId } = req.params;
-    const { users } = req.body;
+    const { userId, role } = req.params;
 
-    console.log('Bulk upload request:', {
-      institutionId,
-      userId: req.user.id,
-      userRole: req.user.role,
-      usersCount: users?.length
+    if (!["student", "teacher"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    let user;
+
+    if (role === "student") {
+      user = await Student.findById(userId);
+    } else {
+      user = await Teacher.findById(userId);
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🚫 Already removed
+    if (!user.institution) {
+      return res.status(400).json({ message: "User not part of any institution" });
+    }
+
+    // ✅ Remove institution
+    user.institution = null;
+    user.status = "inactive";
+    await user.save();
+
+    res.json({
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} removed from institution`,
     });
-
-    // Verify admin permissions
-    const admin = await Admin.findById(req.user.id);
-    if (!admin) {
-      console.error('Admin not found:', req.user.id);
-      return res.status(403).json({ message: "Admin not found" });
-    }
-
-    console.log('Admin institution:', admin.institution.toString());
-    console.log('Requested institution:', institutionId);
-
-    if (admin.institution.toString() !== institutionId) {
-      console.error('Institution mismatch:', {
-        adminInstitution: admin.institution.toString(),
-        requestedInstitution: institutionId
-      });
-      return res.status(403).json({ 
-        message: "Access denied - Institution mismatch",
-        adminInstitution: admin.institution.toString(),
-        requestedInstitution: institutionId
-      });
-    }
-
-    // Validate institution exists
-    const institution = await Institution.findById(institutionId);
-    if (!institution) {
-      return res.status(404).json({ message: "Institution not found" });
-    }
-
-    // Validate users array
-    if (!Array.isArray(users) || users.length === 0) {
-      return res.status(400).json({ message: "Users array is required and must not be empty" });
-    }
-
-    const results = {
-      successCount: 0,
-      errors: []
-    };
-
-    // Process each user
-    for (let i = 0; i < users.length; i++) {
-      const userData = users[i];
-      
-      try {
-        // Validate required fields
-        if (!userData.fullName || !userData.email || !userData.mobile || !userData.department || !userData.username || !userData.role) {
-          results.errors.push({
-            index: i,
-            email: userData.email || 'unknown',
-            error: 'Missing required fields'
-          });
-          continue;
-        }
-
-        // Check for duplicate email in database
-        const existingStudent = await Student.findOne({ email: userData.email });
-        const existingTeacher = await Teacher.findOne({ email: userData.email });
-        const existingAdmin = await Admin.findOne({ email: userData.email });
-
-        if (existingStudent || existingTeacher || existingAdmin) {
-          results.errors.push({
-            index: i,
-            email: userData.email,
-            error: 'Email already exists'
-          });
-          continue;
-        }
-
-        // Generate default password
-        const defaultPassword = 'Welcome@123';
-        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-
-        // Create user based on role
-        if (userData.role === 'student') {
-          // Validate student-specific fields
-          if (!userData.year || !userData.division) {
-            results.errors.push({
-              index: i,
-              email: userData.email,
-              error: 'Year and division are required for students'
-            });
-            continue;
-          }
-
-          await Student.create({
-            fullName: userData.fullName,
-            email: userData.email,
-            password: hashedPassword,
-            username: userData.username,
-            phone: userData.mobile,
-            department: userData.department,
-            institution: institutionId,
-            year: userData.year,
-            division: userData.division,
-            status: 'active'
-          });
-
-          results.successCount++;
-
-        } else if (userData.role === 'teacher') {
-          // Validate teacher-specific fields
-          if (!userData.jobTitle || !userData.qualifications) {
-            results.errors.push({
-              index: i,
-              email: userData.email,
-              error: 'Job title and qualifications are required for teachers'
-            });
-            continue;
-          }
-
-          await Teacher.create({
-            fullName: userData.fullName,
-            email: userData.email,
-            password: hashedPassword,
-            username: userData.username,
-            phone: userData.mobile,
-            department: userData.department,
-            institution: institutionId,
-            jobTitle: userData.jobTitle,
-            qualifications: userData.qualifications,
-            specialization: userData.specialization || '',
-            status: 'active'
-          });
-
-          results.successCount++;
-
-        } else {
-          results.errors.push({
-            index: i,
-            email: userData.email,
-            error: 'Invalid role. Must be student or teacher'
-          });
-        }
-
-      } catch (error) {
-        results.errors.push({
-          index: i,
-          email: userData.email || 'unknown',
-          error: error.message
-        });
-      }
-    }
-
-    res.status(200).json({
-      success: true,
-      message: `Bulk upload completed. ${results.successCount} users added successfully.`,
-      successCount: results.successCount,
-      errors: results.errors,
-      totalProcessed: users.length
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to bulk add users" });
+  } catch (error) {
+    console.error("Remove user error:", error);
+    res.status(500).json({ message: "Failed to remove user" });
   }
 };
