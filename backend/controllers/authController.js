@@ -10,9 +10,13 @@ export const getMe = async (req, res) => {
         let user = null;
 
         if (role === "student") {
-            user = await Student.findById(id).select("fullName email role");
+            user = await Student.findById(id)
+                .populate("institution")
+                .select("fullName email role institution");
         } else if (role === "teacher") {
-            user = await Teacher.findById(id).select("fullName email role");
+            user = await Teacher.findById(id)
+                .populate("institution")
+                .select("fullName email role institution");
         } else if (role === "admin") {
             user = await Admin.findById(id)
                 .populate("institution")
@@ -42,7 +46,7 @@ export const getMe = async (req, res) => {
                 name: user.fullName,
                 email: user.email,
                 role: user.role,
-                institution: role === "admin" ? user.institution : null,
+                institution: user.institution || null, // Include for all roles
             },
         });
 
