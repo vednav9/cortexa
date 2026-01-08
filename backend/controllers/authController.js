@@ -10,16 +10,23 @@ export const getMe = async (req, res) => {
         let user = null;
 
         if (role === "student") {
-            user = await Student.findById(id).select("fullName email role");
-        } else if (role === "teacher") {
-            user = await Teacher.findById(id).select("fullName email role");
-        } else if (role === "admin") {
+            user = await Student.findById(id)
+                .populate("institution")
+                .select("fullName email role institution");
+        }
+        else if (role === "teacher") {
+            user = await Teacher.findById(id)
+                .populate("institution")
+                .select("fullName email role institution");
+        }
+        else if (role === "admin") {
             user = await Admin.findById(id)
                 .populate("institution")
                 .select("fullName email role institution");
         }
         else if (role === "cortexa_admin") {
-            user = await CortexaAdmin.findById(id).select("fullName email role");
+            user = await CortexaAdmin.findById(id)
+                .select("fullName email role");
         }
         else {
             return res.status(400).json({
@@ -42,7 +49,7 @@ export const getMe = async (req, res) => {
                 name: user.fullName,
                 email: user.email,
                 role: user.role,
-                institution: role === "admin" ? user.institution : null,
+                institution: user.institution || null, // ✅ FIX
             },
         });
 
@@ -54,3 +61,4 @@ export const getMe = async (req, res) => {
         });
     }
 };
+

@@ -266,6 +266,7 @@ export const getMyInstitution = async (req, res) => {
 
 
 
+
 /* =========================
    LOGOUT ADMIN
 ========================= */
@@ -691,39 +692,44 @@ export const toggleUserStatus = async (req, res) => {
 
 export const removeUserFromInstitution = async (req, res) => {
   try {
-    const { userId, role } = req.params;
+    const { userId, userType } = req.body;
 
-    if (!["student", "teacher"].includes(role)) {
-      return res.status(400).json({ message: "Invalid role" });
+    if (!userId || !userType) {
+      return res.status(400).json({ message: "userId and userType required" });
+    }
+
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     let user;
 
-    if (role === "student") {
+    if (userType === "Student") {
       user = await Student.findById(userId);
-    } else {
+    } else if (userType === "Teacher") {
       user = await Teacher.findById(userId);
+    } else {
+      return res.status(400).json({ message: "Invalid userType" });
     }
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 🚫 Already removed
-    if (!user.institution) {
-      return res.status(400).json({ message: "User not part of any institution" });
-    }
-
-    // ✅ Remove institution
+    // 🔥 Remove institution
     user.institution = null;
     user.status = "inactive";
     await user.save();
 
-    res.json({
-      message: `${role.charAt(0).toUpperCase() + role.slice(1)} removed from institution`,
+    // 🔔 Notify user in realtime
+    global.io.to(`user:${userId}`).emit("institution-removed", {
+      message: "You have been removed from institution",
     });
+
+    res.json({ message: "User removed from institution successfully" });
+
   } catch (error) {
-    console.error("Remove user error:", error);
-    res.status(500).json({ message: "Failed to remove user" });
+    console.error("REMOVE USER ERROR:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
