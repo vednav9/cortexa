@@ -58,12 +58,18 @@ const Notifications = ({ realtimeInvites = [], clearUnread }) => {
     const handleAccept = async (id) => {
         try {
             await invitationAPI.accept(id);
-            setInvitations((prev) => prev.filter((i) => i._id !== id));
+
             toast.success("Invitation accepted");
+
+            // 🔔 notify dashboard to refresh institution
+            window.dispatchEvent(new Event("institution-updated"));
+
+            setInvitations((prev) => prev.filter((i) => i._id !== id));
         } catch {
             toast.error("Failed to accept invitation");
         }
     };
+
 
     const handleReject = async (id) => {
         try {
@@ -111,54 +117,62 @@ const Notifications = ({ realtimeInvites = [], clearUnread }) => {
                     {invitations.map((inv, index) => (
                         <motion.div
                             key={inv._id}
-                            initial={{ opacity: 0, y: 20 }}
+                            initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.05 }}
-                            className="bg-white border-2 border-emerald-100 rounded-2xl p-6 hover:shadow-lg hover:border-emerald-300 transition-all"
+                            className="bg-white border border-gray-200 rounded-2xl p-5
+             hover:shadow-md transition-all pointer-events-auto"
                         >
                             {/* HEADER */}
-                            <div className="flex items-start gap-4 mb-4">
-                                <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold">
                                     {inv.institution?.name?.slice(0, 2).toUpperCase()}
                                 </div>
 
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="text-lg font-bold text-gray-900 truncate">
+                                <div className="flex-1">
+                                    <h4 className="text-base font-semibold text-gray-900 leading-tight">
                                         {inv.institution?.name}
                                     </h4>
-                                    <p className="text-sm text-gray-600 flex items-center gap-1 truncate">
-                                        <FiMail className="w-4 h-4" />
-                                        {inv.sender?.email}
-                                    </p>
-                                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                                        <FiClock className="w-4 h-4" />
-                                        {new Date(inv.createdAt).toLocaleDateString()}
+                                    <p className="text-xs text-gray-500">
+                                        Invited by {inv.sender?.email}
                                     </p>
                                 </div>
+
+                                <span className="text-xs text-gray-400">
+                                    {new Date(inv.createdAt).toLocaleDateString()}
+                                </span>
                             </div>
 
+                            {/* MESSAGE */}
                             {inv.message && (
-                                <p className="text-sm text-gray-600 mb-4 italic">
+                                <p className="text-sm text-gray-600 italic mb-4">
                                     “{inv.message}”
                                 </p>
                             )}
 
-                            <div className="flex gap-2">
+                            {/* ACTIONS */}
+                            <div className="flex gap-3">
                                 <button
                                     onClick={() => handleAccept(inv._id)}
-                                    className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl font-semibold"
+                                    className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600
+                 text-white rounded-lg text-sm font-semibold
+                 relative z-10 pointer-events-auto"
                                 >
-                                    <FiCheck /> Accept
+                                    Accept
                                 </button>
 
                                 <button
                                     onClick={() => handleReject(inv._id)}
-                                    className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-red-50 hover:text-red-600"
+                                    className="flex-1 py-2.5 border border-gray-300
+                 text-gray-700 rounded-lg text-sm font-semibold
+                 hover:bg-gray-50
+                 relative z-10 pointer-events-auto"
                                 >
-                                    <FiX /> Decline
+                                    Decline
                                 </button>
                             </div>
                         </motion.div>
+
                     ))}
                 </div>
             )}

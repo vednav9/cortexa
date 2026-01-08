@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
+import Institution from "../models/institution.js";
 
 /* ===============================
    REGISTER STUDENT
@@ -187,3 +188,68 @@ export const logoutStudent = (req, res) => {
         });
     }
 };
+
+/* ===============================
+   GET MY INSTITUTION (STUDENT)
+================================ */
+export const getMyInstitution = async (req, res) => {
+    try {
+        const student = await Student.findById(req.user.id)
+            .populate("institution");
+
+        if (!student || !student.institution) {
+            return res.json({ institution: null });
+        }
+
+        res.json({
+            institution: student.institution,
+        });
+    } catch (error) {
+        console.error("Get My Institution Error:", error);
+        res.status(500).json({
+            message: "Failed to fetch institution",
+        });
+    }
+};
+
+/* ===============================
+   LEAVE INSTITUTION (STUDENT)
+================================ */
+export const leaveInstitution = async (req, res) => {
+    try {
+        const student = await Student.findById(req.user.id);
+
+        if (!student || !student.institution) {
+            return res.status(400).json({
+                message: "You are not part of any institution",
+            });
+        }
+
+        const institutionId = student.institution;
+
+        // Remove student from institution stats
+        const institution = await Institution.findById(institutionId);
+        if (institution) {
+            institution.students.pull(req.user.id);
+            institution.stats.totalStudents = Math.max(
+                0,
+                institution.stats.totalStudents - 1
+            );
+            await institution.save();
+        }
+
+        // Clear student institution
+        student.institution = null;
+        await student.save();
+
+        res.json({
+            message: "Left institution successfully",
+        });
+    } catch (error) {
+        console.error("Leave Institution Error:", error);
+        res.status(500).json({
+            message: "Failed to leave institution",
+        });
+    }
+};
+

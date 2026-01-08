@@ -1,6 +1,5 @@
 import Invitation from '../models/invitation.js';
 import Institution from '../models/institution.js';
-import Membership from '../models/membership.js';
 import Student from '../models/student.js';
 import Teacher from '../models/teacher.js';
 import Admin from '../models/admin.js';
@@ -53,14 +52,9 @@ export const getInvitations = async (req, res) => {
     }
 };
 
-
-
-
-
 // ===============================
 // CREATE INVITATION (ADMIN)
 // ===============================
-
 
 export const createInvitation = async (req, res) => {
     try {
@@ -206,100 +200,111 @@ export const createInvitation = async (req, res) => {
     }
 };
 
-
-
 // ===============================
 // ACCEPT INVITATION
 // ===============================
 export const acceptInvitation = async (req, res) => {
     try {
+        console.log("Accept invitation:", req.params.id, req.user);
+
         const invitation = await Invitation.findById(req.params.id);
-
         if (!invitation) {
-            return res.status(404).json({ message: 'Invitation not found' });
+            return res.status(404).json({ message: "Invitation not found" });
         }
 
-        // 🔑 If email-based invite, recipient will be null initially
-        if (invitation.recipient && invitation.recipient.toString() !== req.user.id) {
-            return res.status(403).json({ message: 'Not authorized' });
+        if (invitation.status !== "pending") {
+            return res.status(400).json({ message: "Invitation already processed" });
         }
 
-        if (invitation.status !== 'pending') {
-            return res.status(400).json({ message: 'Invitation already processed' });
-        }
-
-        // Check existing membership
-        const existingMembership = await Membership.findOne({
-            user: req.user.id,
-            institution: invitation.institution,
-        });
-
-        if (existingMembership) {
-            invitation.status = 'accepted';
-            invitation.respondedAt = new Date();
-            invitation.recipient = req.user.id;
+        // Expiry check (SAFE)
+        if (invitation.expiresAt && invitation.expiresAt < new Date()) {
+            invitation.status = "expired";
             await invitation.save();
-            return res.status(400).json({ message: 'Already a member' });
+            return res.status(400).json({ message: "Invitation expired" });
         }
 
-        // Update profile details
-        if (invitation.recipientType === 'Student') {
-            const { class: className, division, enrollmentNumber } = req.body;
-
-            await Student.findByIdAndUpdate(req.user.id, {
-                class: className,
-                division,
-                enrollmentNumber,
-            });
+        // 🔐 Authorization
+        if (
+            invitation.recipient &&
+            invitation.recipient.toString() !== req.user.id
+        ) {
+            return res.status(403).json({ message: "Not authorized" });
         }
 
-        if (invitation.recipientType === 'Teacher') {
-            const { department, specialization } = req.body;
-
-            await Teacher.findByIdAndUpdate(req.user.id, {
-                department,
-                specialization,
-            });
-        }
-
-        // Create membership
-        const membership = await Membership.create({
-            user: req.user.id,
-            userType: invitation.recipientType,
-            institution: invitation.institution,
-            role: invitation.recipientType.toLowerCase(),
-        });
-
-        // Update institution stats
-        const institution = await Institution.findById(invitation.institution);
-        if (institution) {
-            if (invitation.recipientType === 'Student') {
-                institution.students.push(req.user.id);
-                institution.stats.totalStudents += 1;
-            } else {
-                institution.teachers.push(req.user.id);
-                institution.stats.totalTeachers += 1;
+        // 🚫 Enforce single institution
+        if (invitation.recipientType === "Student") {
+            const student = await Student.findById(req.user.id);
+            if (!student) return res.status(404).json({ message: "Student not found" });
+            if (student.institution) {
+                return res.status(400).json({ message: "Already joined an institution" });
             }
-            await institution.save();
+
+            student.institution = invitation.institution;
+            student.status = "active";
+            await student.save();
         }
+
+        if (invitation.recipientType === "Teacher") {
+            const teacher = await Teacher.findById(req.user.id);
+            if (!teacher) return res.status(404).json({ message: "Teacher not found" });
+            if (teacher.institution) {
+                return res.status(400).json({ message: "Already joined an institution" });
+            }
+
+            teacher.institution = invitation.institution;
+            teacher.status = "active";
+            await teacher.save();
+        }
+
+        // // 📊 Update institution (SAFE)
+        // const institution = await Institution.findById(invitation.institution);
+        // if (institution) {
+        //     // ✅ ensure arrays
+        //     institution.students = institution.students || [];
+        //     institution.teachers = institution.teachers || [];
+
+        //     // ✅ ensure stats object
+        //     institution.stats = institution.stats || {
+        //         totalStudents: 0,
+        //         totalTeachers: 0,
+        //     };
+
+        //     if (
+        //         invitation.recipientType === "Student" &&
+        //         !institution.students.includes(req.user.id)
+        //     ) {
+        //         institution.students.push(req.user.id);
+        //         institution.stats.totalStudents += 1;
+        //     }
+
+        //     if (
+        //         invitation.recipientType === "Teacher" &&
+        //         !institution.teachers.includes(req.user.id)
+        //     ) {
+        //         institution.teachers.push(req.user.id);
+        //         institution.stats.totalTeachers += 1;
+        //     }
+
+        //     await institution.save();
+        // }
+
 
         // Finalize invitation
-        invitation.status = 'accepted';
-        invitation.respondedAt = new Date();
+        invitation.status = "accepted";
         invitation.recipient = req.user.id;
+        invitation.respondedAt = new Date();
         await invitation.save();
 
-        res.json({
-            message: 'Invitation accepted successfully',
-            membership,
-        });
+        res.json({ message: "Invitation accepted successfully" });
+
     } catch (error) {
+        console.error("ACCEPT INVITATION ERROR:", error);
         res.status(500).json({
-            message: 'Error accepting invitation',
-            error: error.message,
+            message: "Internal server error while accepting invitation",
         });
     }
 };
+
 
 // ===============================
 // REJECT INVITATION

@@ -51,9 +51,8 @@ export const authAPI = {
 // ============================================
 export const studentAPI = {
   getProfile: () => api.get('/student/me'),
-  getInstitutions: () => api.get('/student/institutions'),
-  leaveInstitution: (institutionId) => api.delete(`/student/institutions/${institutionId}`),
-  joinInstitution: (institutionId) => api.post('/student/join-institution', { institutionId }),
+  getMyInstitution: () => api.get('/student/my-institution'),
+  leaveInstitution: () => api.delete('/student/leave-institution'),
   getInvitations: () => api.get('/student/invitations'),
   respondToInvitation: (invitationId, response) =>
     api.post(`/student/invitation/${invitationId}/respond`, { response }),

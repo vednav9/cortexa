@@ -39,41 +39,54 @@ const CortexaDashboard = () => {
     const profileMenuRef = useRef(null);
 
     // Fetch institutions based on user role
-    useEffect(() => {
-        const fetchInstitutions = async () => {
-            if (!user || !user.role) return;
+    // 🔁 Re-fetch institutions (used by dashboard + events)
+    const fetchInstitutions = async () => {
+        if (!user || !user.role) return;
 
-            try {
-                setInstitutionsLoading(true);
-                const role = user.role.toLowerCase();
+        try {
+            setInstitutionsLoading(true);
+            const role = user.role.toLowerCase();
 
-                if (role === 'student') {
-                    const { data } = await studentAPI.getInstitutions();
-                    console.log("Student institutions fetched:", data.institutions);
-                    setMyInstitutions(data.institutions || []);
-                } else if (role === 'teacher') {
-                    const { data } = await teacherAPI.getInstitutions();
-                    console.log("Teacher institutions fetched:", data.institutions);
-                    setMyInstitutions(data.institutions || []);
-                } else if (role === 'admin') {
-                    // Fetch admin's institution
-                    const { data } = await adminAPI.getInstitution();
-                    console.log("Admin institution fetched:", data.institution);
-                    setMyInstitutions(data.institution ? [data.institution] : []);
-                } else {
-                    setMyInstitutions([]);
-                }
-            } catch (err) {
-                console.error('Failed to fetch institutions:', err);
-                toast.error('Failed to load institutions');
-                setMyInstitutions([]);
-            } finally {
-                setInstitutionsLoading(false);
+            if (role === "student") {
+                const { data } = await studentAPI.getMyInstitution();
+                setMyInstitutions(data.institution ? [data.institution] : []);
             }
-        };
+            else if (role === "teacher") {
+                const { data } = await teacherAPI.getInstitutions();
+                setMyInstitutions(data.institutions || []);
+            }
+            else if (role === "admin") {
+                const { data } = await adminAPI.getInstitution();
+                setMyInstitutions(data.institution ? [data.institution] : []);
+            }
+            else {
+                setMyInstitutions([]);
+            }
+        } catch (err) {
+            console.error("Failed to fetch institutions:", err);
+            setMyInstitutions([]);
+        } finally {
+            setInstitutionsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!user) return;
 
         fetchInstitutions();
+
+        // 👂 listen for accept-invite refresh
+        const handleRefresh = () => {
+            fetchInstitutions();
+        };
+
+        window.addEventListener("institution-updated", handleRefresh);
+
+        return () => {
+            window.removeEventListener("institution-updated", handleRefresh);
+        };
     }, [user]);
+
 
     // Close profile menu when clicking outside
     useEffect(() => {
