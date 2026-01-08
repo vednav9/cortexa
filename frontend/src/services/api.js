@@ -181,7 +181,12 @@ export const userManagementAPI = {
   getAll: (institutionId, params) => api.get(`/admin/institutions/${institutionId}/users`, { params }),
   add: (institutionId, data) => api.post(`/admin/institutions/${institutionId}/users`, data),
   update: (userId, data) => api.put(`/admin/users/${userId}`, data),
-  delete: (userId, role) => api.delete(`/admin/users/${userId}/${role}`),
+  removeFromInstitution: (userId, role) =>
+    api.patch(`/admin/users/${userId}/${role}/remove`),
+
+  deletePermanently: (userId, role) =>
+    api.delete(`/admin/users/${userId}/${role}`),
+
   toggleStatus: (userId, role) => api.patch(`/admin/users/${userId}/${role}/status`),
 };
 

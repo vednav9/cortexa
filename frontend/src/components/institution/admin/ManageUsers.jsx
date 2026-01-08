@@ -30,7 +30,7 @@ const ManageUsers = () => {
     const { hasAccess } = useOutletContext();
     const { user } = useAuth();
     const { institution } = useInstitution();
-    
+
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
@@ -42,7 +42,7 @@ const ManageUsers = () => {
     const [addModalOpen, setAddModalOpen] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [userToDelete, setUserToDelete] = useState(null);
-    
+
     // Form state
     const [formData, setFormData] = useState({
         role: 'student',
@@ -73,7 +73,7 @@ const ManageUsers = () => {
                 department: departmentFilter !== 'all' ? departmentFilter : undefined,
                 search: searchQuery || undefined
             };
-            
+
             const response = await userManagementAPI.getAll(institution._id, params);
             setUsers(response.data.users || []);
         } catch (error) {
@@ -88,7 +88,7 @@ const ManageUsers = () => {
     // Handle add user
     const handleAddUser = async (e) => {
         e.preventDefault();
-        
+
         if (!formData.fullName || !formData.email || !formData.password) {
             toast.error('Please fill in all required fields');
             return;
@@ -168,7 +168,11 @@ const ManageUsers = () => {
 
     const handleConfirmDelete = async () => {
         try {
-            await userManagementAPI.delete(userToDelete._id, userToDelete.role);
+            await userManagementAPI.removeFromInstitution(
+                userToDelete._id,
+                userToDelete.role
+            );
+
             toast.success(`${userToDelete.fullName} has been removed`);
             setDeleteModalOpen(false);
             setUserToDelete(null);
@@ -429,11 +433,10 @@ const ManageUsers = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                                user.role === "teacher" 
+                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${user.role === "teacher"
                                                     ? "bg-green-100 text-green-700"
                                                     : "bg-blue-100 text-blue-700"
-                                            }`}>
+                                                }`}>
                                                 {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                                             </span>
                                         </td>
@@ -446,11 +449,10 @@ const ManageUsers = () => {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <button
                                                 onClick={() => handleStatusToggle(user._id, user.role)}
-                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                                                    user.status === "active"
+                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${user.status === "active"
                                                         ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                                                         : "bg-red-100 text-red-700 hover:bg-red-200"
-                                                }`}
+                                                    }`}
                                             >
                                                 {user.status?.charAt(0).toUpperCase() + user.status?.slice(1) || "Active"}
                                             </button>

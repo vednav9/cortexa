@@ -10,6 +10,7 @@ dotenv.config();
    HTTP SERVER
 ===================== */
 const server = http.createServer(app);
+
 /* =====================
    SOCKET.IO
 ===================== */
@@ -20,16 +21,19 @@ const io = new Server(server, {
     },
 });
 
-// 🌍 Make io accessible in controllers
+// 🌍 Make io accessible everywhere (controllers)
 global.io = io;
 
 io.on("connection", (socket) => {
-    console.log("🟢 Socket connected:", socket.id);
+    console.log("🔵 SOCKET CONNECTED:", socket.id);
 
-    // 👤 Join user-specific room
+    // 👤 user joins their private room
     socket.on("join:user", (userId) => {
-        socket.join(`user:${userId}`);
-        console.log(`👤 User joined room: user:${userId}`);
+        if (!userId) return;
+
+        const room = `user:${userId}`;
+        socket.join(room);
+        console.log("👤 User joined room:", room);
     });
 
     socket.on("disconnect", () => {
@@ -37,14 +41,13 @@ io.on("connection", (socket) => {
     });
 });
 
-
-
 /* =====================
    DATABASE
 ===================== */
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+    .connect(process.env.MONGO_URI)
     .then(() => console.log("MongoDB connected"))
-    .catch(err => console.error("MongoDB error:", err));
+    .catch((err) => console.error("MongoDB error:", err));
 
 /* =====================
    START SERVER

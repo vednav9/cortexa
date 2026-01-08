@@ -12,8 +12,10 @@ export default function Sidebar({
   isOpen,
   onClose,
   activeTab,
-  setActiveTab
+  setActiveTab,
+  unreadCount = 0 // ✅ ADD THIS
 }) {
+
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
 
@@ -98,11 +100,6 @@ export default function Sidebar({
                 onClick={() => {
                   setActiveTab(item.id);
                   onClose?.();
-
-                  // 🔔 clear unread count when opened
-                  if (item.id === "notifications") {
-                    window.dispatchEvent(new Event("notifications-opened"));
-                  }
                 }}
                 className={`relative w-full flex items-center px-4 py-3 rounded-xl ${active ? "bg-emerald-50 text-emerald-600" : ""
                   }`}
@@ -110,15 +107,16 @@ export default function Sidebar({
                 <Icon className="w-5 h-5" />
                 <span className="ml-3">{item.label}</span>
 
-                {/* 🔴 BADGE
-                {item.id === "notifications" && window.__UNREAD_COUNT__ > 0 && (
+                {/* 🔔 NOTIFICATION BADGE */}
+                {item.id === "notifications" && unreadCount > 0 && (
                   <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    {window.__UNREAD_COUNT__}
+                    {unreadCount}
                   </span>
-                )} */}
+                )}
               </motion.button>
             );
           })}
+
 
         </nav>
 
