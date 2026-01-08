@@ -23,6 +23,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignupRequested>(_onSignupRequested);
     on<LogoutRequested>(_onLogoutRequested);
     on<PasswordResetRequested>(_onPasswordResetRequested);
+    on<UserUpdated>(_onUserUpdated);
   }
 
   /// Check if user is already logged in (on app start)
@@ -201,6 +202,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } catch (e) {
       appStateProvider.setLoading(false);
       emit(AuthError(message: 'Failed to send reset email'));
+    }
+  }
+
+  /// Handle user data update (e.g., when joining an institution)
+  Future<void> _onUserUpdated(
+    UserUpdated event,
+    Emitter<AuthState> emit,
+  ) async {
+    try {
+      // Get current token
+      final token = storage.getToken();
+      final accessToken = token?.accessToken ?? '';
+      
+      // Update app state provider with new user data
+      appStateProvider.setUser(event.user, accessToken);
+      
+      // Emit authenticated state with updated user
+      emit(AuthAuthenticated(user: event.user, accessToken: accessToken));
+    } catch (e) {
+      emit(AuthError(message: 'Failed to update user: $e'));
     }
   }
 }

@@ -29,6 +29,15 @@ class UserHiveModel extends Equatable {
   @HiveField(7)
   final String role; // Store as string for Hive compatibility
   
+  @HiveField(8)
+  final String? institutionId; // Institution the user belongs to
+  
+  @HiveField(9)
+  final String? institutionRole; // Role within institution (student/teacher)
+  
+  @HiveField(10)
+  final DateTime? institutionJoinedAt; // When user joined the institution
+  
   const UserHiveModel({
     required this.id,
     required this.username,
@@ -38,6 +47,9 @@ class UserHiveModel extends Equatable {
     required this.createdAt,
     this.updatedAt,
     this.role = 'student', // Default role
+    this.institutionId,
+    this.institutionRole,
+    this.institutionJoinedAt,
   });
   
   // Convert to/from JSON for easy testing
@@ -46,6 +58,11 @@ class UserHiveModel extends Equatable {
       id: json['id'] ?? '',
       username: json['username'] ?? '',
       email: json['email'] ?? '',
+      institutionId: json['institution_id'],
+      institutionRole: json['institution_role'],
+      institutionJoinedAt: json['institution_joined_at'] != null
+          ? DateTime.parse(json['institution_joined_at'])
+          : null,
       fullName: json['full_name'],
       profileImage: json['profile_image'],
       role: json['role'] ?? 'student',
@@ -61,6 +78,9 @@ class UserHiveModel extends Equatable {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'institution_id': institutionId,
+      'institution_role': institutionRole,
+      'institution_joined_at': institutionJoinedAt?.toIso8601String(),
       'username': username,
       'email': email,
       'full_name': fullName,
@@ -77,9 +97,9 @@ class UserHiveModel extends Equatable {
     String? email,
     String? fullName,
     String? profileImage,
-    String? role,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    String? institutionId,
+    String? institutionRole,
+    DateTime? institutionJoinedAt,
   }) {
     return UserHiveModel(
       id: id ?? this.id,
@@ -87,9 +107,12 @@ class UserHiveModel extends Equatable {
       email: email ?? this.email,
       fullName: fullName ?? this.fullName,
       profileImage: profileImage ?? this.profileImage,
-      role: role ?? this.role,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      institutionId: institutionId ?? this.institutionId,
+      institutionRole: institutionRole ?? this.institutionRole,
+      institutionJoinedAt: institutionJoinedAt ?? this.institutionJoinedAt,
+      role: role,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
   
@@ -103,5 +126,8 @@ class UserHiveModel extends Equatable {
     role,
     createdAt,
     updatedAt,
+    institutionId,
+    institutionRole,
+    institutionJoinedAt,
   ];
 }

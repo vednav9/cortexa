@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'core/constants/app_theme.dart';
 import 'core/di/service_locator.dart';
 import 'core/providers/app_state_provider.dart';
+import 'core/bloc/terminology/terminology_bloc.dart';
+import 'core/bloc/terminology/terminology_event.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/data/repositories/mock_auth_repository.dart';
 import 'core/services/hive_storage_service.dart';
@@ -87,6 +89,12 @@ class CortexaApp extends StatelessWidget {
             storage: globalHiveStorage,
             appStateProvider: globalAppState,
           ),
+        ),
+        
+        // ✅ Create TerminologyBloc with HiveStorageService
+        BlocProvider<TerminologyBloc>(
+          create: (_) => TerminologyBloc(storage: globalHiveStorage)
+            ..add(LoadInstitutionType()),
         ),
       ],
       child: MaterialApp.router(

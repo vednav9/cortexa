@@ -109,6 +109,7 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
@@ -326,7 +327,7 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                         ),
                       ),
                       child: DropdownButtonFormField<JobTitle>(
-                        value: _selectedJobTitle,
+                        initialValue: _selectedJobTitle,
                         decoration: const InputDecoration(
                           contentPadding: EdgeInsets.symmetric(
                             horizontal: 16,
@@ -349,8 +350,9 @@ class _InstituteSignupStep1PageState extends State<InstituteSignupStep1Page> {
                           );
                         }).toList(),
                         onChanged: (JobTitle? newTitle) {
-                          if (newTitle != null)
+                          if (newTitle != null) {
                             setState(() => _selectedJobTitle = newTitle);
+                          }
                         },
                       ),
                     ),

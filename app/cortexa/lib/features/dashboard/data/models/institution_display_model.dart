@@ -7,6 +7,7 @@ class InstitutionDisplayModel extends Equatable {
   final String name;
   final String type; // Institute, College, School, Training Center
   final String? logoUrl;
+  final String? bannerImageUrl;
   final String city;
   final String country;
   final String description;
@@ -22,6 +23,7 @@ class InstitutionDisplayModel extends Equatable {
     required this.name,
     required this.type,
     this.logoUrl,
+    this.bannerImageUrl,
     required this.city,
     required this.country,
     required this.description,
@@ -39,6 +41,7 @@ class InstitutionDisplayModel extends Equatable {
       name: json['name'] ?? '',
       type: json['type'] ?? 'Institute',
       logoUrl: json['logo_url'],
+      bannerImageUrl: json['banner_image_url'],
       city: json['city'] ?? '',
       country: json['country'] ?? '',
       description: json['description'] ?? '',
@@ -59,6 +62,7 @@ class InstitutionDisplayModel extends Equatable {
       'name': name,
       'type': type,
       'logo_url': logoUrl,
+      'banner_image_url': bannerImageUrl,
       'city': city,
       'country': country,
       'description': description,
@@ -76,6 +80,7 @@ class InstitutionDisplayModel extends Equatable {
     String? name,
     String? type,
     String? logoUrl,
+    String? bannerImageUrl,
     String? city,
     String? country,
     String? description,
@@ -91,6 +96,7 @@ class InstitutionDisplayModel extends Equatable {
       name: name ?? this.name,
       type: type ?? this.type,
       logoUrl: logoUrl ?? this.logoUrl,
+      bannerImageUrl: bannerImageUrl ?? this.bannerImageUrl,
       city: city ?? this.city,
       country: country ?? this.country,
       description: description ?? this.description,
@@ -111,6 +117,7 @@ class InstitutionDisplayModel extends Equatable {
         name,
         type,
         logoUrl,
+        bannerImageUrl,
         city,
         country,
         description,
