@@ -15,12 +15,14 @@ import { HiSparkles } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useOutletContext } from 'react-router-dom';
 import { useAuth } from '../../../context/authcontext';
-import { adminAPI } from '../../../services/api';
+import { invitationAPI, adminInvitationAPI } from '../../../services/api';
+
+
 
 const InvitePeople = () => {
   const { user } = useAuth();
   const { institution, hasAccess } = useOutletContext();
-  
+
   // Get institutionId from the institution object
   const institutionId = institution?._id;
 
@@ -32,15 +34,18 @@ const InvitePeople = () => {
   const [manualForm, setManualForm] = useState({
     fullName: '',
     email: '',
-    mobile: '',
-    department: '',
-    username: '',
-    year: '',
-    division: '',
-    jobTitle: '',
-    qualifications: '',
-    specialization: ''
+    message: '',
   });
+  // ===============================
+  // INVITATION STATUS MODAL (ADMIN)
+  // ===============================
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState('all');
+  const [adminInvites, setAdminInvites] = useState([]);
+  const [loadingInvites, setLoadingInvites] = useState(false);
+  const [filterRole, setFilterRole] = useState('all'); // all | Student | Teacher
+
+
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -72,19 +77,34 @@ const InvitePeople = () => {
         const lines = text.split('\n').filter(line => line.trim());
         const headers = lines[0].split(',').map(h => h.trim());
 
+        const allowedHeaders = ['fullName', 'email', 'message'];
+
+        const isValid = headers.every(h => allowedHeaders.includes(h));
+        if (!isValid) {
+          toast.error('Invalid CSV format. Use: fullName,email,message');
+          return;
+        }
+
+
         const newUsers = [];
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',').map(v => v.trim());
           const user = {
             id: Date.now() + i,
-            role: userType
+            fullName: '',
+            email: '',
+            message: '',
           };
+
 
           headers.forEach((header, index) => {
             user[header] = values[index] || '';
           });
 
-          newUsers.push(user);
+          if (user.fullName && user.email) {
+            newUsers.push(user);
+          }
+
         }
 
         setUsers(prev => [...prev, ...newUsers]);
@@ -96,59 +116,62 @@ const InvitePeople = () => {
     };
     reader.readAsText(file);
   };
+  const fetchAdminInvitations = async (status = 'all', role = 'all') => {
 
-  const handleManualSubmit = (e) => {
+    try {
+      setLoadingInvites(true);
+      const params = {};
+      if (status !== 'all') params.status = status;
+      if (role !== 'all') params.recipientType = role;
+
+      const res = await adminInvitationAPI.getAll(params);
+
+      setAdminInvites(res.data.invitations || []);
+    } catch (err) {
+      toast.error('Failed to fetch invitations');
+    } finally {
+      setLoadingInvites(false);
+    }
+  };
+
+
+  const handleManualSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!manualForm.fullName || !manualForm.email || !manualForm.mobile || !manualForm.department || !manualForm.username) {
-      toast.error('Please fill all required fields');
+
+    if (!manualForm.fullName || !manualForm.email) {
+      toast.error('Full name and email are required');
       return;
     }
 
-    if (userType === 'student' && (!manualForm.year || !manualForm.division)) {
-      toast.error('Please fill year and division for student');
+    if (!institutionId) {
+      toast.error('Institution not found');
       return;
     }
 
-    if (userType === 'teacher' && (!manualForm.jobTitle || !manualForm.qualifications)) {
-      toast.error('Please fill job title and qualifications for teacher');
-      return;
+    try {
+      const payload = {
+        institutionId,
+        recipientType: userType === 'student' ? 'Student' : 'Teacher',
+        email: manualForm.email,
+        fullName: manualForm.fullName,
+        message: manualForm.message || 'You are invited to join the institution',
+      };
+
+      await invitationAPI.create(payload);
+
+      toast.success('Invitation sent successfully');
+
+      setManualForm({
+        fullName: '',
+        email: '',
+        message: '',
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error.response?.data?.message || 'Failed to send invitation'
+      );
     }
-
-    const newUser = {
-      id: Date.now(),
-      role: userType,
-      fullName: manualForm.fullName,
-      email: manualForm.email,
-      mobile: manualForm.mobile,
-      department: manualForm.department,
-      username: manualForm.username,
-      ...(userType === 'student' && {
-        year: manualForm.year,
-        division: manualForm.division
-      }),
-      ...(userType === 'teacher' && {
-        jobTitle: manualForm.jobTitle,
-        qualifications: manualForm.qualifications,
-        specialization: manualForm.specialization
-      })
-    };
-
-    setUsers(prev => [...prev, newUser]);
-    toast.success(`${userType} added to queue`);
-    
-    setManualForm({
-      fullName: '',
-      email: '',
-      mobile: '',
-      department: '',
-      username: '',
-      year: '',
-      division: '',
-      jobTitle: '',
-      qualifications: '',
-      specialization: ''
-    });
   };
 
   const handleDeleteUser = (id) => {
@@ -157,24 +180,19 @@ const InvitePeople = () => {
   };
 
   const downloadTemplate = () => {
-    let headers = 'fullName,email,mobile,department,username';
-    
-    if (userType === 'student') {
-      headers += ',year,division';
-    } else if (userType === 'teacher') {
-      headers += ',jobTitle,qualifications,specialization';
-    }
+    const headers = 'fullName,email,message\n';
+    const blob = new Blob([headers], { type: 'text/csv' });
 
-    const csvContent = headers + '\n';
-    const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${userType}_template.csv`;
+    a.download = 'invite_template.csv';
     a.click();
+
     window.URL.revokeObjectURL(url);
-    toast.success('Template downloaded');
+    toast.success('CSV template downloaded');
   };
+
 
   const handleBulkUpload = async () => {
     if (users.length === 0) {
@@ -193,23 +211,34 @@ const InvitePeople = () => {
 
     setUploading(true);
     try {
-      const response = await adminAPI.bulkAddUsers(institutionId, { users });
+      const payload = {
+        institutionId,
+        recipientType: userType === 'student' ? 'Student' : 'Teacher',
+        users: users.map(u => ({
+          fullName: u.fullName,
+          email: u.email,
+          message: u.message || 'You are invited to join the institution',
+        })),
+      };
+
+      const response = await invitationAPI.bulkInviteUsers(payload);
+
       toast.success(`${response.data.successCount} users added successfully`);
-      
+
       if (response.data.errors?.length > 0) {
         toast.error(`${response.data.errors.length} users failed to add`);
         console.error('Errors:', response.data.errors);
       }
-      
+
       setUsers([]);
     } catch (error) {
       console.error('Full error object:', error);
       console.error('Error response:', error.response);
       console.error('Error data:', error.response?.data);
-      
+
       const errorMessage = error.response?.data?.message || error.message || 'Failed to add users';
       toast.error(errorMessage);
-      
+
       // Log specific error details
       if (error.response?.data?.errors) {
         console.error('Specific errors:', error.response.data.errors);
@@ -237,7 +266,8 @@ const InvitePeople = () => {
     );
   }
 
-  const displayedUsers = users.filter(u => u.role === userType);
+  const displayedUsers = users;
+
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-6">
@@ -259,34 +289,36 @@ const InvitePeople = () => {
                     Add students and teachers to {institution?.name}
                   </p>
                 </div>
+
               </div>
             </div>
 
             {/* User Type Toggle */}
-            <div className="flex gap-2 p-1.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
-              <button
-                onClick={() => setUserType('student')}
-                className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${
-                  userType === 'student'
+            {uploadMethod === 'manual' && (
+              <div className="flex gap-2 p-1.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
+
+                <button
+                  onClick={() => setUserType('student')}
+                  className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${userType === 'student'
                     ? 'bg-white text-emerald-600 shadow-lg'
                     : 'text-white hover:bg-white/10'
-                }`}
-              >
-                <FiUsers className="w-4 h-4" />
-                Students
-              </button>
-              <button
-                onClick={() => setUserType('teacher')}
-                className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${
-                  userType === 'teacher'
+                    }`}
+                >
+                  <FiUsers className="w-4 h-4" />
+                  Students
+                </button>
+                <button
+                  onClick={() => setUserType('teacher')}
+                  className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${userType === 'teacher'
                     ? 'bg-white text-emerald-600 shadow-lg'
                     : 'text-white hover:bg-white/10'
-                }`}
-              >
-                <FiUsers className="w-4 h-4" />
-                Teachers
-              </button>
-            </div>
+                    }`}
+                >
+                  <FiUsers className="w-4 h-4" />
+                  Teachers
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -297,16 +329,14 @@ const InvitePeople = () => {
           whileHover={{ scale: 1.02, y: -2 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setUploadMethod('csv')}
-          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${
-            uploadMethod === 'csv'
-              ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
-              : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
-          }`}
+          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${uploadMethod === 'csv'
+            ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
+            : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
+            }`}
         >
           <div className="relative z-10 flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              uploadMethod === 'csv' ? 'bg-emerald-500' : 'bg-gray-100'
-            }`}>
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${uploadMethod === 'csv' ? 'bg-emerald-500' : 'bg-gray-100'
+              }`}>
               <FiFile className={`w-7 h-7 ${uploadMethod === 'csv' ? 'text-white' : 'text-gray-600'}`} />
             </div>
             <div className="flex-1 text-left">
@@ -330,16 +360,14 @@ const InvitePeople = () => {
           whileHover={{ scale: 1.02, y: -2 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setUploadMethod('manual')}
-          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${
-            uploadMethod === 'manual'
-              ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
-              : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
-          }`}
+          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${uploadMethod === 'manual'
+            ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
+            : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
+            }`}
         >
           <div className="relative z-10 flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              uploadMethod === 'manual' ? 'bg-emerald-500' : 'bg-gray-100'
-            }`}>
+            <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${uploadMethod === 'manual' ? 'bg-emerald-500' : 'bg-gray-100'
+              }`}>
               <FiEdit2 className={`w-7 h-7 ${uploadMethod === 'manual' ? 'text-white' : 'text-gray-600'}`} />
             </div>
             <div className="flex-1 text-left">
@@ -402,11 +430,10 @@ const InvitePeople = () => {
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                className={`relative border-2 border-dashed rounded-2xl p-16 text-center transition-all ${
-                  dragActive
-                    ? 'border-emerald-500 bg-emerald-50 scale-[1.01]'
-                    : 'border-gray-300 bg-gradient-to-br from-gray-50 to-white hover:border-emerald-400'
-                }`}
+                className={`relative border-2 border-dashed rounded-2xl p-16 text-center transition-all ${dragActive
+                  ? 'border-emerald-500 bg-emerald-50 scale-[1.01]'
+                  : 'border-gray-300 bg-gradient-to-br from-gray-50 to-white hover:border-emerald-400'
+                  }`}
               >
                 <input
                   type="file"
@@ -441,13 +468,12 @@ const InvitePeople = () => {
                   <div className="flex-1">
                     <h4 className="text-sm font-bold text-blue-900 mb-2">CSV Format Guidelines</h4>
                     <div className="space-y-1 text-sm text-blue-800">
-                      <p><strong>Required columns:</strong> fullName, email, mobile, department, username</p>
-                      {userType === 'student' && (
-                        <p><strong>Additional for students:</strong> year, division</p>
-                      )}
-                      {userType === 'teacher' && (
-                        <p><strong>Additional for teachers:</strong> jobTitle, qualifications, specialization</p>
-                      )}
+                      <p><strong>Required columns:</strong> fullName, email</p>
+                      <p><strong>Optional:</strong> message</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Invitations will be sent as {userType === 'student' ? 'Student' : 'Teacher'}
+                      </p>
+
                     </div>
                   </div>
                 </div>
@@ -509,126 +535,17 @@ const InvitePeople = () => {
 
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-700">
-                    Mobile Number <span className="text-red-500">*</span>
+                    Message <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="tel"
-                    value={manualForm.mobile}
-                    onChange={(e) => setManualForm({ ...manualForm, mobile: e.target.value })}
-                    required
-                    placeholder="9876543210"
+                  <textarea
+                    onChange={(e) => setManualForm({ ...manualForm, message: e.target.value })}
+
+                    placeholder="You are invited to join the institution"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700">
-                    Department <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={manualForm.department}
-                    onChange={(e) => setManualForm({ ...manualForm, department: e.target.value })}
-                    required
-                    placeholder="Computer Science"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                  />
-                </div>
 
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700">
-                    Username <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={manualForm.username}
-                    onChange={(e) => setManualForm({ ...manualForm, username: e.target.value })}
-                    required
-                    placeholder="johndoe123"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                  />
-                </div>
-
-                {userType === 'student' && (
-                  <>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">
-                        Year <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={manualForm.year}
-                        onChange={(e) => setManualForm({ ...manualForm, year: e.target.value })}
-                        required
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                      >
-                        <option value="">Select Year</option>
-                        <option value="1">First Year</option>
-                        <option value="2">Second Year</option>
-                        <option value="3">Third Year</option>
-                        <option value="4">Fourth Year</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">
-                        Division <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={manualForm.division}
-                        onChange={(e) => setManualForm({ ...manualForm, division: e.target.value })}
-                        required
-                        placeholder="A, B, C"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                      />
-                    </div>
-                  </>
-                )}
-
-                {userType === 'teacher' && (
-                  <>
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">
-                        Job Title <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={manualForm.jobTitle}
-                        onChange={(e) => setManualForm({ ...manualForm, jobTitle: e.target.value })}
-                        required
-                        placeholder="Professor"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">
-                        Qualifications <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={manualForm.qualifications}
-                        onChange={(e) => setManualForm({ ...manualForm, qualifications: e.target.value })}
-                        required
-                        placeholder="PhD in Computer Science"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2 space-y-2">
-                      <label className="block text-sm font-semibold text-gray-700">
-                        Specialization
-                      </label>
-                      <input
-                        type="text"
-                        value={manualForm.specialization}
-                        onChange={(e) => setManualForm({ ...manualForm, specialization: e.target.value })}
-                        placeholder="Machine Learning"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                      />
-                    </div>
-                  </>
-                )}
               </div>
 
               <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
@@ -641,9 +558,22 @@ const InvitePeople = () => {
                   <FiUserPlus className="w-5 h-5" />
                   Add {userType === 'student' ? 'Student' : 'Teacher'}
                 </motion.button>
+
+                <button
+                  onClick={() => {
+                    setShowStatusModal(true);
+                    fetchAdminInvitations(inviteStatus, filterRole);
+
+                  }}
+                  className="bg-white text-emerald-600 px-5 py-2 rounded-xl font-bold shadow border border-emerald-200 hover:shadow-md ml-4 flex items-center gap-2"
+                >
+                  Check Status
+                </button>
+
               </div>
             </form>
           </motion.div>
+
         )}
       </AnimatePresence>
 
@@ -701,21 +631,7 @@ const InvitePeople = () => {
                     <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">#</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Email</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Mobile</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Department</th>
-                    {userType === 'student' && (
-                      <>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Year</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Div</th>
-                      </>
-                    )}
-                    {userType === 'teacher' && (
-                      <>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Job Title</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Qualifications</th>
-                      </>
-                    )}
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Username</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Message</th>
                     <th className="px-6 py-4 text-center text-xs font-bold text-emerald-700 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
@@ -731,45 +647,20 @@ const InvitePeople = () => {
                       <td className="px-6 py-4 text-sm font-semibold text-gray-500">
                         {index + 1}
                       </td>
+
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">
                         {user.fullName}
                       </td>
+
+
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {user.email}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {user.mobile}
+
+                      <td className="px-6 py-4 text-sm italic text-gray-500">
+                        {user.message || '—'}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {user.department}
-                      </td>
-                      {userType === 'student' && (
-                        <>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-sm">
-                              {user.year}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-purple-100 text-purple-700">
-                              {user.division}
-                            </span>
-                          </td>
-                        </>
-                      )}
-                      {userType === 'teacher' && (
-                        <>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            {user.jobTitle}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            {user.qualifications}
-                          </td>
-                        </>
-                      )}
-                      <td className="px-6 py-4 text-sm font-mono text-emerald-600 font-semibold">
-                        @{user.username}
-                      </td>
+
                       <td className="px-6 py-4 text-center">
                         <motion.button
                           whileHover={{ scale: 1.15, rotate: 5 }}
@@ -788,6 +679,107 @@ const InvitePeople = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {showStatusModal && (
+          <motion.div
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-xl"
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Invitation Status</h2>
+                <button onClick={() => setShowStatusModal(false)}>✕</button>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-3 mb-4">
+                {['all', 'pending', 'accepted', 'rejected'].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      setInviteStatus(status);
+                      fetchAdminInvitations(status, filterRole);
+
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold ${inviteStatus === status
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-gray-100 text-gray-700'
+                      }`}
+                  >
+                    {status.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-3 mb-4">
+                {['all', 'Student', 'Teacher'].map(role => (
+                  <button
+                    key={role}
+                    onClick={() => {
+                      setFilterRole(role);
+                      fetchAdminInvitations(inviteStatus, role);
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold ${filterRole === role
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-700'
+                      }`}
+                  >
+                    {role === 'all' ? 'ALL ROLES' : role}
+                  </button>
+                ))}
+              </div>
+
+
+              {/* Content */}
+              {loadingInvites ? (
+                <p className="text-center py-10">Loading...</p>
+              ) : adminInvites.length === 0 ? (
+                <p className="text-center text-gray-500 py-10">
+                  No invitations found
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2">Email</th>
+                        <th className="text-center py-2">Status</th>
+                        <th className="text-center py-2">Role</th>
+                        <th className="text-center py-2">Sent On</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminInvites.map(inv => (
+                        <tr key={inv._id} className="border-b">
+                          <td className="py-2">{inv.email}</td>
+                          <td className="text-center py-2 font-semibold">
+                            {inv.status}
+                          </td>
+                          <td className="text-center py-2">
+                            {inv.recipientType}
+                          </td>
+                          <td className="text-center py-2">
+                            {new Date(inv.createdAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

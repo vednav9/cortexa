@@ -10,24 +10,34 @@ dotenv.config();
    HTTP SERVER
 ===================== */
 const server = http.createServer(app);
-
 /* =====================
    SOCKET.IO
 ===================== */
-export const io = new Server(server, {
+const io = new Server(server, {
     cors: {
         origin: "http://localhost:5173",
         credentials: true,
     },
 });
 
+// 🌍 Make io accessible in controllers
+global.io = io;
+
 io.on("connection", (socket) => {
     console.log("🟢 Socket connected:", socket.id);
+
+    // 👤 Join user-specific room
+    socket.on("join:user", (userId) => {
+        socket.join(`user:${userId}`);
+        console.log(`👤 User joined room: user:${userId}`);
+    });
 
     socket.on("disconnect", () => {
         console.log("🔴 Socket disconnected:", socket.id);
     });
 });
+
+
 
 /* =====================
    DATABASE

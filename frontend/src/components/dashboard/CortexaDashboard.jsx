@@ -19,7 +19,7 @@ import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
 import MyInstitutionsTab from "./MyInstitutionsTab";
 import Notifications from "./Notifications";
 import QueryDesk from "./QueryDesk";
-// import { socket } from "../../socket";
+import { socket } from "../../socket";
 
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
@@ -121,9 +121,40 @@ const CortexaDashboard = () => {
         );
     }
 
+    useEffect(() => {
+        if (!user?._id) return;
+
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        socket.emit("join:user", user._id);
+
+        const handleInvite = (invitation) => {
+            if (
+                invitation.email === user.email ||
+                invitation.recipient === user._id
+            ) {
+                setGlobalNotifications((prev) => [invitation, ...prev]);
+                setUnreadCount((prev) => prev + 1);
+                toast.success("📩 New invitation received");
+            }
+        };
+
+        socket.on("invitation:new", handleInvite);
+
+        return () => {
+            socket.off("invitation:new", handleInvite);
+            socket.disconnect();
+        };
+    }, [user?._id]);
     if (!user) return null;
 
+
+
     const browseCount = 5;
+
+
 
     return (
         <div className="flex w-full h-screen bg-gray-50 lg:pl-80">
@@ -288,8 +319,11 @@ const CortexaDashboard = () => {
                                             className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
                                         >
                                             <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Notifications</p>
-                                            <p className="text-4xl font-bold mt-2">0</p>
-                                            <p className="text-emerald-100 text-xs mt-1">All caught up!</p>
+                                            <p className="text-4xl font-bold mt-2">{unreadCount}</p>
+                                            <p className="text-emerald-100 text-xs mt-1">
+                                                {unreadCount > 0 ? "New notifications" : "All caught up!"}
+                                            </p>
+
                                         </motion.div>
                                     </div>
                                 </div>
@@ -362,7 +396,13 @@ const CortexaDashboard = () => {
                     )}
 
                     {/* NOTIFICATIONS TAB */}
-                    {activeTab === "notifications" && <Notifications />}
+                    {activeTab === "notifications" && (
+                        <Notifications
+                            realtimeInvites={globalNotifications}
+                            clearUnread={() => setUnreadCount(0)}
+                        />
+                    )}
+
 
                     {/* QUERY DESK */}
                     {activeTab === "querydesk" && <QueryDesk />}

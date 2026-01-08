@@ -1,5 +1,5 @@
 import Notification from "../models/notification.js";
-import { io } from "../server.js";
+// import { io } from "../server.js";
 
 export const sendGlobalNotification = async (req, res) => {
     try {

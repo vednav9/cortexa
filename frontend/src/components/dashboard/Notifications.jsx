@@ -11,9 +11,18 @@ import toast from "react-hot-toast";
 import { invitationAPI } from "../../services/api";
 import { LoadingPage } from "../common/LoadingSpinner";
 
-const Notifications = () => {
+const Notifications = ({ realtimeInvites = [], clearUnread }) => {
     const [invitations, setInvitations] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [initialized, setInitialized] = useState(false);
+
+
+    /* ============================
+    CLEAR UNREAD COUNT (ON OPEN)
+ ============================ */
+    useEffect(() => {
+        clearUnread?.();
+    }, []);
 
     /* ============================
        FETCH INVITATIONS
@@ -22,16 +31,26 @@ const Notifications = () => {
         const fetchInvitations = async () => {
             try {
                 const { data } = await invitationAPI.getAll("pending");
-                setInvitations(data?.invitations || []);
+
+                const apiInvites = data?.invitations || [];
+                const merged = [...realtimeInvites, ...apiInvites];
+
+                const unique = Array.from(
+                    new Map(merged.map((i) => [i._id, i])).values()
+                );
+
+                setInvitations(unique);
             } catch (err) {
                 toast.error("Failed to load invitations");
             } finally {
-                setLoading(false);
+                setInitialized(true); // ✅ IMPORTANT
             }
         };
 
         fetchInvitations();
-    }, []);
+    }, [realtimeInvites]);
+
+
 
     /* ============================
        ACTION HANDLERS
@@ -56,9 +75,9 @@ const Notifications = () => {
         }
     };
 
-    if (loading) {
-        return <LoadingPage message="Loading notifications..." />;
-    }
+    // if (loading) {
+    //     return <LoadingPage message="Loading notifications..." />;
+    // }
 
     return (
         <div className="max-w-7xl mx-auto space-y-6">
@@ -86,7 +105,8 @@ const Notifications = () => {
             {/* ============================
          INVITATIONS
       ============================ */}
-            {invitations.length > 0 ? (
+            {/* INVITATIONS LIST */}
+            {initialized && invitations.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {invitations.map((inv, index) => (
                         <motion.div
@@ -117,25 +137,23 @@ const Notifications = () => {
                                 </div>
                             </div>
 
-                            {/* MESSAGE */}
                             {inv.message && (
                                 <p className="text-sm text-gray-600 mb-4 italic">
                                     “{inv.message}”
                                 </p>
                             )}
 
-                            {/* ACTIONS */}
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => handleAccept(inv._id)}
-                                    className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+                                    className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl font-semibold"
                                 >
                                     <FiCheck /> Accept
                                 </button>
 
                                 <button
                                     onClick={() => handleReject(inv._id)}
-                                    className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-red-50 hover:text-red-600 flex items-center justify-center gap-2 transition-all"
+                                    className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-red-50 hover:text-red-600"
                                 >
                                     <FiX /> Decline
                                 </button>
@@ -143,10 +161,9 @@ const Notifications = () => {
                         </motion.div>
                     ))}
                 </div>
-            ) : (
-                /* ============================
-                   EMPTY STATE
-                ============================ */
+            )}
+            {/* EMPTY STATE */}
+            {initialized && invitations.length === 0 && (
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}

@@ -55,7 +55,7 @@ export const studentAPI = {
   leaveInstitution: (institutionId) => api.delete(`/student/institutions/${institutionId}`),
   joinInstitution: (institutionId) => api.post('/student/join-institution', { institutionId }),
   getInvitations: () => api.get('/student/invitations'),
-  respondToInvitation: (invitationId, response) => 
+  respondToInvitation: (invitationId, response) =>
     api.post(`/student/invitation/${invitationId}/respond`, { response }),
 };
 
@@ -89,10 +89,10 @@ export const adminAPI = {
   bulkAddUsers: (institutionId, usersData) => api.post(`/admin/institutions/${institutionId}/users/bulk`, usersData),
   deleteUser: (userId) => api.delete(`/admin/user/${userId}`),
   updateUser: (userId, userData) => api.put(`/admin/user/${userId}`, userData),
-  
+
   // Institution Management
   getInstitution: () => api.get('/admin/institution'),
-  
+
   // Admin Management APIs
   addAdmin: (adminData) => api.post('/admin/add-admin', adminData),
   getAllAdmins: () => api.get('/admin/admins'),
@@ -122,13 +122,37 @@ export const institutionAPI = {
 // ============================================
 // INVITATION APIs
 // ============================================
+// ============================================
+// INVITATION APIs
+// ============================================
 export const invitationAPI = {
   getAll: (status) => api.get('/invitations', { params: { status } }),
   create: (data) => api.post('/invitations', data),
   accept: (id) => api.post(`/invitations/${id}/accept`),
   reject: (id) => api.post(`/invitations/${id}/reject`),
   delete: (id) => api.delete(`/invitations/${id}`),
+  bulkInviteUsers: (data) => api.post('/invitations/bulk', data),
 };
+
+
+// ============================================
+// ADMIN INVITATION APIs
+// ============================================
+export const adminInvitationAPI = {
+  getAll: (status) =>
+    api.get('/invitations/admin', {
+      params: status ? { status } : {},
+    }),
+
+  getPending: () =>
+    api.get('/invitations/admin', {
+      params: { status: 'pending' },
+    }),
+
+  cancel: (invitationId) =>
+    api.delete(`/invitations/${invitationId}`),
+};
+
 
 // ============================================
 // NOTIFICATION APIs (Legacy - uses invitations)
