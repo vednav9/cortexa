@@ -104,7 +104,7 @@ export const createInvitation = async (req, res) => {
                 email: normalizedEmail,
                 status: 'pending',
             });
-
+            console.log("🚨 EMITTING INVITATION SOCKET EVENT");
             // 🔁 RESEND INSTEAD OF BLOCK
             if (existingInvite) {
                 existingInvite.message = message;
@@ -136,16 +136,20 @@ export const createInvitation = async (req, res) => {
                 ),
             });
 
+            console.log("🚨 EMITTING INVITATION SOCKET EVENT");
             // 🔔 REALTIME NOTIFICATION (EMAIL BASED)
             // EMAIL invite → broadcast (no userId yet)
-            global.io.emit("invitation:new", {
-                invitationId: invitation._id,
-                email: invitation.email,
-                recipientType: invitation.recipientType,
-                institution: institutionId,
-                message: invitation.message,
-                createdAt: invitation.createdAt,
-            });
+            global.io
+                .to(`user:${invitation.recipient}`)
+                .emit("invitation:new", {
+                    _id: invitation._id,
+                    email: invitation.email,
+                    institution: invitation.institution,
+                    recipientType: invitation.recipientType,
+                    message: invitation.message,
+                    createdAt: invitation.createdAt,
+                });
+
 
 
             return res.status(201).json({
@@ -310,10 +314,7 @@ export const acceptInvitation = async (req, res) => {
 
         global.io
             .to(`user:${req.user.id}`)
-            .emit("institution-updated", {
-                institutionId: invitation.institution,
-                role: invitation.recipientType,
-            });
+            .emit("auth:refresh");
 
         res.json({ message: "Invitation accepted successfully" });
 
@@ -509,14 +510,17 @@ export const bulkInviteUsers = async (req, res) => {
                 });
 
                 // 🔔 SOCKET EMIT (REALTIME)
-                global.io.emit("invitation:new", {
-                    invitationId: invite._id,
-                    email: invite.email,
-                    recipientType: invite.recipientType,
-                    institution: institutionId,
-                    message: invite.message,
-                    createdAt: invite.createdAt,
-                });
+                global.io
+                    .to(`user:${invitation.recipient}`)
+                    .emit("invitation:new", {
+                        _id: invitation._id,
+                        email: invitation.email,
+                        institution: invitation.institution,
+                        recipientType: invitation.recipientType,
+                        message: invitation.message,
+                        createdAt: invitation.createdAt,
+                    });
+
 
                 results.successCount++;
             } catch (err) {

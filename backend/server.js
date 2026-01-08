@@ -6,14 +6,8 @@ import app from "./app.js";
 
 dotenv.config();
 
-/* =====================
-   HTTP SERVER
-===================== */
 const server = http.createServer(app);
 
-/* =====================
-   SOCKET.IO
-===================== */
 const io = new Server(server, {
     cors: {
         origin: "http://localhost:5173",
@@ -21,19 +15,15 @@ const io = new Server(server, {
     },
 });
 
-// 🌍 Make io accessible everywhere (controllers)
+// expose globally
 global.io = io;
 
 io.on("connection", (socket) => {
-    console.log("🔵 SOCKET CONNECTED:", socket.id);
+    console.log("🟢 SOCKET CONNECTED:", socket.id);
 
-    // 👤 user joins their private room
     socket.on("join:user", (userId) => {
-        if (!userId) return;
-
-        const room = `user:${userId}`;
-        socket.join(room);
-        console.log("👤 User joined room:", room);
+        console.log("👤 User joined room:", userId);
+        socket.join(`user:${userId}`);
     });
 
     socket.on("disconnect", () => {
@@ -41,19 +31,18 @@ io.on("connection", (socket) => {
     });
 });
 
+
 /* =====================
    DATABASE
 ===================== */
-mongoose
-    .connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("MongoDB connected"))
-    .catch((err) => console.error("MongoDB error:", err));
+    .catch(err => console.error("MongoDB error:", err));
 
 /* =====================
    START SERVER
 ===================== */
 const PORT = process.env.PORT || 5000;
-
 server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });
