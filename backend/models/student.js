@@ -2,13 +2,18 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
 const studentSchema = new mongoose.Schema({
-    fullName: String,
-    email: { type: String, unique: true, required: true },
+    fullName: { type: String, required: true },
+    email: { type: String, unique: true, required: true, lowercase: true },
     password: { type: String, required: true },
+    username: { type: String, required: true, unique: true },
+    phone: { type: String, required: true },
     role: { type: String, default: "student" },
-    class: { type: String },
-    division: { type: String },
-    enrollmentNumber: { type: String }
+    department: { type: String, required: true },
+    institution: { type: mongoose.Schema.Types.ObjectId, ref: "Institution", required: true },
+    year: { type: String, required: true },
+    division: { type: String, required: true },
+    enrollmentNumber: { type: String },
+    status: { type: String, enum: ["active", "inactive"], default: "active" }
 }, { timestamps: true });
 
 // ✅ Hash password before saving

@@ -29,3 +29,9 @@ bitsandbytes>=0.41.0  # For 8-bit quantization
 duckduckgo-search>=4.0.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
+
+# For Voice-to-Text
+openai-whisper>=20231117
+
+# Using chocolatey
+# choco install ffmpeg

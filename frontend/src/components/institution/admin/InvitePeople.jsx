@@ -13,14 +13,16 @@ import {
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-import { useOutletContext, useParams } from 'react-router-dom';
+import { useOutletContext } from 'react-router-dom';
 import { useAuth } from '../../../context/authcontext';
 import { adminAPI } from '../../../services/api';
 
 const InvitePeople = () => {
-  const { institutionId } = useParams();
   const { user } = useAuth();
   const { institution, hasAccess } = useOutletContext();
+  
+  // Get institutionId from the institution object
+  const institutionId = institution?._id;
 
   const [userType, setUserType] = useState('student');
   const [uploadMethod, setUploadMethod] = useState('csv');
@@ -180,6 +182,15 @@ const InvitePeople = () => {
       return;
     }
 
+    if (!institutionId) {
+      toast.error('Institution ID not found');
+      console.error('Institution object:', institution);
+      return;
+    }
+
+    console.log('Uploading users:', users);
+    console.log('Institution ID:', institutionId);
+
     setUploading(true);
     try {
       const response = await adminAPI.bulkAddUsers(institutionId, { users });
@@ -192,8 +203,17 @@ const InvitePeople = () => {
       
       setUsers([]);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to add users');
-      console.error(error);
+      console.error('Full error object:', error);
+      console.error('Error response:', error.response);
+      console.error('Error data:', error.response?.data);
+      
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to add users';
+      toast.error(errorMessage);
+      
+      // Log specific error details
+      if (error.response?.data?.errors) {
+        console.error('Specific errors:', error.response.data.errors);
+      }
     } finally {
       setUploading(false);
     }
