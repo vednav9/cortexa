@@ -63,7 +63,7 @@ export const studentAPI = {
 // ============================================
 export const teacherAPI = {
   getProfile: () => api.get('/teacher/me'),
-  getInstitutions: () => api.get('/teacher/institutions'),
+  getMyInstitution: () => api.get('/teacher/my-institution'),
   leaveInstitution: (institutionId) => api.delete(`/teacher/institutions/${institutionId}`),
   getStudents: (institutionId) => api.get(`/teacher/students/${institutionId}`),
   getCourses: (institutionId) => api.get(`/teacher/courses/${institutionId}`),

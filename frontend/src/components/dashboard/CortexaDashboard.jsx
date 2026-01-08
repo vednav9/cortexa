@@ -51,10 +51,11 @@ const CortexaDashboard = () => {
                 const { data } = await studentAPI.getMyInstitution();
                 setMyInstitutions(data.institution ? [data.institution] : []);
             }
-            else if (role === "teacher") {
-                const { data } = await teacherAPI.getInstitutions();
-                setMyInstitutions(data.institutions || []);
+            else if (role === 'teacher') {
+                const { data } = await teacherAPI.getMyInstitution();
+                setMyInstitutions(data.institution ? [data.institution] : []);
             }
+
             else if (role === "admin") {
                 const { data } = await adminAPI.getInstitution();
                 setMyInstitutions(data.institution ? [data.institution] : []);
