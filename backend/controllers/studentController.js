@@ -195,8 +195,7 @@ export const logoutStudent = (req, res) => {
 ================================ */
 export const getMyInstitution = async (req, res) => {
     try {
-        const student = await Student.findById(req.user.id)
-            .populate("institution");
+        const student = await Student.findById(req.user.id).populate("institution");
 
         if (!student || !student.institution) {
             return res.json({ institution: null });
@@ -204,28 +203,29 @@ export const getMyInstitution = async (req, res) => {
 
         const institutionId = student.institution._id;
 
-        const totalStudents = await Student.countDocuments({
-            institution: institutionId,
-        });
-
-        const totalTeachers = await Teacher.countDocuments({
-            institution: institutionId,
-        });
+        const [studentsCount, teachersCount] = await Promise.all([
+            Student.countDocuments({ institution: institutionId }),
+            Teacher.countDocuments({ institution: institutionId }),
+        ]);
 
         res.json({
             institution: {
                 ...student.institution.toObject(),
+                role: "student",
                 stats: {
-                    totalStudents,
-                    totalTeachers,
+                    students: studentsCount,
+                    teachers: teachersCount,
+                    courses: 0,
                 },
             },
         });
     } catch (error) {
-        console.error("Get My Institution Error:", error);
+        console.error(error);
         res.status(500).json({ message: "Failed to fetch institution" });
     }
 };
+
+
 
 /* ===============================
    LEAVE INSTITUTION (STUDENT)
