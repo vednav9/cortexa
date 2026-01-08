@@ -266,6 +266,7 @@ export const getMyInstitution = async (req, res) => {
 
 
 
+
 /* =========================
    LOGOUT ADMIN
 ========================= */
@@ -282,57 +283,69 @@ export const logoutAdmin = (req, res) => {
 export const getUsers = async (req, res) => {
   try {
     const { institutionId } = req.params;
-    const { role, status, department, search } = req.query;
+    const { role = "all", status, department, search } = req.query;
 
-    // 🔐 verify admin
+    // 🔐 Verify admin
     const admin = await Admin.findById(req.user.id);
     if (!admin || admin.institution.toString() !== institutionId) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    const baseQuery = { institution: institutionId };
+    // 🔎 Common filters
+    const buildQuery = () => {
+      const q = { institution: institutionId };
 
-    if (status) baseQuery.status = status;
-    if (department) baseQuery.department = department;
+      if (status) q.status = status;
+      if (department) q.department = department;
 
-    if (search) {
-      baseQuery.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } }
-      ];
-    }
+      if (search) {
+        q.$or = [
+          { fullName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      return q;
+    };
 
     let users = [];
+    let students = [];
+    let teachers = [];
 
-    if (!role || role === "all") {
-      const [students, teachers] = await Promise.all([
-        Student.find(baseQuery).lean(),
-        Teacher.find(baseQuery).lean()
-      ]);
-
-      users = [
-        ...students.map(u => ({ ...u, role: "student" })),
-        ...teachers.map(u => ({ ...u, role: "teacher" }))
-      ];
+    // 👥 FETCH USERS
+    if (role === "all" || role === "student") {
+      students = await Student.find(buildQuery()).lean();
+      students = students.map(u => ({ ...u, role: "student" }));
     }
 
-    if (role === "student") {
-      users = (await Student.find(baseQuery).lean())
-        .map(u => ({ ...u, role: "student" }));
+    if (role === "all" || role === "teacher") {
+      teachers = await Teacher.find(buildQuery()).lean();
+      teachers = teachers.map(u => ({ ...u, role: "teacher" }));
     }
 
-    if (role === "teacher") {
-      users = (await Teacher.find(baseQuery).lean())
-        .map(u => ({ ...u, role: "teacher" }));
-    }
+    users = [...students, ...teachers];
 
-    res.json({ success: true, users });
+    // 📊 STATS
+    const stats = {
+      total: users.length,
+      students: students.length,
+      teachers: teachers.length,
+      active: users.filter(u => u.status === "active").length,
+      inactive: users.filter(u => u.status === "inactive").length,
+    };
+
+    res.json({
+      success: true,
+      users,
+      stats,
+    });
 
   } catch (err) {
     console.error("getUsers error:", err);
     res.status(500).json({ message: "Failed to fetch users" });
   }
 };
+
 
 
 // Add new user
@@ -688,42 +701,46 @@ export const toggleUserStatus = async (req, res) => {
 //   }
 // };
 
-
 export const removeUserFromInstitution = async (req, res) => {
   try {
     const { userId, role } = req.params;
 
-    if (!["student", "teacher"].includes(role)) {
-      return res.status(400).json({ message: "Invalid role" });
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     let user;
 
     if (role === "student") {
       user = await Student.findById(userId);
-    } else {
+    } else if (role === "teacher") {
       user = await Teacher.findById(userId);
+    } else {
+      return res.status(400).json({ message: "Invalid role" });
     }
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 🚫 Already removed
-    if (!user.institution) {
-      return res.status(400).json({ message: "User not part of any institution" });
-    }
-
-    // ✅ Remove institution
+    // 🔥 REMOVE FROM INSTITUTION
     user.institution = null;
     user.status = "inactive";
     await user.save();
 
+    // 🔔 REALTIME NOTIFY USER
+    global.io.to(`user:${userId}`).emit("institution-removed", {
+      message: "You have been removed from the institution",
+    });
+
     res.json({
-      message: `${role.charAt(0).toUpperCase() + role.slice(1)} removed from institution`,
+      success: true,
+      message: "User removed from institution successfully",
     });
   } catch (error) {
-    console.error("Remove user error:", error);
-    res.status(500).json({ message: "Failed to remove user" });
+    console.error("REMOVE USER ERROR:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
+
+

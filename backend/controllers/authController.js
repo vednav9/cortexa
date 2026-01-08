@@ -23,7 +23,8 @@ export const getMe = async (req, res) => {
                 .select("fullName email role institution");
         }
         else if (role === "cortexa_admin") {
-            user = await CortexaAdmin.findById(id).select("fullName email role");
+            user = await CortexaAdmin.findById(id)
+                .select("fullName email role");
         }
         else {
             return res.status(400).json({
@@ -58,3 +59,4 @@ export const getMe = async (req, res) => {
         });
     }
 };
+
