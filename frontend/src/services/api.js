@@ -75,7 +75,9 @@ export const teacherAPI = {
 // ============================================
 export const adminAPI = {
   getProfile: () => api.get('/admin/me'),
-  getUsers: (params) => api.get('/admin/users', { params }),
+  getUsers: (institutionId, params) =>
+    api.get(`/admin/institutions/${institutionId}/users`, { params }),
+
   getStudents: () => api.get('/admin/students'),
   getTeachers: () => api.get('/admin/teachers'),
   getPendingRequests: () => api.get('/admin/pending-requests'),
