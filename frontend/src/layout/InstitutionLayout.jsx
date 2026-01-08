@@ -25,13 +25,47 @@ export default function InstitutionLayout() {
                 setInstitution(res.data.institution);
                 
                 // Check if user has access to this institution
-                // This would need to check against user's institutions from their profile
                 if (user && user.institution) {
-                    const userInstitutionSlug = user.institution.slug || user.institution._id;
-                    setHasAccess(userInstitutionSlug === slug);
+                    // Handle both ObjectId string and populated institution object
+                    const userInstitutionId = typeof user.institution === 'string' 
+                        ? user.institution 
+                        : user.institution._id;
+                    
+                    const userInstitutionSlug = typeof user.institution === 'object' && user.institution.slug
+                        ? user.institution.slug
+                        : null;
+                    
+                    const currentInstitutionId = res.data.institution._id;
+                    const currentSlug = res.data.institution.slug;
+                    
+                    // Check by ID (most reliable) or slug
+                    const hasAccessById = userInstitutionId === currentInstitutionId;
+                    const hasAccessBySlug = userInstitutionSlug && userInstitutionSlug === currentSlug;
+                    const hasAccessBySlugParam = slug && (userInstitutionSlug === slug);
+                    
+                    const accessGranted = hasAccessById || hasAccessBySlug || hasAccessBySlugParam;
+                    
+                    console.log('🔍 Access Check:', {
+                        userRole: user.role,
+                        userInstitutionId,
+                        userInstitutionSlug,
+                        currentInstitutionId,
+                        currentSlug,
+                        urlSlug: slug,
+                        hasAccessById,
+                        hasAccessBySlug,
+                        hasAccessBySlugParam,
+                        finalAccess: accessGranted
+                    });
+                    
+                    setHasAccess(accessGranted);
+                } else {
+                    console.log('🔍 No user or no institution on user object');
+                    setHasAccess(false);
                 }
             } catch (err) {
                 console.error("Institution fetch failed", err);
+                setHasAccess(false);
             } finally {
                 setLoading(false);
             }
