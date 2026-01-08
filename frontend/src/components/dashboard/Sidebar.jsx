@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
+import {
   FiHome, FiBell, FiHelpCircle, FiLogOut, FiX
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
@@ -8,10 +8,10 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/authcontext";
 
-export default function Sidebar({ 
-  isOpen, 
-  onClose, 
-  activeTab, 
+export default function Sidebar({
+  isOpen,
+  onClose,
+  activeTab,
   setActiveTab
 }) {
   const navigate = useNavigate();
@@ -98,34 +98,28 @@ export default function Sidebar({
                 onClick={() => {
                   setActiveTab(item.id);
                   onClose?.();
-                }}
-                whileHover={{ x: 4 }}
-                whileTap={{ scale: 0.98 }}
-                className={`
-                  w-full relative flex items-center space-x-3 px-4 py-3 rounded-xl 
-                  transition-all duration-200
-                  ${active
-                    ? "bg-emerald-50 text-emerald-600 font-semibold shadow-sm"
-                    : "text-gray-700 hover:bg-gray-50"
-                  }
-                `}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                <div className="flex-1 text-left">
-                  <p className="font-medium text-sm">{item.label}</p>
-                </div>
 
-                {/* Active Indicator */}
-                {active && (
-                  <motion.div
-                    layoutId="activeSidebarItem"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-emerald-500"
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  />
-                )}
+                  // 🔔 clear unread count when opened
+                  if (item.id === "notifications") {
+                    window.dispatchEvent(new Event("notifications-opened"));
+                  }
+                }}
+                className={`relative w-full flex items-center px-4 py-3 rounded-xl ${active ? "bg-emerald-50 text-emerald-600" : ""
+                  }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="ml-3">{item.label}</span>
+
+                {/* 🔴 BADGE
+                {item.id === "notifications" && window.__UNREAD_COUNT__ > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {window.__UNREAD_COUNT__}
+                  </span>
+                )} */}
               </motion.button>
             );
           })}
+
         </nav>
 
         {/* Footer - Logout */}

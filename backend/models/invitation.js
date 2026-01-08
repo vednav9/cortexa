@@ -9,7 +9,12 @@ const invitationSchema = new mongoose.Schema({
   recipient: {
     type: mongoose.Schema.Types.ObjectId,
     refPath: 'recipientType',
-    required: true
+    required: false
+  },
+  email: {
+    type: String,
+    lowercase: true,
+    trim: true,
   },
   recipientType: {
     type: String,
@@ -54,14 +59,11 @@ invitationSchema.index({ institution: 1, status: 1 });
 invitationSchema.index({ expiresAt: 1 });
 
 // Virtual to check if expired
-invitationSchema.virtual('isExpired').get(function() {
+invitationSchema.virtual('isExpired').get(function () {
   return this.expiresAt < new Date() && this.status === 'pending';
 });
 
-// Auto-expire invitations
-invitationSchema.pre('find', function() {
-  this.where('expiresAt').gt(new Date()).or({ status: { $ne: 'pending' } });
-});
+
 
 const Invitation = mongoose.model('Invitation', invitationSchema);
 

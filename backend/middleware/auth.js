@@ -3,24 +3,24 @@ import jwt from "jsonwebtoken";
 
 export const authenticate = (req, res, next) => {
     try {
-        // Get token from cookie
-        const token = req.cookies.token;
+        const token =
+            req.cookies?.token ||
+            req.headers.authorization?.split(" ")[1];
 
         if (!token) {
             return res.status(401).json({
                 success: false,
-                message: "Access denied. No token provided."
+                message: "Access denied. No token provided.",
             });
         }
 
-        // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;  // Attach user info to request
+        req.user = decoded;
         next();
     } catch (error) {
         return res.status(401).json({
             success: false,
-            message: "Invalid or expired token"
+            message: "Invalid or expired token",
         });
     }
 };

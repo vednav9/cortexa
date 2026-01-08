@@ -123,3 +123,24 @@ export const logoutTeacher = (req, res) => {
         message: "Teacher logged out successfully",
     });
 };
+
+
+export const getMyInstitution = async (req, res) => {
+    try {
+        const teacher = await Teacher.findById(req.user.id)
+            .populate("institution");
+
+        if (!teacher || !teacher.institution) {
+            return res.json({ institution: null });
+        }
+
+        res.json({
+            institution: teacher.institution,
+        });
+    } catch (error) {
+        console.error("Get Teacher Institution Error:", error);
+        res.status(500).json({
+            message: "Failed to fetch institution",
+        });
+    }
+};

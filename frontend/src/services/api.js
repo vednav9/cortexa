@@ -51,11 +51,10 @@ export const authAPI = {
 // ============================================
 export const studentAPI = {
   getProfile: () => api.get('/student/me'),
-  getInstitutions: () => api.get('/student/institutions'),
-  leaveInstitution: (institutionId) => api.delete(`/student/institutions/${institutionId}`),
-  joinInstitution: (institutionId) => api.post('/student/join-institution', { institutionId }),
+  getMyInstitution: () => api.get('/student/my-institution'),
+  leaveInstitution: () => api.delete('/student/leave-institution'),
   getInvitations: () => api.get('/student/invitations'),
-  respondToInvitation: (invitationId, response) => 
+  respondToInvitation: (invitationId, response) =>
     api.post(`/student/invitation/${invitationId}/respond`, { response }),
 };
 
@@ -64,7 +63,7 @@ export const studentAPI = {
 // ============================================
 export const teacherAPI = {
   getProfile: () => api.get('/teacher/me'),
-  getInstitutions: () => api.get('/teacher/institutions'),
+  getMyInstitution: () => api.get('/teacher/my-institution'),
   leaveInstitution: (institutionId) => api.delete(`/teacher/institutions/${institutionId}`),
   getStudents: (institutionId) => api.get(`/teacher/students/${institutionId}`),
   getCourses: (institutionId) => api.get(`/teacher/courses/${institutionId}`),
@@ -89,10 +88,10 @@ export const adminAPI = {
   bulkAddUsers: (institutionId, usersData) => api.post(`/admin/institutions/${institutionId}/users/bulk`, usersData),
   deleteUser: (userId) => api.delete(`/admin/user/${userId}`),
   updateUser: (userId, userData) => api.put(`/admin/user/${userId}`, userData),
-  
+
   // Institution Management
   getInstitution: () => api.get('/admin/institution'),
-  
+
   // Admin Management APIs
   addAdmin: (adminData) => api.post('/admin/add-admin', adminData),
   getAllAdmins: () => api.get('/admin/admins'),
@@ -122,13 +121,37 @@ export const institutionAPI = {
 // ============================================
 // INVITATION APIs
 // ============================================
+// ============================================
+// INVITATION APIs
+// ============================================
 export const invitationAPI = {
   getAll: (status) => api.get('/invitations', { params: { status } }),
   create: (data) => api.post('/invitations', data),
   accept: (id) => api.post(`/invitations/${id}/accept`),
   reject: (id) => api.post(`/invitations/${id}/reject`),
   delete: (id) => api.delete(`/invitations/${id}`),
+  bulkInviteUsers: (data) => api.post('/invitations/bulk', data),
 };
+
+
+// ============================================
+// ADMIN INVITATION APIs
+// ============================================
+export const adminInvitationAPI = {
+  getAll: (status) =>
+    api.get('/invitations/admin', {
+      params: status ? { status } : {},
+    }),
+
+  getPending: () =>
+    api.get('/invitations/admin', {
+      params: { status: 'pending' },
+    }),
+
+  cancel: (invitationId) =>
+    api.delete(`/invitations/${invitationId}`),
+};
+
 
 // ============================================
 // NOTIFICATION APIs (Legacy - uses invitations)
