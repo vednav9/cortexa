@@ -138,19 +138,25 @@ const CortexaDashboard = () => {
     useEffect(() => {
         if (!user?._id) return;
 
+        // ✅ Connect once
         if (!socket.connected) {
             socket.connect();
         }
 
-        socket.emit("join:user", user._id);
+        socket.on("connect", () => {
+            console.log("🟢 SOCKET CONNECTED:", socket.id);
+            socket.emit("join:user", user._id);
+        });
 
         const handleInvite = (invitation) => {
+            console.log("📩 INVITE RECEIVED:", invitation);
+
             if (
                 invitation.email === user.email ||
                 invitation.recipient === user._id
             ) {
-                setGlobalNotifications((prev) => [invitation, ...prev]);
-                setUnreadCount((prev) => prev + 1);
+                setGlobalNotifications(prev => [invitation, ...prev]);
+                setUnreadCount(prev => prev + 1);
                 toast.success("📩 New invitation received");
             }
         };
@@ -159,10 +165,11 @@ const CortexaDashboard = () => {
 
         return () => {
             socket.off("invitation:new", handleInvite);
-            socket.disconnect();
+            // ❌ DO NOT DISCONNECT HERE
         };
     }, [user?._id]);
-    if (!user) return null;
+
+
 
 
 
@@ -178,7 +185,9 @@ const CortexaDashboard = () => {
                 onClose={() => setSidebarOpen(false)}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
+                unreadCount={unreadCount}   // ✅ ADD THIS
             />
+
 
             {/* MAIN CONTENT */}
             <div className="flex-1 flex flex-col">

@@ -1,4 +1,5 @@
 import Student from "../models/student.js";
+import Teacher from "../models/teacher.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../utils/generateToken.js";
@@ -194,23 +195,37 @@ export const logoutStudent = (req, res) => {
 ================================ */
 export const getMyInstitution = async (req, res) => {
     try {
-        const student = await Student.findById(req.user.id)
-            .populate("institution");
+        const student = await Student.findById(req.user.id).populate("institution");
 
         if (!student || !student.institution) {
             return res.json({ institution: null });
         }
 
+        const institutionId = student.institution._id;
+
+        const [studentsCount, teachersCount] = await Promise.all([
+            Student.countDocuments({ institution: institutionId }),
+            Teacher.countDocuments({ institution: institutionId }),
+        ]);
+
         res.json({
-            institution: student.institution,
+            institution: {
+                ...student.institution.toObject(),
+                role: "student",
+                stats: {
+                    students: studentsCount,
+                    teachers: teachersCount,
+                    courses: 0,
+                },
+            },
         });
     } catch (error) {
-        console.error("Get My Institution Error:", error);
-        res.status(500).json({
-            message: "Failed to fetch institution",
-        });
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch institution" });
     }
 };
+
+
 
 /* ===============================
    LEAVE INSTITUTION (STUDENT)

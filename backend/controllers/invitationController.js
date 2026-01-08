@@ -137,6 +137,7 @@ export const createInvitation = async (req, res) => {
             });
 
             // 🔔 REALTIME NOTIFICATION (EMAIL BASED)
+            // EMAIL invite → broadcast (no userId yet)
             global.io.emit("invitation:new", {
                 invitationId: invitation._id,
                 email: invitation.email,
@@ -185,6 +186,18 @@ export const createInvitation = async (req, res) => {
                 Date.now() + 30 * 24 * 60 * 60 * 1000
             ),
         });
+        // 🔔 REALTIME NOTIFICATION (USER-ID BASED)
+        global.io
+            .to(`user:${recipientId}`)
+            .emit("invitation:new", {
+                invitationId: invitation._id,
+                recipient: recipientId,
+                recipientType: invitation.recipientType,
+                institution: institutionId,
+                message: invitation.message,
+                createdAt: invitation.createdAt,
+            });
+
 
         res.status(201).json({
             message: 'Invitation sent successfully',
@@ -294,6 +307,13 @@ export const acceptInvitation = async (req, res) => {
         invitation.recipient = req.user.id;
         invitation.respondedAt = new Date();
         await invitation.save();
+
+        global.io
+            .to(`user:${req.user.id}`)
+            .emit("institution-updated", {
+                institutionId: invitation.institution,
+                role: invitation.recipientType,
+            });
 
         res.json({ message: "Invitation accepted successfully" });
 
