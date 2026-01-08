@@ -1,4 +1,5 @@
 import Student from "../models/student.js";
+import Teacher from "../models/teacher.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../utils/generateToken.js";
@@ -201,14 +202,28 @@ export const getMyInstitution = async (req, res) => {
             return res.json({ institution: null });
         }
 
+        const institutionId = student.institution._id;
+
+        const totalStudents = await Student.countDocuments({
+            institution: institutionId,
+        });
+
+        const totalTeachers = await Teacher.countDocuments({
+            institution: institutionId,
+        });
+
         res.json({
-            institution: student.institution,
+            institution: {
+                ...student.institution.toObject(),
+                stats: {
+                    totalStudents,
+                    totalTeachers,
+                },
+            },
         });
     } catch (error) {
         console.error("Get My Institution Error:", error);
-        res.status(500).json({
-            message: "Failed to fetch institution",
-        });
+        res.status(500).json({ message: "Failed to fetch institution" });
     }
 };
 

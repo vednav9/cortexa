@@ -1,5 +1,6 @@
 // controllers/teacherController.js
 import Teacher from "../models/teacher.js";
+import Student from "../models/student.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
@@ -134,13 +135,27 @@ export const getMyInstitution = async (req, res) => {
             return res.json({ institution: null });
         }
 
+        const institutionId = teacher.institution._id;
+
+        const totalStudents = await Student.countDocuments({
+            institution: institutionId,
+        });
+
+        const totalTeachers = await Teacher.countDocuments({
+            institution: institutionId,
+        });
+
         res.json({
-            institution: teacher.institution,
+            institution: {
+                ...teacher.institution.toObject(),
+                stats: {
+                    totalStudents,
+                    totalTeachers,
+                },
+            },
         });
     } catch (error) {
         console.error("Get Teacher Institution Error:", error);
-        res.status(500).json({
-            message: "Failed to fetch institution",
-        });
+        res.status(500).json({ message: "Failed to fetch institution" });
     }
 };
