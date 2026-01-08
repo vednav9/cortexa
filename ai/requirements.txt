@@ -32,5 +32,6 @@ beautifulsoup4>=4.12.0
 
 # For Voice-to-Text
 openai-whisper>=20231117
-ffmpeg-python>=0.2.0
-pydub>=0.25.1
+
+# Using chocolatey
+# choco install ffmpeg
