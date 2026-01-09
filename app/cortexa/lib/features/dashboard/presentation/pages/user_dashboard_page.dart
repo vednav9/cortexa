@@ -2,15 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/hive_storage_service.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/bloc/terminology/terminology_bloc.dart';
+import '../../../../core/bloc/terminology/terminology_event.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../teacher/presentation/pages/teacher_dashboard_page.dart';
+import '../../../student/presentation/pages/student_dashboard_page.dart';
 import '../../data/models/institution_display_model.dart';
 import '../../data/repositories/mock_dashboard_repository.dart';
 import '../widgets/dashboard_drawer.dart';
 import '../widgets/institution_tab_view.dart';
 import '../widgets/search_filter_modal.dart';
 import 'notifications_page.dart';
+import 'query_desk_page.dart';
 
 class UserDashboardPage extends StatefulWidget {
   const UserDashboardPage({super.key});
@@ -40,8 +47,11 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   @override
   void initState() {
     super.initState();
+    // Load terminology immediately when dashboard loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TerminologyBloc>().add(LoadInstitutionType());
+    });
     _loadInstitutions();
-    _loadMyInstitutions();
   }
 
   @override
@@ -51,22 +61,102 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   }
 
   Future<void> _loadMyInstitutions() async {
-    // TODO: Load user's registered/accepted institutions from API
-    // For now, using empty list
-    setState(() {
-      _myInstitutions = [];
-    });
+    final storage = getIt<HiveStorageService>();
+    final currentUser = storage.getCurrentUser();
+    
+    if (currentUser?.institutionId != null && currentUser!.institutionId!.isNotEmpty) {
+      var userInstitution = _institutions
+          .where((i) => i.id == currentUser.institutionId)
+          .toList();
+      
+      if (userInstitution.isEmpty) {
+        final institutionData = storage.findInstitutionById(currentUser.institutionId!);
+        if (institutionData != null) {
+          try {
+            final institution = InstitutionDisplayModel(
+              id: (institutionData['id'] as String?) ?? '',
+              name: (institutionData['institution_name'] as String?) ?? 'Unknown Institution',
+              description: (institutionData['short_description'] as String?) ?? '',
+              logoUrl: institutionData['logo_path'] as String?,
+              bannerImageUrl: institutionData['banner_image_path'] as String?,
+              type: (institutionData['institution_type'] as String?) ?? 'Institute',
+              city: (institutionData['city'] as String?) ?? 'Unknown',
+              country: (institutionData['country'] as String?) ?? 'Unknown',
+              studentCount: 0,
+              customUrlSlug: (institutionData['custom_url_slug'] as String?) ?? 'institution',
+              primaryBrandColor: (institutionData['primary_brand_color'] as String?) ?? '#34d399',
+              createdAt: DateTime.now(),
+              isOwnInstitution: true,
+            );
+            userInstitution = [institution];
+          } catch (e) {
+            print('❌ Error loading institution: $e');
+          }
+        }
+      }
+      
+      setState(() {
+        _myInstitutions = userInstitution;
+      });
+    } else {
+      setState(() {
+        _myInstitutions = [];
+      });
+    }
   }
 
   Future<void> _loadInstitutions() async {
     setState(() => _isLoadingInstitutions = true);
     try {
-      final institutions = await _repository.getInstitutions();
+      // Load institutions from mock repository
+      final mockInstitutions = await _repository.getInstitutions();
+      
+      // Load institutions from Hive storage
+      final storage = getIt<HiveStorageService>();
+      final storedInstitutions = storage.getAllInstitutions();
+      
+      // Convert stored institutions to InstitutionDisplayModel
+      final savedInstitutions = <InstitutionDisplayModel>[];
+      for (var data in storedInstitutions) {
+        try {
+          final institution = InstitutionDisplayModel(
+            id: (data['id'] as String?) ?? '',
+            name: (data['institution_name'] as String?) ?? 'Unknown Institution',
+            description: (data['short_description'] as String?) ?? '',
+            logoUrl: data['logo_path'] as String?,
+            bannerImageUrl: data['banner_image_path'] as String?,
+            type: (data['institution_type'] as String?) ?? 'Institute',
+            city: (data['city'] as String?) ?? 'Unknown',
+            country: (data['country'] as String?) ?? 'Unknown',
+            studentCount: 0,
+            customUrlSlug: (data['custom_url_slug'] as String?) ?? 'institution',
+            primaryBrandColor: (data['primary_brand_color'] as String?) ?? '#34d399',
+            createdAt: DateTime.now(),
+          );
+          savedInstitutions.add(institution);
+        } catch (e) {
+          print('⚠️ Error converting institution data: $e');
+          print('📋 Data that caused error: $data');
+        }
+      }
+      
+      // Combine mock and saved institutions (avoid duplicates by ID)
+      final allInstitutions = <String, InstitutionDisplayModel>{};
+      for (final inst in mockInstitutions) {
+        allInstitutions[inst.id] = inst;
+      }
+      for (final inst in savedInstitutions) {
+        allInstitutions[inst.id] = inst; // Saved institutions override mock ones
+      }
+      
       setState(() {
-        _institutions = institutions;
-        _filteredInstitutions = institutions;
+        _institutions = allInstitutions.values.toList();
+        _filteredInstitutions = _institutions;
         _isLoadingInstitutions = false;
       });
+      
+      // Load user's institutions after main institutions are loaded
+      await _loadMyInstitutions();
     } catch (e) {
       setState(() => _isLoadingInstitutions = false);
       if (mounted) {
@@ -185,12 +275,48 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     );
   }
 
-  void _navigateToInstitutionDetail(InstitutionDisplayModel institution) {
-    context.pushNamed(
-      'institution-detail',
-      pathParameters: {'id': institution.id},
-      extra: institution,
-    );
+  void _navigateToInstitutionDetail(InstitutionDisplayModel institution, bool isFromMyInstitutionsTab) {
+    final storage = getIt<HiveStorageService>();
+    final currentUser = storage.getCurrentUser();
+    final isOwnInstitution = currentUser?.institutionId == institution.id;
+    
+    // If it's from My Institutions tab and it's the user's own institution,
+    // navigate to role-specific dashboard (teacher or student environment)
+    if (isOwnInstitution && isFromMyInstitutionsTab) {
+      final userRole = currentUser!.role.toLowerCase();
+      
+      if (userRole == 'teacher') {
+        // Navigate to Teacher Dashboard
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TeacherDashboardPage(institution: institution),
+          ),
+        );
+      } else if (userRole == 'student') {
+        // Navigate to Student Dashboard
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StudentDashboardPage(institution: institution),
+          ),
+        );
+      } else {
+        // For other roles, show public detail view
+        context.pushNamed(
+          'institution-detail',
+          pathParameters: {'id': institution.id},
+          extra: institution,
+        );
+      }
+    } else {
+      // Browse tab or not own institution - show public detail view
+      context.pushNamed(
+        'institution-detail',
+        pathParameters: {'id': institution.id},
+        extra: institution,
+      );
+    }
   }
 
   @override
@@ -203,11 +329,17 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
         final userRole = authState is AuthAuthenticated
             ? authState.user.role
             : '';
+        final userEmail = authState is AuthAuthenticated
+            ? authState.user.email
+            : '';
 
         return BlocListener<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthUnauthenticated) {
               context.go('/login');
+            } else if (state is AuthAuthenticated) {
+              // Reload institutions when user data is updated (e.g., after accepting invitation)
+              _loadMyInstitutions();
             }
           },
           child: Scaffold(
@@ -230,6 +362,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
               },
               userName: userName,
               userRole: userRole,
+              userEmail: userEmail,
             ),
             appBar: AppBar(
               backgroundColor: AppColors.surface,
@@ -277,8 +410,8 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
         return _buildDashboardContent();
       case DashboardTab.notifications:
         return const NotificationsPage();
-      default:
-        return _buildDashboardContent();
+      case DashboardTab.queryDesk:
+        return const QueryDeskPage();
     }
   }
 

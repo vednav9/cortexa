@@ -16,10 +16,10 @@ class EmailService {
   void _debugPrintConfig() {
     assert(() {
       // ignore: avoid_print
-      print('📧 [EmailService] Using base endpoint: ' + _emailApiEndpoint);
+      print('📧 [EmailService] Using base endpoint: $_emailApiEndpoint');
       // ignore: avoid_print
       final ct = _dio.options.connectTimeout;
-      print('🌐 [EmailService] Dio connectTimeout: ' + (ct?.inSeconds.toString() ?? 'n/a') + 's');
+      print('🌐 [EmailService] Dio connectTimeout: ${ct?.inSeconds ?? 'n/a'}s');
       return true;
     }());
   }

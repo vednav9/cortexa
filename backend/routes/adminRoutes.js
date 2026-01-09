@@ -22,7 +22,16 @@ const router = express.Router();
 /* =========================
    AUTH
 ========================= */
-router.post("/register", upload.single("logo"), registerAdmin);
+// Accept optional `logo` and `banner` uploads in the same multipart request.
+// Keep fields optional so existing clients continue working.
+router.post(
+  "/register",
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "banner", maxCount: 1 },
+  ]),
+  registerAdmin
+);
 router.post("/login", loginAdmin);
 router.post("/logout", authenticate, logoutAdmin);
 

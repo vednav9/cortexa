@@ -5,7 +5,7 @@ import Institution from "../models/institution.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
-import { uploadInstitutionLogo } from "../services/cloudflareR2.js";
+import { uploadInstitutionLogo, uploadInstitutionBanner } from "../services/cloudflareR2.js";
 
 // helpers
 const slugify = (name) =>
@@ -93,13 +93,26 @@ export const registerAdmin = async (req, res) => {
       });
     }
 
-    // 🔹 UPLOAD LOGO (OPTIONAL)
+    // 🔹 UPLOAD LOGO/BANNER (OPTIONAL)
+    // Using upload.fields() so files appear in req.files.{logo|banner}[0]
     let logo = "";
-    if (req.file) {
+    let banner = "";
+    const logoFile = req.files?.logo?.[0];
+    const bannerFile = req.files?.banner?.[0];
+
+    if (logoFile) {
       logo = await uploadInstitutionLogo(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype
+        logoFile.buffer,
+        logoFile.originalname,
+        logoFile.mimetype
+      );
+    }
+
+    if (bannerFile) {
+      banner = await uploadInstitutionBanner(
+        bannerFile.buffer,
+        bannerFile.originalname,
+        bannerFile.mimetype
       );
     }
 
@@ -130,6 +143,7 @@ export const registerAdmin = async (req, res) => {
 
       branding: {
         logo,
+        banner,
         primaryColor: brandColor || "#10b981",
       },
     });

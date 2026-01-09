@@ -7,12 +7,14 @@ class InvitationCard extends StatelessWidget {
   final InvitationModel invitation;
   final VoidCallback? onAccept;
   final VoidCallback? onReject;
+  final bool isAdminView;
 
   const InvitationCard({
     super.key,
     required this.invitation,
     this.onAccept,
     this.onReject,
+    this.isAdminView = false,
   });
 
   @override
@@ -133,21 +135,22 @@ class InvitationCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Invited by
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.person_outline,
-                        size: 16,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Invited by: ',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                      ),
+                  // Invited by/to
+                  if (!isAdminView)
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Invited by: ',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                        ),
                       Expanded(
                         child: Text(
                           invitation.invitedByName,
@@ -160,6 +163,62 @@ class InvitationCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  // For admin view: Show invited user info
+                  if (isAdminView) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Sent to: ',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            invitation.invitedByName, // This contains the full name in admin view
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.email_outlined,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Email: ',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            invitation.invitedByEmail, // This contains the email in admin view
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   // Date
                   Row(

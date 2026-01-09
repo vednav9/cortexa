@@ -82,6 +82,17 @@ export const uploadInstitutionLogo = async (fileBuffer, fileName, contentType) =
 };
 
 /**
+ * Upload institution banner to R2 (images folder)
+ * @param {Buffer} fileBuffer - File buffer
+ * @param {string} fileName - Original filename
+ * @param {string} contentType - MIME type
+ * @returns {Promise<string>} - Public URL
+ */
+export const uploadInstitutionBanner = async (fileBuffer, fileName, contentType) => {
+    return uploadToR2(fileBuffer, fileName, "images", contentType);
+};
+
+/**
  * Upload document to R2 (docs folder)
  * @param {Buffer} fileBuffer - File buffer
  * @param {string} fileName - Original filename
@@ -92,4 +103,4 @@ export const uploadDocument = async (fileBuffer, fileName, contentType) => {
     return uploadToR2(fileBuffer, fileName, "docs", contentType);
 };
 
-export default { uploadToR2, deleteFromR2, uploadInstitutionLogo, uploadDocument };
+export default { uploadToR2, deleteFromR2, uploadInstitutionLogo, uploadInstitutionBanner, uploadDocument };
