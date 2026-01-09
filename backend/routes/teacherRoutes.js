@@ -5,6 +5,7 @@ import {
   logoutTeacher,
   getMyInstitution,
   getAuthorizedCourses,
+  getStudentsInAuthorizedCourses,
 } from "../controllers/teacherController.js";
 import { authenticate } from "../middleware/auth.js";
 
@@ -21,5 +22,8 @@ router.get("/my-institution", authenticate, getMyInstitution);
 
 // Courses
 router.get("/authorized-courses", authenticate, getAuthorizedCourses);
+
+// Students
+router.get("/students", authenticate, getStudentsInAuthorizedCourses);
 
 export default router;
