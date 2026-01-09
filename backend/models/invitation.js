@@ -21,6 +21,20 @@ const invitationSchema = new mongoose.Schema({
     enum: ['Student', 'Teacher'],
     required: true
   },
+  department: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Department',
+    default: null
+  },
+  semester: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Semester',
+    default: null
+  },
+  courses: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Course'
+  }],
   sender: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',

@@ -28,7 +28,24 @@ const studentSchema = new mongoose.Schema(
             default: "student",
         },
 
-        department: { type: String },
+        department: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Department",
+            default: null,
+        },
+
+        semester: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Semester",
+            default: null,
+        },
+
+        enrolledCourses: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Course",
+            },
+        ],
 
         institution: {
             type: mongoose.Schema.Types.ObjectId,

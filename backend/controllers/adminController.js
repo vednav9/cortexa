@@ -757,4 +757,71 @@ export const removeUserFromInstitution = async (req, res) => {
   }
 };
 
+// ============================================
+// GET STUDENTS BY INSTITUTION (for Dashboard)
+// ============================================
+export const getInstitutionStudents = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const admin = await Admin.findById(req.user.id);
+    if (!admin || admin.institution.toString() !== institutionId) {
+      return res.status(403).json({ message: "Not authorized for this institution" });
+    }
+
+    const students = await Student.find({ institution: institutionId })
+      .populate('department', 'name code')
+      .populate('semester', 'name academicYear')
+      .select('-password')
+      .sort('-createdAt');
+
+    res.json({
+      success: true,
+      count: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("GET STUDENTS ERROR:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ============================================
+// GET TEACHERS BY INSTITUTION (for Dashboard)
+// ============================================
+export const getInstitutionTeachers = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const admin = await Admin.findById(req.user.id);
+    if (!admin || admin.institution.toString() !== institutionId) {
+      return res.status(403).json({ message: "Not authorized for this institution" });
+    }
+
+    const teachers = await Teacher.find({ institution: institutionId })
+      .populate('department', 'name code')
+      .populate('semester', 'name academicYear')
+      .populate('authorizedCourses', 'name code')
+      .select('-password')
+      .sort('-createdAt');
+
+    res.json({
+      success: true,
+      count: teachers.length,
+      teachers,
+    });
+  } catch (error) {
+    console.error("GET TEACHERS ERROR:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 

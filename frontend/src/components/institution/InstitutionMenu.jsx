@@ -323,11 +323,7 @@ export default function InstitutionMenu({
       setOpenDropdown(openDropdown === item.id ? null : item.id);
     } else {
       // Navigate to the route for items without sub-items
-      if (item.id === "institution-dashboard") {
-        navigate(`/${slug}`);
-      } else {
-        navigate(`/${slug}/${item.id}`);
-      }
+      navigate(`/${slug}/${item.id}`);
       setOpenDropdown(null);
     }
   };
