@@ -19,24 +19,27 @@ export const NotificationProvider = ({ children }) => {
     };
 
     // 🔌 SOCKET LISTENER (THIS WAS MISSING)
-
     useEffect(() => {
         if (!user?._id) return;
 
         if (!socket.connected) {
             socket.connect();
-            console.log("🟢 SOCKET CONNECTED:", socket.id);
         }
 
         socket.emit("join:user", user._id);
-        console.log("👤 User joined room:", user._id);
+        console.log("👤 Joined notification room:", user._id);
+
+        const handleInvitation = (data) => {
+            console.log("🔔 CONTEXT RECEIVED:", data);
+            addNotification(data);
+        };
+
+        socket.on("invitation:new", handleInvitation);
 
         return () => {
-            socket.disconnect();
-            console.log("🔴 SOCKET DISCONNECTED");
+            socket.off("invitation:new", handleInvitation);
         };
     }, [user?._id]);
-
 
     return (
         <NotificationContext.Provider
