@@ -4,6 +4,7 @@ import { FiCalendar, FiPlus, FiEdit2, FiTrash2, FiX } from 'react-icons/fi';
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
+import toast from 'react-hot-toast';
 
 function Calendar() {
   const { hasAccess, institution } = useOutletContext();
@@ -28,7 +29,7 @@ function Calendar() {
     class: 'blue',
     exam: 'red',
     holiday: 'green',
-    event: 'purple',
+    event: 'yellow',
     deadline: 'orange',
   };
 
@@ -40,7 +41,9 @@ function Calendar() {
     try {
       setLoading(true);
       const response = await academicAPI.getCalendarEvents(institution._id);
-      setEvents(Array.isArray(response.data) ? response.data : []);
+      // Backend returns { success, count, data: [...] }
+      const eventsData = response.data.data || response.data || [];
+      setEvents(Array.isArray(eventsData) ? eventsData : []);
     } catch (error) {
       console.error('Error:', error);
       setEvents([]);
@@ -54,13 +57,15 @@ function Calendar() {
     try {
       if (editingEvent) {
         await academicAPI.updateCalendarEvent(editingEvent._id, formData);
+        toast.success('Event updated successfully!');
       } else {
         await academicAPI.createCalendarEvent(institution._id, formData);
+        toast.success('Event created successfully!');
       }
-      fetchEvents();
+      await fetchEvents();
       closeModal();
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to save event');
+      toast.error(error.response?.data?.message || 'Failed to save event');
     }
   };
 
@@ -68,9 +73,10 @@ function Calendar() {
     if (!window.confirm('Delete this event?')) return;
     try {
       await academicAPI.deleteCalendarEvent(id);
-      fetchEvents();
+      toast.success('Event deleted successfully!');
+      await fetchEvents();
     } catch (error) {
-      alert('Failed to delete event');
+      toast.error('Failed to delete event');
     }
   };
 
