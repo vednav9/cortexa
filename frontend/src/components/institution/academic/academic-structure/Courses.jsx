@@ -23,7 +23,7 @@ function Courses() {
     description: '',
     department: '',
     credits: 3,
-    semester: '',
+    semester: 1,
     maxCapacity: 60,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -102,7 +102,7 @@ function Courses() {
         description: course.description || '',
         department: course.department._id || course.department,
         credits: course.credits,
-        semester: course.semester || '',
+        semester: course.semester || 1,
         maxCapacity: course.maxCapacity || 60,
       });
     } else {
@@ -113,7 +113,7 @@ function Courses() {
         description: '',
         department: '',
         credits: 3,
-        semester: '',
+        semester: 1,
         maxCapacity: 60,
       });
     }
@@ -419,16 +419,32 @@ function Courses() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Max Capacity
+                      Semester *
                     </label>
                     <input
                       type="number"
+                      required
                       min="1"
-                      value={formData.maxCapacity}
-                      onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
+                      max="8"
+                      value={formData.semester}
+                      onChange={(e) => setFormData({ ...formData, semester: parseInt(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="e.g., 1, 2, 3..."
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Max Capacity
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.maxCapacity}
+                    onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-4">
