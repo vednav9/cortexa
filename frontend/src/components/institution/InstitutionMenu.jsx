@@ -37,191 +37,240 @@ export default function InstitutionMenu({
   const getMenuItems = () => {
     const role = userRole?.toLowerCase();
 
-    // For users without access (visitors)
-    if (!hasAccess) {
-      return [
-        {
-          id: "institution-dashboard",
-          label: "Institution Dashboard",
-          icon: FiHome,
-          items: [],
-        },
-        {
-          id: "academic-structure",
-          label: "Academic Structure",
-          icon: FiGrid,
-          items: [
-            { id: "departments", label: "Departments", icon: FiBook },
-            { id: "courses", label: "Courses", icon: FiBook },
-            { id: "faculty", label: "Faculty", icon: FiUsers },
-          ],
-        },
-      ];
-    }
+    // Debug logging
+    console.log('🎯 InstitutionMenu - getMenuItems:', {
+      userRole: role,
+      hasAccess,
+      willCheckRole: !!role
+    });
 
-    // ADMIN Menu
+    // ADMIN Menu - Check hasAccess for full vs limited menu
     if (role === "admin") {
-      return [
-        {
-          id: "institution-dashboard",
-          label: "Institution Dashboard",
-          icon: FiHome,
-          items: [],
-        },
-        {
-          id: "announcements",
-          label: "Announcements",
-          icon: FiBell,
-          items: [],
-        },
-        {
-          id: "invite-people",
-          label: "Invite People",
-          icon: FiUserPlus,
-          items: [],
-        },
-        {
-          id: "manage-users",
-          label: "Manage Users",
-          icon: FiUsers,
-          items: [],
-        },
-        {
-          id: "academic-structure",
-          label: "Academic Structure",
-          icon: FiGrid,
-          items: [
-            { id: "departments", label: "Departments", icon: FiBook },
-            { id: "courses", label: "Courses", icon: FiBook },
-            { id: "semesters", label: "Semesters", icon: FiClipboard },
-            { id: "calendar", label: "Academic Calendar", icon: FiBell },
-            { id: "faculty", label: "Faculty", icon: FiUsers },
-          ],
-        },
-        {
-          id: "query-desk",
-          label: "Query Desk",
-          icon: FiHelpCircle,
-          items: [],
-        },
-      ];
+      if (hasAccess) {
+        // Admin HAS ACCESS to this institution - Full admin menu
+        console.log('✅ Admin with access - showing full menu');
+        return [
+          {
+            id: "institution-dashboard",
+            label: "Institution Dashboard",
+            icon: FiHome,
+            items: [],
+          },
+          {
+            id: "announcements",
+            label: "Announcements",
+            icon: FiBell,
+            items: [],
+          },
+          {
+            id: "invite-people",
+            label: "Invite People",
+            icon: FiUserPlus,
+            items: [],
+          },
+          {
+            id: "manage-users",
+            label: "Manage Users",
+            icon: FiUsers,
+            items: [],
+          },
+          {
+            id: "academic-structure",
+            label: "Academic Structure",
+            icon: FiGrid,
+            items: [
+              { id: "departments", label: "Departments", icon: FiBook },
+              { id: "courses", label: "Courses", icon: FiBook },
+              { id: "semesters", label: "Semesters", icon: FiClipboard },
+              { id: "calendar", label: "Academic Calendar", icon: FiBell },
+              { id: "faculty", label: "Faculty", icon: FiUsers },
+            ],
+          },
+          {
+            id: "query-desk",
+            label: "Query Desk",
+            icon: FiHelpCircle,
+            items: [],
+          },
+        ];
+      } else {
+        // Admin NO ACCESS - Limited menu (visitor view)
+        console.log('⚠️ Admin without access - showing limited menu');
+        return [
+          {
+            id: "institution-dashboard",
+            label: "Institution Dashboard",
+            icon: FiHome,
+            items: [],
+          },
+          {
+            id: "query-desk",
+            label: "Query Desk",
+            icon: FiHelpCircle,
+            items: [],
+          },
+        ];
+      }
     }
 
-    // TEACHER Menu
+    // TEACHER Menu - Check hasAccess for full vs limited menu
     if (role === "teacher") {
-      return [
-        {
-          id: "institution-dashboard",
-          label: "Institution Dashboard",
-          icon: FiHome,
-          items: [],
-        },
-        {
-          id: "announcements",
-          label: "Announcements",
-          icon: FiBell,
-          items: [],
-        },
-        {
-          id: "see-students",
-          label: "See Students",
-          icon: FiUsers,
-          items: [],
-        },
-        {
-          id: "upload-notes",
-          label: "Upload Notes",
-          icon: FiUpload,
-          items: [],
-        },
-        {
-          id: "generate-mcq",
-          label: "Generate MCQs",
-          icon: FiCheckSquare,
-          items: [],
-        },
-        {
-          id: "voice-to-text",
-          label: "Voice-to-Text",
-          icon: FiMic,
-          items: [],
-        },
-        {
-          id: "qa-portal",
-          label: "Q&A Portal",
-          icon: FiMessageSquare,
-          items: [],
-        },
-        {
-          id: "assessment",
-          label: "Assessment",
-          icon: FiClipboard,
-          items: [],
-        },
-        {
-          id: "ai-chatbot",
-          label: "AI Chatbot Personal",
-          icon: HiSparkles,
-          items: [],
-        },
-        {
-          id: "query-desk",
-          label: "Query Desk",
-          icon: FiHelpCircle,
-          items: [],
-        },
-      ];
+      if (hasAccess) {
+        // Teacher HAS ACCESS to this institution - Full menu
+        console.log('✅ Teacher with access - showing full menu');
+        return [
+          {
+            id: "institution-dashboard",
+            label: "Institution Dashboard",
+            icon: FiHome,
+            items: [],
+          },
+          {
+            id: "announcements",
+            label: "Announcements",
+            icon: FiBell,
+            items: [],
+          },
+          {
+            id: "see-students",
+            label: "See Students",
+            icon: FiUsers,
+            items: [],
+          },
+          {
+            id: "upload-notes",
+            label: "Upload Notes",
+            icon: FiUpload,
+            items: [],
+          },
+          {
+            id: "generate-mcq",
+            label: "Generate MCQs",
+            icon: FiCheckSquare,
+            items: [],
+          },
+          {
+            id: "voice-to-text",
+            label: "Voice-to-Text",
+            icon: FiMic,
+            items: [],
+          },
+          {
+            id: "qa-portal",
+            label: "Q&A Portal",
+            icon: FiMessageSquare,
+            items: [],
+          },
+          {
+            id: "assessment",
+            label: "Assessment",
+            icon: FiClipboard,
+            items: [],
+          },
+          {
+            id: "ai-chatbot",
+            label: "AI Chatbot Personal",
+            icon: HiSparkles,
+            items: [],
+          },
+          {
+            id: "query-desk",
+            label: "Query Desk",
+            icon: FiHelpCircle,
+            items: [],
+          },
+        ];
+      } else {
+        // Teacher NO ACCESS - Limited menu
+        console.log('⚠️ Teacher without access - showing limited menu');
+        return [
+          {
+            id: "institution-dashboard",
+            label: "Institution Dashboard",
+            icon: FiHome,
+            items: [],
+          },
+          {
+            id: "query-desk",
+            label: "Query Desk",
+            icon: FiHelpCircle,
+            items: [],
+          },
+        ];
+      }
     }
 
-    // STUDENT Menu
+    // STUDENT Menu - Check hasAccess for full vs limited menu
     if (role === "student") {
-      return [
-        {
-          id: "institution-dashboard",
-          label: "Institution Dashboard",
-          icon: FiHome,
-          items: [],
-        },
-        {
-          id: "announcements",
-          label: "Announcements",
-          icon: FiBell,
-          items: [],
-        },
-        {
-          id: "mcq-test",
-          label: "MCQ Test",
-          icon: FiCheckSquare,
-          items: [],
-        },
-        {
-          id: "rag-chatbot",
-          label: "RAG Chatbot",
-          icon: HiSparkles,
-          items: [],
-        },
-        {
-          id: "qa-section",
-          label: "Q&A Section",
-          icon: FiMessageSquare,
-          items: [],
-        },
-        {
-          id: "assessment",
-          label: "Assessment",
-          icon: FiClipboard,
-          items: [],
-        },
-        {
-          id: "query-desk",
-          label: "Query Desk",
-          icon: FiHelpCircle,
-          items: [],
-        },
-      ];
+      if (hasAccess) {
+        // Student HAS ACCESS to this institution - Full menu
+        console.log('✅ Student with access - showing full menu');
+        return [
+          {
+            id: "institution-dashboard",
+            label: "Institution Dashboard",
+            icon: FiHome,
+            items: [],
+          },
+          {
+            id: "announcements",
+            label: "Announcements",
+            icon: FiBell,
+            items: [],
+          },
+          {
+            id: "mcq-test",
+            label: "MCQ Test",
+            icon: FiCheckSquare,
+            items: [],
+          },
+          {
+            id: "rag-chatbot",
+            label: "RAG Chatbot",
+            icon: HiSparkles,
+            items: [],
+          },
+          {
+            id: "qa-section",
+            label: "Q&A Section",
+            icon: FiMessageSquare,
+            items: [],
+          },
+          {
+            id: "assessment",
+            label: "Assessment",
+            icon: FiClipboard,
+            items: [],
+          },
+          {
+            id: "query-desk",
+            label: "Query Desk",
+            icon: FiHelpCircle,
+            items: [],
+          },
+        ];
+      } else {
+        // Student NO ACCESS - Limited menu
+        console.log('⚠️ Student without access - showing limited menu');
+        return [
+          {
+            id: "institution-dashboard",
+            label: "Institution Dashboard",
+            icon: FiHome,
+            items: [],
+          },
+          {
+            id: "query-desk",
+            label: "Query Desk",
+            icon: FiHelpCircle,
+            items: [],
+          },
+        ];
+      }
     }
 
-    // Default (no access)
+    // Default - Non-logged-in users or unknown roles
+    console.log('⚠️ No role matched or not logged in - showing public menu');
     return [
       {
         id: "institution-dashboard",
@@ -230,14 +279,10 @@ export default function InstitutionMenu({
         items: [],
       },
       {
-        id: "academic-structure",
-        label: "Academic Structure",
-        icon: FiGrid,
-        items: [
-          { id: "departments", label: "Departments", icon: FiBook },
-          { id: "courses", label: "Courses", icon: FiBook },
-          { id: "faculty", label: "Faculty", icon: FiUsers },
-        ],
+        id: "courses",
+        label: "Courses",
+        icon: FiBook,
+        items: [],
       },
     ];
   };

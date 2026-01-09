@@ -26,8 +26,12 @@ function Faculty() {
         academicAPI.getFaculty(institution._id),
         academicAPI.getDepartments(institution._id),
       ]);
-      setFaculty(Array.isArray(facultyRes.data) ? facultyRes.data : []);
-      setDepartments(Array.isArray(deptsRes.data) ? deptsRes.data : []);
+      // Backend returns { success, count, data: [...] }
+      const facultyData = facultyRes.data.data || facultyRes.data || [];
+      const deptsData = deptsRes.data.data || deptsRes.data || [];
+      
+      setFaculty(Array.isArray(facultyData) ? facultyData : []);
+      setDepartments(Array.isArray(deptsData) ? deptsData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       setFaculty([]);
@@ -107,7 +111,7 @@ function Faculty() {
             className="bg-gradient-to-br from-white to-indigo-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border border-indigo-100/50"
           >
             <div className="flex flex-col items-center text-center mb-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg mb-3">
+              <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-red-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg mb-3">
                 {member.name?.charAt(0).toUpperCase() || member.email?.charAt(0).toUpperCase()}
               </div>
               
@@ -169,7 +173,7 @@ function Faculty() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center py-16 px-4"
         >
-          <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-200 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-red-200 rounded-full flex items-center justify-center mx-auto mb-6">
             <FiUsers className="w-12 h-12 text-indigo-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-800 mb-2">
@@ -188,7 +192,7 @@ function Faculty() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-8 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-2xl p-6 border border-indigo-100"
+          className="mt-8 bg-gradient-to-r from-indigo-50 via-red-50 to-pink-50 rounded-2xl p-6 border border-indigo-100"
         >
           <h3 className="text-lg font-bold text-gray-800 mb-6">Faculty Overview</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
@@ -200,11 +204,11 @@ function Faculty() {
               <p className="text-2xl font-bold text-indigo-600">{faculty.length}</p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-lg">
                 <FiFilter className="w-6 h-6 text-white" />
               </div>
               <p className="text-gray-600 text-sm mb-1">Departments</p>
-              <p className="text-2xl font-bold text-purple-600">{departments.length}</p>
+              <p className="text-2xl font-bold text-red-600">{departments.length}</p>
             </div>
             <div className="text-center">
               <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-lg">

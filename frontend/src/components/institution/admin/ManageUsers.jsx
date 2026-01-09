@@ -59,10 +59,19 @@ const ManageUsers = () => {
 
     // Fetch users on mount
     useEffect(() => {
-        if (institution?._id && hasAccess && user?.userType === 'Admin') {
+        if (institution?._id && hasAccess && user?.role === 'admin') {
             fetchUsers();
         }
-    }, [institution, hasAccess, user, roleFilter, statusFilter, departmentFilter, searchQuery]);
+    }, [
+        institution?._id,
+        hasAccess,
+        user?.role,
+        roleFilter,
+        statusFilter,
+        departmentFilter,
+        searchQuery
+    ]);
+
 
     const fetchUsers = async () => {
         try {
@@ -434,8 +443,8 @@ const ManageUsers = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${user.role === "teacher"
-                                                    ? "bg-green-100 text-green-700"
-                                                    : "bg-blue-100 text-blue-700"
+                                                ? "bg-green-100 text-green-700"
+                                                : "bg-blue-100 text-blue-700"
                                                 }`}>
                                                 {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                                             </span>
@@ -450,8 +459,8 @@ const ManageUsers = () => {
                                             <button
                                                 onClick={() => handleStatusToggle(user._id, user.role)}
                                                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${user.status === "active"
-                                                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                                        : "bg-red-100 text-red-700 hover:bg-red-200"
+                                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                                    : "bg-red-100 text-red-700 hover:bg-red-200"
                                                     }`}
                                             >
                                                 {user.status?.charAt(0).toUpperCase() + user.status?.slice(1) || "Active"}

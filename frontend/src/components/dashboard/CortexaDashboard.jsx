@@ -25,7 +25,7 @@ import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
 const CortexaDashboard = () => {
-    const { user, loading } = useAuth();
+    const { user, loading, refreshUser } = useAuth();
 
     console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -106,20 +106,53 @@ const CortexaDashboard = () => {
         };
     }, [profileMenuOpen]);
 
-    //notifications
-    // useEffect(() => {
-    //     if (!user) return;
+    useEffect(() => {
+        if (!user?.id) return;
 
-    //     socket.on("global_notification", (notification) => {
-    //         setGlobalNotifications((prev) => [notification, ...prev]);
-    //         setUnreadCount((prev) => prev + 1);
-    //     });
+        if (!socket.connected) {
+            socket.connect();
+            console.log("🔌 SOCKET CONNECT CALLED");
+        }
+
+        socket.on("connect", () => {
+            console.log("🟢 SOCKET CONNECTED:", socket.id);
+            socket.emit("join:user", user.id);
+        });
+
+        socket.on("invitation:new", (data) => {
+            console.log("📩 INVITATION RECEIVED:", data);
+            setUnreadCount(prev => prev + 1);
+        });
+
+        return () => {
+            socket.off("connect");
+            socket.off("invitation:new");
+        };
+    }, [user?.id]);
 
 
-    //     return () => {
-    //         socket.off("global_notification");
-    //     };
-    // }, [user]);
+
+
+    useEffect(() => {
+        if (!user?.id) return;
+
+        const handleInvitation = (invitation) => {
+            console.log("📩 INVITATION RECEIVED:", invitation);
+
+            setGlobalNotifications(prev => [invitation, ...prev]);
+            setUnreadCount(prev => prev + 1);
+
+            toast.success("📩 New invitation received");
+        };
+
+        socket.on("invitation:new", handleInvitation);
+
+        return () => {
+            socket.off("invitation:new", handleInvitation);
+        };
+    }, [user?.id]);
+
+
 
 
     if (loading) {
@@ -138,36 +171,18 @@ const CortexaDashboard = () => {
     useEffect(() => {
         if (!user?._id) return;
 
-        // ✅ Connect once
-        if (!socket.connected) {
-            socket.connect();
-        }
+        socket.on("auth:refresh", async () => {
+            console.log("🔄 AUTH REFRESH RECEIVED");
 
-        socket.on("connect", () => {
-            console.log("🟢 SOCKET CONNECTED:", socket.id);
-            socket.emit("join:user", user._id);
+            // force reload auth user from backend
+            await refreshUser(); // 👈 explained below
         });
 
-        const handleInvite = (invitation) => {
-            console.log("📩 INVITE RECEIVED:", invitation);
-
-            if (
-                invitation.email === user.email ||
-                invitation.recipient === user._id
-            ) {
-                setGlobalNotifications(prev => [invitation, ...prev]);
-                setUnreadCount(prev => prev + 1);
-                toast.success("📩 New invitation received");
-            }
-        };
-
-        socket.on("invitation:new", handleInvite);
-
         return () => {
-            socket.off("invitation:new", handleInvite);
-            // ❌ DO NOT DISCONNECT HERE
+            socket.off("auth:refresh");
         };
     }, [user?._id]);
+
 
 
 
