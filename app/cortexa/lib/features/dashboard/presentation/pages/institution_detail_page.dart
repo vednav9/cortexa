@@ -30,7 +30,7 @@ class InstitutionDetailPage extends StatelessWidget {
               title: Text(
                 institution.name,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.black,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),

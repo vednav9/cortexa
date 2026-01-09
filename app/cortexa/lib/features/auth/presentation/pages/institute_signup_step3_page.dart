@@ -3,12 +3,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:io';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../../../core/services/hive_storage_service.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../admin/data/models/institution_model.dart';
+import '../../../dashboard/data/models/institution_display_model.dart';
+import '../../../dashboard/presentation/widgets/institution_card.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_state.dart';
 
@@ -27,6 +32,8 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
   Color _brandColor = const Color(0xFF34d399);
   String? _logoPath;
   File? _logoFile;
+  String? _bannerImagePath;
+  File? _bannerImageFile;
   
   @override
   void initState() {
@@ -41,6 +48,31 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
   void dispose() {
     _urlSlugController.dispose();
     super.dispose();
+  }
+
+  InstitutionDisplayModel _buildPreviewModel() {
+    return InstitutionDisplayModel(
+      id: 'preview',
+      name: widget.previousData.institutionName.isEmpty 
+          ? 'Your Institution' 
+          : widget.previousData.institutionName,
+      type: widget.previousData.institutionType,
+      logoUrl: _logoFile?.path,
+      bannerImageUrl: _bannerImageFile?.path,
+      city: widget.previousData.city,
+      country: widget.previousData.country,
+      description: widget.previousData.shortDescription.isEmpty
+          ? 'Your institution description will appear here'
+          : widget.previousData.shortDescription,
+      customUrlSlug: _urlSlugController.text.isEmpty 
+          ? 'your-institution' 
+          : _urlSlugController.text,
+      primaryBrandColor: '#${_brandColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
+      isOwnInstitution: true,
+      studentCount: 0,
+      teacherCount: 0,
+      createdAt: DateTime.now(),
+    );
   }
   
   Future<void> _pickColor() async {
@@ -98,7 +130,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       
       if (result != null && result.files.single.path != null) {
         setState(() {
-          _logoPath = result.files.single.name;
+          _logoPath = result.files.single.path;
           _logoFile = File(result.files.single.path!);
         });
         
@@ -123,16 +155,56 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       }
     }
   }
+
+  Future<void> _pickBannerImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+      
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _bannerImagePath = result.files.single.path;
+          _bannerImageFile = File(result.files.single.path!);
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Banner image uploaded successfully!'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
   
-  void _handleSubmit() {
+  void _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
       final institutionData = widget.previousData.copyWith(
         customUrlSlug: _urlSlugController.text.trim(),
-        primaryBrandColor: '#${_brandColor.value.toRadixString(16).substring(2)}',
+        primaryBrandColor: '#${_brandColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
         logoPath: _logoPath,
+        bannerImagePath: _bannerImagePath,
       );
       
-      // Create the Admin account in the mock auth repository so they can log in
+      // Generate a unique institution ID
+      const uuid = Uuid();
+      final institutionId = uuid.v4();
+      
+      // Create the Admin account and link them to the institution
       try {
         final repo = context.read<AuthBloc>().authRepository;
         repo.registerAdminUser(
@@ -140,6 +212,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
           email: institutionData.adminEmail,
           password: institutionData.adminPassword,
           fullName: institutionData.adminFullName,
+          institutionId: institutionId,
         );
       } catch (e) {
         // Non-fatal in demo; proceed to success message
@@ -148,24 +221,31 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
         print('⚠️ Failed to pre-create admin user: $e');
       }
 
-      // TODO: Submit institution data to backend
-      // For now, just show success message
-      print('Institution Registration Data: ${institutionData.toJson()}');
-      if (_logoFile != null) {
-        print('Logo file path: ${_logoFile!.path}');
+      // Save institution data to Hive storage
+      try {
+        final storage = getIt<HiveStorageService>();
+        final institutionJson = institutionData.toJson();
+        institutionJson['id'] = institutionId; // Add the generated ID
+        
+        await storage.saveInstitution(institutionJson);
+        print('✅ Institution saved to storage: ${institutionData.institutionName}');
+      } catch (e) {
+        print('⚠️ Failed to save institution: $e');
       }
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Institution registration successful! You can now sign in as Admin.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      
-      // Navigate to login
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) context.go('/login');
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Institution registration successful! You can now sign in as Admin.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        
+        // Navigate to login
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) context.go('/login');
+        });
+      }
     }
   }
   
@@ -193,6 +273,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
         },
         child: SafeArea(
           child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
             padding: EdgeInsets.all(screenWidth * 0.06),
             child: Form(
               key: _formKey,
@@ -284,7 +365,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _logoPath ?? 'No file chosen', 
+                                    _logoPath != null ? _logoPath!.split('\\').last.split('/').last : 'No file chosen', 
                                     style: const TextStyle(color: AppColors.textPrimary),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -299,6 +380,69 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                             ),
                             TextButton(
                               onPressed: _pickLogo,
+                              child: const Text('Choose File', style: TextStyle(color: AppColors.primary)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Banner Background Image
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Banner Background Image', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                image: _bannerImageFile != null
+                                    ? DecorationImage(
+                                        image: FileImage(_bannerImageFile!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: _bannerImageFile == null 
+                                  ? const Icon(Icons.panorama_outlined, color: AppColors.primary)
+                                  : null,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _bannerImagePath != null ? _bannerImagePath!.split('\\').last.split('/').last : 'No file chosen', 
+                                    style: const TextStyle(color: AppColors.textPrimary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Recommended: 1200x400px, PNG or JPG', 
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _pickBannerImage,
                               child: const Text('Choose File', style: TextStyle(color: AppColors.primary)),
                             ),
                           ],
@@ -361,7 +505,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '#${_brandColor.value.toRadixString(16).substring(2).toUpperCase()}',
+                                    '#${_brandColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
                                     style: const TextStyle(
                                       color: AppColors.textPrimary,
                                       fontFamily: 'monospace',
@@ -394,76 +538,36 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                   
                   const SizedBox(height: 24),
                   
-                  // Brand Preview
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Brand Preview', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: _brandColor,
-                                borderRadius: BorderRadius.circular(10),
-                                image: _logoFile != null
-                                    ? DecorationImage(
-                                        image: FileImage(_logoFile!),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                              ),
-                              child: _logoFile == null 
-                                  ? Center(
-                                      child: Text(
-                                        widget.previousData.institutionName.isNotEmpty 
-                                          ? widget.previousData.institutionName[0].toUpperCase()
-                                          : 'A',
-                                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                                      ),
-                                    )
-                                  : null,
+                  // Live Card Preview
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.preview, color: AppColors.primary, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Card Preview',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.previousData.institutionName.isEmpty ? 'Your Institution' : widget.previousData.institutionName,
-                                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-                                  ),
-                                  if (widget.previousData.shortDescription.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        widget.previousData.shortDescription,
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textPrimary),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'cortexa.com/${_urlSlugController.text.isEmpty ? "your-institution" : _urlSlugController.text}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'This is how your institution will appear in the Browse Colleges list',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                      InstitutionCard(
+                        institution: _buildPreviewModel(),
+                        userRole: 'admin',
+                      ),
+                    ],
                   ),
                   
                   const SizedBox(height: 32),

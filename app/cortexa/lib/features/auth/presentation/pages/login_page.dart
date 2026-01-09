@@ -76,6 +76,7 @@ class _LoginPageState extends State<LoginPage> {
           return SafeArea(
             child: Center(
               child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.symmetric(
                   horizontal: screenWidth * 0.06,
                 ),
@@ -184,7 +185,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                               ),
                               child: DropdownButtonFormField<UserRole>(
-                                value: _selectedRole,
+                                initialValue: _selectedRole,
                                 decoration: const InputDecoration(
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: 16,

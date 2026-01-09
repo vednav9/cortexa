@@ -4,12 +4,14 @@ import { FiBook, FiPlus, FiEdit2, FiTrash2, FiX, FiSearch, FiFilter, FiUsers } f
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
+import toast from 'react-hot-toast';
 
 function Courses() {
   const { hasAccess, institution } = useOutletContext();
   const [courses, setCourses] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [semesters, setSemesters] = useState([]);
+  const [faculty, setFaculty] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
@@ -22,7 +24,8 @@ function Courses() {
     description: '',
     department: '',
     credits: 3,
-    semester: '',
+    semesterAvailable: '',
+    facultyAvailable: '',
     maxCapacity: 60,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -36,19 +39,28 @@ function Courses() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [coursesRes, deptsRes, semsRes] = await Promise.all([
+      const [coursesRes, deptsRes, semsRes, facultyRes] = await Promise.all([
         academicAPI.getCourses(institution._id),
         academicAPI.getDepartments(institution._id),
         academicAPI.getSemesters(institution._id),
+        academicAPI.getFaculty(institution._id),
       ]);
-      setCourses(Array.isArray(coursesRes.data) ? coursesRes.data : []);
-      setDepartments(Array.isArray(deptsRes.data) ? deptsRes.data : []);
-      setSemesters(Array.isArray(semsRes.data) ? semsRes.data : []);
+      // Backend returns { success, count, data: [...] }
+      const coursesData = coursesRes.data.data || coursesRes.data || [];
+      const deptsData = deptsRes.data.data || deptsRes.data || [];
+      const semsData = semsRes.data.data || semsRes.data || [];
+      const facultyData = facultyRes.data.data || facultyRes.data || [];
+      
+      setCourses(Array.isArray(coursesData) ? coursesData : []);
+      setDepartments(Array.isArray(deptsData) ? deptsData : []);
+      setSemesters(Array.isArray(semsData) ? semsData : []);
+      setFaculty(Array.isArray(facultyData) ? facultyData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       setCourses([]);
       setDepartments([]);
       setSemesters([]);
+      setFaculty([]);
     } finally {
       setLoading(false);
     }
@@ -60,14 +72,16 @@ function Courses() {
       setSubmitting(true);
       if (editingCourse) {
         await academicAPI.updateCourse(editingCourse._id, formData);
+        toast.success('Course updated successfully!');
       } else {
         await academicAPI.createCourse(institution._id, formData);
+        toast.success('Course created successfully!');
       }
-      fetchData();
+      await fetchData();
       closeModal();
     } catch (error) {
       console.error('Error saving course:', error);
-      alert(error.response?.data?.message || 'Failed to save course');
+      toast.error(error.response?.data?.message || 'Failed to save course');
     } finally {
       setSubmitting(false);
     }
@@ -77,10 +91,11 @@ function Courses() {
     if (!window.confirm('Are you sure you want to delete this course?')) return;
     try {
       await academicAPI.deleteCourse(id);
-      fetchData();
+      toast.success('Course deleted successfully!');
+      await fetchData();
     } catch (error) {
       console.error('Error deleting course:', error);
-      alert(error.response?.data?.message || 'Failed to delete course');
+      toast.error(error.response?.data?.message || 'Failed to delete course');
     }
   };
 
@@ -93,7 +108,8 @@ function Courses() {
         description: course.description || '',
         department: course.department._id || course.department,
         credits: course.credits,
-        semester: course.semester || '',
+        semesterAvailable: course.semesterAvailable?._id || course.semesterAvailable || '',
+        facultyAvailable: course.facultyAvailable?._id || course.facultyAvailable || '',
         maxCapacity: course.maxCapacity || 60,
       });
     } else {
@@ -104,7 +120,8 @@ function Courses() {
         description: '',
         department: '',
         credits: 3,
-        semester: '',
+        semesterAvailable: '',
+        facultyAvailable: '',
         maxCapacity: 60,
       });
     }
@@ -268,6 +285,29 @@ function Courses() {
                 </p>
               </div>
             )}
+
+            {course.semesterAvailable && (
+              <div className="mt-3 p-3 bg-gradient-to-r from-pink-50 to-pink-100 rounded-xl border border-pink-200">
+                <p className="text-xs text-pink-600 font-semibold mb-1">SEMESTER</p>
+                <p className="text-sm font-bold text-pink-800">
+                  {course.semesterAvailable.name} ({course.semesterAvailable.academicYear})
+                </p>
+              </div>
+            )}
+
+            {course.facultyAvailable && (
+              <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+                <p className="text-xs text-blue-600 font-semibold mb-1">FACULTY</p>
+                <p className="text-sm font-bold text-blue-800">
+                  {course.facultyAvailable.fullName || course.facultyAvailable}
+                </p>
+                {course.facultyAvailable.jobTitle && (
+                  <p className="text-xs text-blue-600 mt-0.5">
+                    {course.facultyAvailable.jobTitle}
+                  </p>
+                )}
+              </div>
+            )}
           </motion.div>
         ))}
       </div>
@@ -420,6 +460,53 @@ function Courses() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Semester Available
+                  </label>
+                  <select
+                    value={formData.semesterAvailable}
+                    onChange={(e) => setFormData({ ...formData, semesterAvailable: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="">Select Semester</option>
+                    {semesters.map(sem => (
+                      <option key={sem._id} value={sem._id}>{sem.name} ({sem.academicYear})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Faculty Available
+                  </label>
+                  <select
+                    value={formData.facultyAvailable}
+                    onChange={(e) => setFormData({ ...formData, facultyAvailable: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
+                    <option value="">Select Faculty</option>
+                    {faculty.map(f => (
+                      <option key={f._id} value={f._id}>
+                        {f.fullName} - {f.jobTitle || 'Faculty'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Max Capacity
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.maxCapacity}
+                    onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-4">

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/hive_storage_service.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/bloc/terminology/terminology_bloc.dart';
+import '../../../../core/bloc/terminology/terminology_event.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
@@ -11,7 +15,8 @@ import '../widgets/dashboard_drawer.dart';
 import '../widgets/institution_tab_view.dart';
 import '../widgets/search_filter_modal.dart';
 import 'notifications_page.dart';
-import 'invite_people_page.dart';
+import 'query_desk_page.dart';
+import '../../../institution/presentation/pages/institution_admin_dashboard_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -41,16 +46,57 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   @override
   void initState() {
     super.initState();
+    // Load terminology immediately when dashboard loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TerminologyBloc>().add(LoadInstitutionType());
+    });
     _loadInstitutions();
-    _loadMyInstitutions();
   }
 
   Future<void> _loadMyInstitutions() async {
-    // TODO: Load admin's registered/managed institutions from API
-    // For now, using empty list
-    setState(() {
-      _myInstitutions = [];
-    });
+    final storage = getIt<HiveStorageService>();
+    final currentUser = storage.getCurrentUser();
+    
+    if (currentUser?.institutionId != null && currentUser!.institutionId!.isNotEmpty) {
+      var userInstitution = _institutions
+          .where((i) => i.id == currentUser.institutionId)
+          .toList();
+      
+      if (userInstitution.isEmpty) {
+        final institutionData = storage.findInstitutionById(currentUser.institutionId!);
+        if (institutionData != null) {
+          try {
+            final institution = InstitutionDisplayModel(
+              id: (institutionData['id'] as String?) ?? '',
+              name: (institutionData['institution_name'] as String?) ?? 'Unknown Institution',
+              description: (institutionData['short_description'] as String?) ?? '',
+              logoUrl: institutionData['logo_path'] as String?,
+              bannerImageUrl: institutionData['banner_image_path'] as String?,
+              type: (institutionData['institution_type'] as String?) ?? 'Institute',
+              city: (institutionData['city'] as String?) ?? 'Unknown',
+              country: (institutionData['country'] as String?) ?? 'Unknown',
+              studentCount: 0,
+              customUrlSlug: (institutionData['custom_url_slug'] as String?) ?? 'institution',
+              primaryBrandColor: (institutionData['primary_brand_color'] as String?) ?? '#34d399',
+              createdAt: DateTime.now(),
+              isOwnInstitution: true,
+            );
+            userInstitution = [institution];
+            print('✅ [ADMIN] Loaded institution: ${institution.name}');
+          } catch (e) {
+            print('❌ [ADMIN] Error loading institution: $e');
+          }
+        }
+      }
+      
+      setState(() {
+        _myInstitutions = userInstitution;
+      });
+    } else {
+      setState(() {
+        _myInstitutions = [];
+      });
+    }
   }
 
   @override
@@ -62,12 +108,55 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _loadInstitutions() async {
     setState(() => _isLoading = true);
     try {
-      final institutions = await _repository.getInstitutions();
+      // Load institutions from mock repository
+      final mockInstitutions = await _repository.getInstitutions();
+      
+      // Load institutions from Hive storage
+      final storage = getIt<HiveStorageService>();
+      final storedInstitutions = storage.getAllInstitutions();
+      
+      // Convert stored institutions to InstitutionDisplayModel
+      final savedInstitutions = <InstitutionDisplayModel>[];
+      for (var data in storedInstitutions) {
+        try {
+          final institution = InstitutionDisplayModel(
+            id: (data['id'] as String?) ?? '',
+            name: (data['institution_name'] as String?) ?? 'Unknown Institution',
+            description: (data['short_description'] as String?) ?? '',
+            logoUrl: data['logo_path'] as String?,
+            bannerImageUrl: data['banner_image_path'] as String?,
+            type: (data['institution_type'] as String?) ?? 'Institute',
+            city: (data['city'] as String?) ?? 'Unknown',
+            country: (data['country'] as String?) ?? 'Unknown',
+            studentCount: 0,
+            customUrlSlug: (data['custom_url_slug'] as String?) ?? 'institution',
+            primaryBrandColor: (data['primary_brand_color'] as String?) ?? '#34d399',
+            createdAt: DateTime.now(),
+          );
+          savedInstitutions.add(institution);
+        } catch (e) {
+          print('⚠️ Error converting institution data: $e');
+          print('📋 Data that caused error: $data');
+        }
+      }
+      
+      // Combine mock and saved institutions (avoid duplicates by ID)
+      final allInstitutions = <String, InstitutionDisplayModel>{};
+      for (final inst in mockInstitutions) {
+        allInstitutions[inst.id] = inst;
+      }
+      for (final inst in savedInstitutions) {
+        allInstitutions[inst.id] = inst; // Saved institutions override mock ones
+      }
+      
       setState(() {
-        _institutions = institutions;
-        _filteredInstitutions = institutions;
+        _institutions = allInstitutions.values.toList();
+        _filteredInstitutions = _institutions;
         _isLoading = false;
       });
+      
+      // Load admin's institutions after main institutions are loaded
+      await _loadMyInstitutions();
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -187,12 +276,32 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 
-  void _navigateToInstitutionDetail(InstitutionDisplayModel institution) {
-    context.pushNamed(
-      'institution-detail',
-      pathParameters: {'id': institution.id},
-      extra: institution,
-    );
+  void _navigateToInstitutionDetail(InstitutionDisplayModel institution, bool isFromMyInstitutionsTab) {
+    // Only navigate to admin dashboard if:
+    // 1. It's the admin's own institution AND
+    // 2. Clicked from "My Institutions" tab (not from "Browse Institutions")
+    final storage = getIt<HiveStorageService>();
+    final currentUser = storage.getCurrentUser();
+    final isOwnInstitution = currentUser?.institutionId == institution.id;
+
+    if (isOwnInstitution && isFromMyInstitutionsTab) {
+      // Navigate to Institution Admin Dashboard (full environment)
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => InstitutionAdminDashboardPage(
+            institution: institution,
+          ),
+        ),
+      );
+    } else {
+      // Navigate to regular institution detail view (public info only)
+      context.pushNamed(
+        'institution-detail',
+        pathParameters: {'id': institution.id},
+        extra: institution,
+      );
+    }
   }
 
   @override
@@ -201,6 +310,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       listener: (context, state) {
         if (state is AuthUnauthenticated) {
           context.go('/login');
+        } else if (state is AuthAuthenticated) {
+          // Reload institutions when user data is updated
+          _loadMyInstitutions();
         }
       },
       child: BlocBuilder<AuthBloc, AuthState>(
@@ -265,6 +377,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               },
               userName: userName,
               userRole: userRole,
+              userEmail: state is AuthAuthenticated ? state.user.email : '',
             ),
             body: _buildCurrentTabContent(),
           );
@@ -279,8 +392,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         return _buildDashboardContent();
       case DashboardTab.notifications:
         return const NotificationsPage(isAdmin: true);
-      case DashboardTab.invitePeople:
-        return const InvitePeoplePage();
+      case DashboardTab.queryDesk:
+        return const QueryDeskPage();
     }
   }
 

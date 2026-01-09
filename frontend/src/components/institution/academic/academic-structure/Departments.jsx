@@ -4,6 +4,7 @@ import { FiLayers, FiPlus, FiEdit2, FiTrash2, FiUsers, FiX, FiSearch } from 'rea
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
+import toast from 'react-hot-toast';
 
 function Departments() {
   const { hasAccess, institution } = useOutletContext();
@@ -29,11 +30,12 @@ function Departments() {
     try {
       setLoading(true);
       const response = await academicAPI.getDepartments(institution._id);
-      // Ensure we always set an array
-      setDepartments(Array.isArray(response.data) ? response.data : []);
+      // Backend returns { success, count, data: [...] }
+      const departmentsData = response.data.data || response.data || [];
+      setDepartments(Array.isArray(departmentsData) ? departmentsData : []);
     } catch (error) {
       console.error('Error fetching departments:', error);
-      setDepartments([]); // Set empty array on error
+      setDepartments([]);
     } finally {
       setLoading(false);
     }
@@ -45,14 +47,16 @@ function Departments() {
       setSubmitting(true);
       if (editingDepartment) {
         await academicAPI.updateDepartment(editingDepartment._id, formData);
+        toast.success('Department updated successfully!');
       } else {
         await academicAPI.createDepartment(institution._id, formData);
+        toast.success('Department created successfully!');
       }
-      fetchDepartments();
+      await fetchDepartments();
       closeModal();
     } catch (error) {
       console.error('Error saving department:', error);
-      alert(error.response?.data?.message || 'Failed to save department');
+      toast.error(error.response?.data?.message || 'Failed to save department');
     } finally {
       setSubmitting(false);
     }
@@ -62,10 +66,11 @@ function Departments() {
     if (!window.confirm('Are you sure? This will affect related courses.')) return;
     try {
       await academicAPI.deleteDepartment(id);
-      fetchDepartments();
+      toast.success('Department deleted successfully!');
+      await fetchDepartments();
     } catch (error) {
       console.error('Error deleting department:', error);
-      alert(error.response?.data?.message || 'Failed to delete department');
+      toast.error(error.response?.data?.message || 'Failed to delete department');
     }
   };
 
@@ -102,7 +107,7 @@ function Departments() {
     return (
       <GenericPage title="Departments" icon={FiLayers}>
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
         </div>
       </GenericPage>
     );
@@ -123,7 +128,7 @@ function Departments() {
             placeholder="Search departments..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm hover:shadow-md"
+            className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all shadow-sm hover:shadow-md"
           />
         </div>
         {hasAccess && (
@@ -131,7 +136,7 @@ function Departments() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => openModal()}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl font-medium"
+            className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg hover:shadow-xl font-medium"
           >
             <FiPlus className="w-5 h-5" /> Add Department
           </motion.button>
@@ -147,10 +152,10 @@ function Departments() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
             whileHover={{ y: -4 }}
-            className="bg-gradient-to-br from-white to-blue-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border border-blue-100/50"
+            className="bg-gradient-to-br from-white to-orange-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border border-orange-100/50"
           >
             <div className="flex justify-between items-start mb-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
                 <FiLayers className="text-white text-2xl" />
               </div>
               {hasAccess && (
@@ -159,7 +164,7 @@ function Departments() {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => openModal(dept)}
-                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                   >
                     <FiEdit2 className="w-4 h-4" />
                   </motion.button>
@@ -176,15 +181,15 @@ function Departments() {
             </div>
 
             <h3 className="text-xl font-bold text-gray-900 mb-1">{dept.name}</h3>
-            <p className="text-sm text-blue-600 font-semibold mb-3 bg-blue-50 px-2 py-1 rounded-md inline-block">{dept.code}</p>
+            <p className="text-sm text-orange-600 font-semibold mb-3 bg-orange-50 px-2 py-1 rounded-md inline-block">{dept.code}</p>
             {dept.description && (
               <p className="text-gray-600 text-sm mb-4 line-clamp-2">{dept.description}</p>
             )}
 
             <div className="flex items-center gap-4 text-sm text-gray-600 border-t border-gray-200 pt-4 mt-4">
               <div className="flex items-center gap-1.5">
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FiUsers className="w-4 h-4 text-blue-600" />
+                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <FiUsers className="w-4 h-4 text-orange-600" />
                 </div>
                 <span className="font-medium">{dept.faculty?.length || 0} Faculty</span>
               </div>
@@ -214,8 +219,8 @@ function Departments() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center py-16 px-4"
         >
-          <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-6">
-            <FiLayers className="w-12 h-12 text-blue-600" />
+          <div className="w-24 h-24 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FiLayers className="w-12 h-12 text-orange-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-800 mb-2">
             {searchQuery ? 'No departments found' : 'No departments yet'}
@@ -230,7 +235,7 @@ function Departments() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => openModal()}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl font-medium"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg hover:shadow-xl font-medium"
             >
               <FiPlus className="w-5 h-5" /> Create First Department
             </motion.button>
@@ -277,7 +282,7 @@ function Departments() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="e.g., Computer Science"
                   />
                 </div>
@@ -291,7 +296,7 @@ function Departments() {
                     required
                     value={formData.code}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     placeholder="e.g., CS"
                     maxLength={10}
                   />
@@ -304,7 +309,7 @@ function Departments() {
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     rows={3}
                     placeholder="Brief description of the department..."
                   />
@@ -321,7 +326,7 @@ function Departments() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? 'Saving...' : editingDepartment ? 'Update' : 'Create'}
                   </button>

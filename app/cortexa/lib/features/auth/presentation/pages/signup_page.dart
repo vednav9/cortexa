@@ -96,6 +96,7 @@ class _SignupPageState extends State<SignupPage> {
 
           return SafeArea(
             child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
               padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
               child: Form(
                 key: _formKey,
@@ -205,7 +206,7 @@ class _SignupPageState extends State<SignupPage> {
                               ),
                             ),
                             child: DropdownButtonFormField<UserRole>(
-                              value: _selectedRole,
+                              initialValue: _selectedRole,
                               decoration: const InputDecoration(
                                 contentPadding: EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -232,8 +233,9 @@ class _SignupPageState extends State<SignupPage> {
                                 );
                               }).toList(),
                               onChanged: (UserRole? newRole) {
-                                if (newRole != null)
+                                if (newRole != null) {
                                   setState(() => _selectedRole = newRole);
+                                }
                               },
                             ),
                           ),
@@ -263,10 +265,12 @@ class _SignupPageState extends State<SignupPage> {
                         color: AppColors.primary,
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty)
+                        if (value == null || value.isEmpty) {
                           return 'Username is required';
-                        if (value.length < 3)
+                        }
+                        if (value.length < 3) {
                           return 'Username must be at least 3 characters';
+                        }
                         if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
                           return 'Username can only contain letters, numbers, and underscores';
                         }

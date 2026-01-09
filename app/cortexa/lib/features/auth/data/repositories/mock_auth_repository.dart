@@ -77,7 +77,40 @@ class MockAuthRepository {
     final accessToken = _generateToken();
     final refreshToken = _generateToken();
     
-    // Create user model
+    // CRITICAL FIX: Check if user has accepted invitations (institution data recovery)
+    // If registeredUsersBox has null but user accepted an invitation, restore from invitations
+    String? institutionId = user['institution_id'];
+    String? institutionRole = user['institution_role'];
+    DateTime? institutionJoinedAt = user['institution_joined_at'] != null 
+        ? DateTime.parse(user['institution_joined_at']) 
+        : null;
+    
+    if (institutionId == null) {
+      // Check invitations for accepted invitation
+      final userId = user['id'] as String;
+      final allInvitations = _storage.getInvitationsForUser(userId);
+      final acceptedInvitation = allInvitations.where((inv) => inv['status'] == 'accepted').firstOrNull;
+      
+      if (acceptedInvitation != null) {
+        institutionId = acceptedInvitation['institution_id'] as String;
+        institutionRole = acceptedInvitation['role'] as String;
+        institutionJoinedAt = DateTime.parse(acceptedInvitation['invited_at'] as String);
+        
+        print('🔄 Recovered institution data from accepted invitation');
+        print('   - Institution ID: $institutionId');
+        print('   - Role: $institutionRole');
+        
+        // Update registeredUsersBox so we don't need to do this again
+        await _storage.updateRegisteredUserInstitution(
+          userId: userId,
+          institutionId: institutionId,
+          institutionRole: institutionRole,
+          joinedAt: institutionJoinedAt,
+        );
+      }
+    }
+    
+    // Create user model with institution fields
     final userModel = UserHiveModel(
       id: user['id'],
       username: user['username'],
@@ -87,6 +120,9 @@ class MockAuthRepository {
       role: user['role'],
       createdAt: DateTime.parse(user['created_at']),
       updatedAt: DateTime.now(),
+      institutionId: institutionId,
+      institutionRole: institutionRole,
+      institutionJoinedAt: institutionJoinedAt,
     );
     
     // Create token model
@@ -114,6 +150,7 @@ class MockAuthRepository {
     required String email,
     required String password,
     required String fullName,
+    String? institutionId,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
 
@@ -154,6 +191,9 @@ class MockAuthRepository {
       'profile_image': null,
       'role': 'admin',
       'created_at': DateTime.now().toIso8601String(),
+      'institution_id': institutionId,
+      'institution_role': institutionId != null ? 'admin' : null,
+      'institution_joined_at': institutionId != null ? DateTime.now().toIso8601String() : null,
     };
     
     // Add to in-memory list

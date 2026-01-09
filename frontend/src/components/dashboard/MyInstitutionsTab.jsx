@@ -59,10 +59,10 @@ export default function MyInstitutionsTab({ institutions = [] }) {
             {/* Logo */}
             <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg flex-shrink-0">
               {institution.branding?.logo ? (
-                    <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover rounded-lg" />
-                  ) : (
-                    institution.code || institution.name.substring(0, 2).toUpperCase()
-                  )}
+                <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover rounded-lg" />
+              ) : (
+                institution.code || institution.name.substring(0, 2).toUpperCase()
+              )}
             </div>
 
             {/* Info */}
@@ -101,18 +101,33 @@ export default function MyInstitutionsTab({ institutions = [] }) {
         {/* Optional: Quick Stats or Info */}
         <div className="mt-6 pt-6 border-t-2 border-gray-100 grid grid-cols-3 gap-4">
           <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">0</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {institution.stats?.students ?? 0}
+            </p>
             <p className="text-xs text-gray-500 mt-1">Total Students</p>
+
+
           </div>
+
           <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">0</p>
-            <p className="text-xs text-gray-500 mt-1">Teachers</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {institution.stats?.teachers ?? 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Total Teachers</p>
+
+
+
           </div>
+
           <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">0</p>
-            <p className="text-xs text-gray-500 mt-1">Courses</p>
+            <p className="text-2xl font-bold text-gray-900">
+              {institution.stats?.courses ?? 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Total Courses</p>
+
           </div>
         </div>
+
       </div>
     </motion.div>
   );

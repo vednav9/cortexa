@@ -1,8 +1,9 @@
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const AI_DIRECT_URL = import.meta.env.VITE_AI_URL || 'http://localhost:8000'; // Direct AI connection
 
-// Create axios instance with longer timeout for AI operations
+// Create axios instance for backend routes
 const aiAxios = axios.create({
   baseURL: API_BASE_URL,
   timeout: 180000, // 3 minutes timeout for AI operations (increased from 2 min)
@@ -11,11 +12,20 @@ const aiAxios = axios.create({
   }
 });
 
+// Create axios instance for direct AI server connection (RAG chatbot)
+const aiDirectAxios = axios.create({
+  baseURL: AI_DIRECT_URL,
+  timeout: 180000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
 class AIService {
-  // RAG Query
+  // RAG Query - Direct to AI server (no backend)
   async queryRAG(query, institutionId = null) {
     try {
-      const response = await aiAxios.post('/ai/query', {
+      const response = await aiDirectAxios.post('/query', {
         query,
         institution_id: institutionId
       });
@@ -28,10 +38,10 @@ class AIService {
     }
   }
 
-  // Hybrid Assistant
+  // Hybrid Assistant - Direct to AI server (no backend, no refresh)
   async queryAssistant(query, useWebFallback = true) {
     try {
-      const response = await aiAxios.post('/ai/assistant', {
+      const response = await aiDirectAxios.post('/assistant', {
         query,
         use_web_fallback: useWebFallback
       });
@@ -44,7 +54,7 @@ class AIService {
     }
   }
 
-  // Generate MCQs
+  // Generate MCQs - Through backend (for teacher features)
   async generateMCQs(sourceType, source, numQuestions = 5, difficulty = 'medium') {
     try {
       const response = await aiAxios.post('/ai/mcq/generate', {
@@ -62,10 +72,10 @@ class AIService {
     }
   }
 
-  // Score MCQs
+  // Score MCQs - Direct to AI server
   async scoreMCQs(mcqs, userAnswers) {
     try {
-      const response = await aiAxios.post('/ai/mcq/score', {
+      const response = await aiDirectAxios.post('/mcq/score', {
         mcqs,
         user_answers: userAnswers
       });
@@ -75,7 +85,7 @@ class AIService {
     }
   }
 
-  // Upload Document
+  // Upload Document - Direct to AI server (for RAG chatbot)
   async uploadDocument(file, institutionId = null, courseId = null) {
     try {
       // Validate file parameter
@@ -138,9 +148,9 @@ class AIService {
         formData.append('course_id', String(courseId));
       }
 
-      console.log('Sending upload request to /ai/upload...');
+      console.log('Sending upload request directly to AI server /upload...');
 
-      const response = await aiAxios.post('/ai/upload', formData, {
+      const response = await aiDirectAxios.post('/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
@@ -158,10 +168,10 @@ class AIService {
     }
   }
 
-  // Check AI Health
+  // Check AI Health - Direct to AI server
   async checkHealth() {
     try {
-      const response = await aiAxios.get('/ai/health', { timeout: 5000 }); // Short timeout for health check
+      const response = await aiDirectAxios.get('/health', { timeout: 5000 }); // Short timeout for health check
       return response.data;
     } catch (error) {
       return { status: 'unavailable', error: error.message };

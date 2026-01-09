@@ -101,6 +101,7 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
           // Scrollable content
           Expanded(
             child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,6 +109,7 @@ class _SearchFilterModalState extends State<SearchFilterModal> {
                   // Search bar
                   TextField(
                     controller: widget.searchController,
+                    enableInteractiveSelection: true,
                     decoration: InputDecoration(
                       hintText: 'Search institutions by name or city...',
                       prefixIcon: const Icon(Icons.search, color: AppColors.primary),

@@ -5,7 +5,7 @@ import Institution from "../models/institution.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
-import { uploadInstitutionLogo } from "../services/cloudflareR2.js";
+import { uploadInstitutionLogo, uploadInstitutionBanner } from "../services/cloudflareR2.js";
 
 // helpers
 const slugify = (name) =>
@@ -29,6 +29,16 @@ const generateUniqueCode = async (name) => {
 
   return code;
 };
+
+const getInstitutionStats = async (institutionId) => {
+  const [students, teachers] = await Promise.all([
+    Student.countDocuments({ institution: institutionId }),
+    Teacher.countDocuments({ institution: institutionId }),
+  ]);
+
+  return { students, teachers };
+};
+
 
 /* =========================
    REGISTER ADMIN + INSTITUTION
@@ -83,13 +93,26 @@ export const registerAdmin = async (req, res) => {
       });
     }
 
-    // 🔹 UPLOAD LOGO (OPTIONAL)
+    // 🔹 UPLOAD LOGO/BANNER (OPTIONAL)
+    // Using upload.fields() so files appear in req.files.{logo|banner}[0]
     let logo = "";
-    if (req.file) {
+    let banner = "";
+    const logoFile = req.files?.logo?.[0];
+    const bannerFile = req.files?.banner?.[0];
+
+    if (logoFile) {
       logo = await uploadInstitutionLogo(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype
+        logoFile.buffer,
+        logoFile.originalname,
+        logoFile.mimetype
+      );
+    }
+
+    if (bannerFile) {
+      banner = await uploadInstitutionBanner(
+        bannerFile.buffer,
+        bannerFile.originalname,
+        bannerFile.mimetype
       );
     }
 
@@ -120,6 +143,7 @@ export const registerAdmin = async (req, res) => {
 
       branding: {
         logo,
+        banner,
         primaryColor: brandColor || "#10b981",
       },
     });
@@ -220,26 +244,41 @@ export const loginAdmin = async (req, res) => {
 /* =========================
    Get ADMIN Institution
 ========================= */
-
 export const getMyInstitution = async (req, res) => {
   try {
-    const admin = await Admin.findById(req.user.id)
-      .populate("institution");
+    const admin = await Admin.findById(req.user.id).populate("institution");
 
     if (!admin || !admin.institution) {
       return res.json({ institution: null });
     }
 
+    const institutionId = admin.institution._id;
+
+    // 🔥 DYNAMIC COUNTS
+    const [studentsCount, teachersCount] = await Promise.all([
+      Student.countDocuments({ institution: institutionId }),
+      Teacher.countDocuments({ institution: institutionId }),
+    ]);
+
     res.json({
-      institution: admin.institution,
+      institution: {
+        ...admin.institution.toObject(),
+        stats: {
+          students: studentsCount,
+          teachers: teachersCount,
+          courses: 0, // placeholder for future
+        },
+      },
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      message: "Failed to fetch admin institution",
-    });
+  } catch (error) {
+    console.error("getMyInstitution error:", error);
+    res.status(500).json({ message: "Failed to fetch institution" });
   }
 };
+
+
+
+
 
 
 /* =========================
@@ -258,66 +297,76 @@ export const logoutAdmin = (req, res) => {
 export const getUsers = async (req, res) => {
   try {
     const { institutionId } = req.params;
-    const { role, status, department, search } = req.query;
+    const { role = "all", status, department, search } = req.query;
 
-    // Verify admin belongs to this institution
+    // 🔐 Verify admin
     const admin = await Admin.findById(req.user.id);
-    if (admin.institution.toString() !== institutionId) {
+    if (!admin || admin.institution.toString() !== institutionId) {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    let query = { institution: institutionId };
+    // 🔎 Common filters
+    const buildQuery = () => {
+      const q = { institution: institutionId };
 
-    // Apply filters
-    if (status) query.status = status;
-    if (department) query.department = department;
+      if (status) q.status = status;
+      if (department) q.department = department;
 
-    // Build search query
-    if (search) {
-      query.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
-    }
+      if (search) {
+        q.$or = [
+          { fullName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      return q;
+    };
 
     let users = [];
+    let students = [];
+    let teachers = [];
 
-    // Fetch based on role filter
-    if (!role || role === 'all') {
-      const [students, teachers, admins] = await Promise.all([
-        Student.find(query).select('-password').lean(),
-        Teacher.find(query).select('-password').lean(),
-        Admin.find({ institution: institutionId }).select('-password').lean()
-      ]);
-      
-      users = [
-        ...students.map(s => ({ ...s, role: 'student' })),
-        ...teachers.map(t => ({ ...t, role: 'teacher' })),
-        ...admins.map(a => ({ ...a, role: 'admin' }))
-      ];
-    } else if (role === 'student') {
-      const students = await Student.find(query).select('-password').lean();
-      users = students.map(s => ({ ...s, role: 'student' }));
-    } else if (role === 'teacher') {
-      const teachers = await Teacher.find(query).select('-password').lean();
-      users = teachers.map(t => ({ ...t, role: 'teacher' }));
-    } else if (role === 'admin') {
-      const admins = await Admin.find({ institution: institutionId }).select('-password').lean();
-      users = admins.map(a => ({ ...a, role: 'admin' }));
+    // 👥 FETCH USERS
+    if (role === "all" || role === "student") {
+      students = await Student.find(buildQuery()).lean();
+      students = students.map(u => ({ ...u, role: "student" }));
     }
 
-    res.json({ success: true, users });
+    if (role === "all" || role === "teacher") {
+      teachers = await Teacher.find(buildQuery()).lean();
+      teachers = teachers.map(u => ({ ...u, role: "teacher" }));
+    }
+
+    users = [...students, ...teachers];
+
+    // 📊 STATS
+    const stats = {
+      total: users.length,
+      students: students.length,
+      teachers: teachers.length,
+      active: users.filter(u => u.status === "active").length,
+      inactive: users.filter(u => u.status === "inactive").length,
+    };
+
+    res.json({
+      success: true,
+      users,
+      stats,
+    });
+
   } catch (err) {
-    console.error(err);
+    console.error("getUsers error:", err);
     res.status(500).json({ message: "Failed to fetch users" });
   }
 };
+
+
 
 // Add new user
 export const addUser = async (req, res) => {
   try {
     const { institutionId } = req.params;
-    const { role, fullName, email, password, phone, department, semester, expertise, jobTitle } = req.body;
+    const { role, fullName, email, password, phone, department, semester, expertise, jobTitle, authorizedCourses } = req.body;
 
     // Verify admin belongs to this institution
     const admin = await Admin.findById(req.user.id);
@@ -340,6 +389,7 @@ export const addUser = async (req, res) => {
     let newUser;
 
     if (role === 'student') {
+      // Create student
       newUser = await Student.create({
         fullName,
         email,
@@ -350,7 +400,24 @@ export const addUser = async (req, res) => {
         institution: institutionId,
         status: 'active'
       });
+
+      // Auto-enroll in courses based on department and semester
+      if (department && semester) {
+        const Course = (await import('../models/course.js')).default;
+        const coursesToEnroll = await Course.find({
+          institution: institutionId,
+          department,
+          semesterAvailable: semester,
+          isActive: true
+        }).select('_id');
+
+        if (coursesToEnroll.length > 0) {
+          newUser.enrolledCourses = coursesToEnroll.map(c => c._id);
+          await newUser.save();
+        }
+      }
     } else if (role === 'teacher') {
+      // Create teacher with authorized courses
       newUser = await Teacher.create({
         fullName,
         email,
@@ -359,7 +426,8 @@ export const addUser = async (req, res) => {
         department,
         expertise,
         institution: institutionId,
-        status: 'active'
+        status: 'active',
+        authorizedCourses: authorizedCourses || [] // Only selected courses
       });
     } else if (role === 'admin') {
       newUser = await Admin.create({
@@ -397,7 +465,7 @@ export const updateUser = async (req, res) => {
 
     // Verify admin permissions
     const admin = await Admin.findById(req.user.id);
-    
+
     let updatedUser;
     const updateData = { fullName, email, phone, department, status };
 
@@ -434,7 +502,7 @@ export const deleteUser = async (req, res) => {
 
     // Verify admin permissions
     const admin = await Admin.findById(req.user.id);
-    
+
     let deletedUser;
 
     if (role === 'student') {
@@ -497,7 +565,7 @@ export const toggleUserStatus = async (req, res) => {
   }
 };
 
-// Bulk add multiple users
+// Bulk add multiple users (CSV import - students only, no teachers via CSV per requirements)
 export const bulkAddUsers = async (req, res) => {
   try {
     const { institutionId } = req.params;
@@ -517,18 +585,9 @@ export const bulkAddUsers = async (req, res) => {
       return res.status(403).json({ message: "Admin not found" });
     }
 
-    console.log('Admin institution:', admin.institution.toString());
-    console.log('Requested institution:', institutionId);
-
     if (admin.institution.toString() !== institutionId) {
-      console.error('Institution mismatch:', {
-        adminInstitution: admin.institution.toString(),
-        requestedInstitution: institutionId
-      });
       return res.status(403).json({ 
-        message: "Access denied - Institution mismatch",
-        adminInstitution: admin.institution.toString(),
-        requestedInstitution: institutionId
+        message: "Access denied - Institution mismatch"
       });
     }
 
@@ -543,6 +602,8 @@ export const bulkAddUsers = async (req, res) => {
       return res.status(400).json({ message: "Users array is required and must not be empty" });
     }
 
+    const Course = (await import('../models/course.js')).default;
+    
     const results = {
       successCount: 0,
       errors: []
@@ -551,7 +612,7 @@ export const bulkAddUsers = async (req, res) => {
     // Process each user
     for (let i = 0; i < users.length; i++) {
       const userData = users[i];
-      
+
       try {
         // Validate required fields
         if (!userData.fullName || !userData.email || !userData.mobile || !userData.department || !userData.username || !userData.role) {
@@ -559,6 +620,16 @@ export const bulkAddUsers = async (req, res) => {
             index: i,
             email: userData.email || 'unknown',
             error: 'Missing required fields'
+          });
+          continue;
+        }
+
+        // CSV upload only for students (per user requirements)
+        if (userData.role !== 'student') {
+          results.errors.push({
+            index: i,
+            email: userData.email,
+            error: 'CSV upload only supports students. Teachers must be added manually.'
           });
           continue;
         }
@@ -581,67 +652,45 @@ export const bulkAddUsers = async (req, res) => {
         const defaultPassword = 'Welcome@123';
         const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-        // Create user based on role
-        if (userData.role === 'student') {
-          // Validate student-specific fields
-          if (!userData.year || !userData.division) {
-            results.errors.push({
-              index: i,
-              email: userData.email,
-              error: 'Year and division are required for students'
-            });
-            continue;
-          }
-
-          await Student.create({
-            fullName: userData.fullName,
-            email: userData.email,
-            password: hashedPassword,
-            username: userData.username,
-            phone: userData.mobile,
-            department: userData.department,
-            institution: institutionId,
-            year: userData.year,
-            division: userData.division,
-            status: 'active'
-          });
-
-          results.successCount++;
-
-        } else if (userData.role === 'teacher') {
-          // Validate teacher-specific fields
-          if (!userData.jobTitle || !userData.qualifications) {
-            results.errors.push({
-              index: i,
-              email: userData.email,
-              error: 'Job title and qualifications are required for teachers'
-            });
-            continue;
-          }
-
-          await Teacher.create({
-            fullName: userData.fullName,
-            email: userData.email,
-            password: hashedPassword,
-            username: userData.username,
-            phone: userData.mobile,
-            department: userData.department,
-            institution: institutionId,
-            jobTitle: userData.jobTitle,
-            qualifications: userData.qualifications,
-            specialization: userData.specialization || '',
-            status: 'active'
-          });
-
-          results.successCount++;
-
-        } else {
+        // Validate student-specific fields
+        if (!userData.semester) {
           results.errors.push({
             index: i,
             email: userData.email,
-            error: 'Invalid role. Must be student or teacher'
+            error: 'Semester is required for students'
           });
+          continue;
         }
+
+        // Create student
+        const newStudent = await Student.create({
+          fullName: userData.fullName,
+          email: userData.email,
+          password: hashedPassword,
+          username: userData.username,
+          phone: userData.mobile,
+          department: userData.department,
+          semester: userData.semester,
+          institution: institutionId,
+          status: 'active'
+        });
+
+        // Auto-enroll in courses based on department and semester
+        if (userData.department && userData.semester) {
+          const coursesToEnroll = await Course.find({
+            institution: institutionId,
+            department: userData.department,
+            semesterAvailable: userData.semester,
+            isActive: true
+          }).select('_id');
+
+          if (coursesToEnroll.length > 0) {
+            newStudent.enrolledCourses = coursesToEnroll.map(c => c._id);
+            await newStudent.save();
+          }
+        }
+
+        results.successCount++;
 
       } catch (error) {
         results.errors.push({
@@ -654,7 +703,7 @@ export const bulkAddUsers = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Bulk upload completed. ${results.successCount} users added successfully.`,
+      message: `Bulk upload completed. ${results.successCount} students added successfully.`,
       successCount: results.successCount,
       errors: results.errors,
       totalProcessed: users.length
@@ -665,3 +714,114 @@ export const bulkAddUsers = async (req, res) => {
     res.status(500).json({ message: "Failed to bulk add users" });
   }
 };
+
+export const removeUserFromInstitution = async (req, res) => {
+  try {
+    const { userId, role } = req.params;
+
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    let user;
+
+    if (role === "student") {
+      user = await Student.findById(userId);
+    } else if (role === "teacher") {
+      user = await Teacher.findById(userId);
+    } else {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🔥 REMOVE FROM INSTITUTION
+    user.institution = null;
+    user.status = "inactive";
+    await user.save();
+
+    // 🔔 REALTIME NOTIFY USER
+    global.io.to(`user:${userId}`).emit("institution-removed", {
+      message: "You have been removed from the institution",
+    });
+
+    res.json({
+      success: true,
+      message: "User removed from institution successfully",
+    });
+  } catch (error) {
+    console.error("REMOVE USER ERROR:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ============================================
+// GET STUDENTS BY INSTITUTION (for Dashboard)
+// ============================================
+export const getInstitutionStudents = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const admin = await Admin.findById(req.user.id);
+    if (!admin || admin.institution.toString() !== institutionId) {
+      return res.status(403).json({ message: "Not authorized for this institution" });
+    }
+
+    const students = await Student.find({ institution: institutionId })
+      .populate('department', 'name code')
+      .populate('semester', 'name academicYear')
+      .select('-password')
+      .sort('-createdAt');
+
+    res.json({
+      success: true,
+      count: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("GET STUDENTS ERROR:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ============================================
+// GET TEACHERS BY INSTITUTION (for Dashboard)
+// ============================================
+export const getInstitutionTeachers = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const admin = await Admin.findById(req.user.id);
+    if (!admin || admin.institution.toString() !== institutionId) {
+      return res.status(403).json({ message: "Not authorized for this institution" });
+    }
+
+    const teachers = await Teacher.find({ institution: institutionId })
+      .populate('department', 'name code')
+      .populate('semester', 'name academicYear')
+      .populate('authorizedCourses', 'name code')
+      .select('-password')
+      .sort('-createdAt');
+
+    res.json({
+      success: true,
+      count: teachers.length,
+      teachers,
+    });
+  } catch (error) {
+    console.error("GET TEACHERS ERROR:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+

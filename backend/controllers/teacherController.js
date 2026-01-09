@@ -1,8 +1,14 @@
 // controllers/teacherController.js
 import Teacher from "../models/teacher.js";
+import Student from "../models/student.js";
+import Course from "../models/course.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
+
+
+
+
 
 /* =========================
    REGISTER TEACHER
@@ -122,4 +128,78 @@ export const logoutTeacher = (req, res) => {
         success: true,
         message: "Teacher logged out successfully",
     });
+};
+
+
+export const getMyInstitution = async (req, res) => {
+    try {
+        const teacher = await Teacher.findById(req.user.id).populate("institution");
+
+        if (!teacher || !teacher.institution) {
+            return res.json({ institution: null });
+        }
+
+        const institutionId = teacher.institution._id;
+
+        const [studentsCount, teachersCount] = await Promise.all([
+            Student.countDocuments({ institution: institutionId }),
+            Teacher.countDocuments({ institution: institutionId }),
+        ]);
+
+        res.json({
+            institution: {
+                ...teacher.institution.toObject(),
+                role: "teacher",
+                stats: {
+                    students: studentsCount,
+                    teachers: teachersCount,
+                    courses: 0,
+                },
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch institution" });
+    }
+};
+
+/* =========================
+   GET AUTHORIZED COURSES
+========================= */
+export const getAuthorizedCourses = async (req, res) => {
+    try {
+        const teacherId = req.user.id;
+        
+        // Get teacher with populated authorized courses
+        const teacher = await Teacher.findById(teacherId)
+            .populate({
+                path: "authorizedCourses",
+                populate: [
+                    { path: "department", select: "name code" },
+                    { path: "semesterAvailable", select: "name academicYear" }
+                ]
+            });
+
+        if (!teacher) {
+            return res.status(404).json({
+                success: false,
+                message: "Teacher not found"
+            });
+        }
+
+        // Filter only active courses
+        const activeCourses = teacher.authorizedCourses.filter(course => course.isActive);
+
+        res.status(200).json({
+            success: true,
+            count: activeCourses.length,
+            courses: activeCourses
+        });
+    } catch (error) {
+        console.error("Get authorized courses error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch authorized courses"
+        });
+    }
 };

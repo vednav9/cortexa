@@ -16,6 +16,8 @@ import CourseDetails from "./components/institution/CourseDetails";
 // Admin Pages
 import ManageUsers from "./components/institution/admin/ManageUsers";
 import InvitePeople from "./components/institution/admin/InvitePeople";
+import { NotificationProvider } from "./context/NotificationContext";
+
 
 // Teacher Pages
 import SeeStudents from "./components/institution/teacher/SeeStudents";
@@ -26,6 +28,8 @@ import Assessment from "./components/institution/teacher/Assessment";
 
 // Student Pages
 import RAGChatbot from "./components/institution/student/RAGChatbot";
+import MCQTest from "./components/institution/student/MCQTest";
+import QASection from "./components/institution/student/QASection";
 
 // Shared Pages (All Roles)
 import Announcements from "./components/institution/shared/Announcements";
@@ -44,12 +48,13 @@ import Faculty from "./components/institution/academic/academic-structure/Facult
 
 // Dashboard
 import CortexaDashboard from "./components/dashboard/CortexaDashboard";
-
+import CortexaAdminLogin from "./components/dashboard/cortexaAdminLogin";
+import InstitutionDashboard from "./components/institution/Dashboard";
 // Layout
 import Navbar from "./components/Navbar";
 
 // Auth
-import { AuthProvider, useAuth } from "./context/authcontext";
+import { useAuth } from "./context/authcontext";
 
 /* ===========================
    Protected Route (OLD STYLE)
@@ -77,7 +82,7 @@ const ProtectedRoute = ({ children }) => {
 =========================== */
 function App() {
   return (
-    <AuthProvider>
+    <NotificationProvider>
       <Router>
         <div className="min-h-screen flex flex-col">
           <Navbar />
@@ -87,6 +92,7 @@ function App() {
               {/* Public */}
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/cortexaAdminLogin" element={<CortexaAdminLogin />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/institute-signup" element={<InstituteSignUp />} />
 
@@ -108,14 +114,14 @@ function App() {
                 <Route path="manage-users" element={<ManageUsers />} />
                 <Route path="query-desk" element={<QueryDesk />} />
                 <Route path="academic-structure" element={<AcademicStructure />} />
-                
+
                 {/* Academic Structure Nested Routes */}
                 <Route path="academic-structure/departments" element={<Departments />} />
                 <Route path="academic-structure/courses" element={<AcademicCourses />} />
                 <Route path="academic-structure/semesters" element={<Semesters />} />
                 <Route path="academic-structure/calendar" element={<Calendar />} />
                 <Route path="academic-structure/faculty" element={<Faculty />} />
-                
+
                 <Route path="see-students" element={<SeeStudents />} />
                 <Route path="upload-notes" element={<UploadNotes />} />
                 <Route path="generate-mcq" element={<GenerateMCQ />} />
@@ -124,6 +130,8 @@ function App() {
                 <Route path="assessment" element={<Assessment />} />
                 <Route path="ai-chatbot" element={<AIChatbot />} />
                 <Route path="rag-chatbot" element={<RAGChatbot />} />
+                <Route path="mcq-test" element={<MCQTest />} />
+                <Route path="qa-section" element={<QASection />} />
                 <Route path="courses" element={<CourseCatalog />} />
                 <Route path="courses/:courseCode" element={<CourseDetails />} />
               </Route>
@@ -135,10 +143,10 @@ function App() {
           </main>
         </div>
       </Router>
+    </NotificationProvider>
 
 
 
-    </AuthProvider>
   );
 }
 
