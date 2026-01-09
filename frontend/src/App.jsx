@@ -47,6 +47,7 @@ import Faculty from "./components/institution/academic/academic-structure/Facult
 // Dashboard
 import CortexaDashboard from "./components/dashboard/CortexaDashboard";
 import CortexaAdminLogin from "./components/dashboard/cortexaAdminLogin";
+import InstitutionDashboard from "./components/institution/Dashboard";
 // Layout
 import Navbar from "./components/Navbar";
 
@@ -106,6 +107,7 @@ function App() {
             {/* Institution Routes */}   {/* PUBLIC INSTITUTION ROUTES */}
             <Route path="/:slug" element={<InstitutionLayout />}>
               <Route index element={<InstitutionHome />} />
+              <Route path="institution-dashboard" element={<InstitutionDashboard />} />
               <Route path="announcements" element={<Announcements />} />
               <Route path="invite-people" element={<InvitePeople />} />
               <Route path="manage-users" element={<ManageUsers />} />

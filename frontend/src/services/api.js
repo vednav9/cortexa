@@ -78,8 +78,8 @@ export const adminAPI = {
   getUsers: (institutionId, params) =>
     api.get(`/admin/institutions/${institutionId}/users`, { params }),
 
-  getStudents: () => api.get('/admin/students'),
-  getTeachers: () => api.get('/admin/teachers'),
+  getStudents: (institutionId) => api.get(`/admin/institutions/${institutionId}/students`),
+  getTeachers: (institutionId) => api.get(`/admin/institutions/${institutionId}/teachers`),
   getPendingRequests: () => api.get('/admin/pending-requests'),
   deleteStudent: (studentId) => api.delete(`/admin/students/${studentId}`),
   deleteTeacher: (teacherId) => api.delete(`/admin/teachers/${teacherId}`),

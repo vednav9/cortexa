@@ -10,6 +10,8 @@ import {
   deleteUser,
   toggleUserStatus,
   removeUserFromInstitution,
+  getInstitutionStudents,
+  getInstitutionTeachers,
 } from "../controllers/adminController.js";
 
 import { authenticate } from "../middleware/auth.js";
@@ -28,6 +30,10 @@ router.post("/logout", authenticate, logoutAdmin);
    INSTITUTION
 ========================= */
 router.get("/institution", authenticate, getMyInstitution);
+
+// Dashboard stats endpoints
+router.get("/institutions/:institutionId/students", authenticate, getInstitutionStudents);
+router.get("/institutions/:institutionId/teachers", authenticate, getInstitutionTeachers);
 
 /* =========================
    USER MANAGEMENT

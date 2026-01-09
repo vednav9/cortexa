@@ -3,6 +3,7 @@ import Institution from '../models/institution.js';
 import Student from '../models/student.js';
 import Teacher from '../models/teacher.js';
 import Admin from '../models/admin.js';
+import Course from '../models/course.js';
 // ===============================
 // GET USER INVITATIONS
 // ===============================
@@ -65,11 +66,28 @@ export const createInvitation = async (req, res) => {
             email,
             message,
             type = "join",
+            department,
+            semester,
+            courses,
         } = req.body;
 
         if (!institutionId || !recipientType) {
             return res.status(400).json({
                 message: 'institutionId and recipientType are required',
+            });
+        }
+
+        // Validate department and semester for Students
+        if (recipientType === 'Student' && (!department || !semester)) {
+            return res.status(400).json({
+                message: 'department and semester are required for students',
+            });
+        }
+
+        // Validate department, semester, and courses for Teachers
+        if (recipientType === 'Teacher' && (!department || !semester || !courses || courses.length === 0)) {
+            return res.status(400).json({
+                message: 'department, semester, and at least one course are required for teachers',
             });
         }
 
@@ -93,6 +111,20 @@ export const createInvitation = async (req, res) => {
             });
         }
 
+        // Auto-allocate courses for students based on department and semester
+        let coursesToAllocate = courses || [];
+        
+        if (recipientType === 'Student') {
+            // Find all courses matching department and semester
+            const matchingCourses = await Course.find({
+                institution: institutionId,
+                department: department,
+                semesterAvailable: semester
+            }).select('_id');
+            
+            coursesToAllocate = matchingCourses.map(c => c._id);
+        }
+
         /* ======================================================
            EMAIL-BASED INVITE (RESEND SUPPORTED)
         ====================================================== */
@@ -110,6 +142,9 @@ export const createInvitation = async (req, res) => {
                 existingInvite.message = message;
                 existingInvite.sender = req.user.id;
                 existingInvite.type = type;
+                existingInvite.department = department;
+                existingInvite.semester = semester;
+                existingInvite.courses = coursesToAllocate;
                 existingInvite.createdAt = new Date();
                 existingInvite.expiresAt = new Date(
                     Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
@@ -131,6 +166,9 @@ export const createInvitation = async (req, res) => {
                 sender: req.user.id,
                 message,
                 type,
+                department,
+                semester,
+                courses: coursesToAllocate,
                 expiresAt: new Date(
                     Date.now() + 30 * 24 * 60 * 60 * 1000
                 ),
@@ -257,8 +295,19 @@ export const acceptInvitation = async (req, res) => {
             }
 
             student.institution = invitation.institution;
+            student.department = invitation.department;
+            student.semester = invitation.semester;
+            student.enrolledCourses = invitation.courses || [];
             student.status = "active";
             await student.save();
+
+            // Add student to courses
+            if (invitation.courses && invitation.courses.length > 0) {
+                await Course.updateMany(
+                    { _id: { $in: invitation.courses } },
+                    { $addToSet: { enrolledStudents: req.user.id } }
+                );
+            }
         }
 
         if (invitation.recipientType === "Teacher") {
@@ -269,6 +318,9 @@ export const acceptInvitation = async (req, res) => {
             }
 
             teacher.institution = invitation.institution;
+            teacher.department = invitation.department;
+            teacher.semester = invitation.semester;
+            teacher.authorizedCourses = invitation.courses || [];
             teacher.status = "active";
             await teacher.save();
         }
@@ -435,7 +487,7 @@ export const getAdminInvitations = async (req, res) => {
 // ===============================
 export const bulkInviteUsers = async (req, res) => {
     try {
-        const { institutionId, recipientType, users } = req.body;
+        const { institutionId, recipientType, users, department, semester, courses } = req.body;
 
         // 1️⃣ Validation
         if (!institutionId || !recipientType || !Array.isArray(users)) {
@@ -444,6 +496,18 @@ export const bulkInviteUsers = async (req, res) => {
 
         if (!["Student", "Teacher"].includes(recipientType)) {
             return res.status(400).json({ message: "Invalid recipientType" });
+        }
+
+        // Teachers cannot be bulk invited - only students
+        if (recipientType === "Teacher") {
+            return res.status(400).json({ message: "Bulk invite is only available for students. Use manual entry for teachers." });
+        }
+
+        // Validate department and semester for Students
+        if (recipientType === 'Student' && (!department || !semester)) {
+            return res.status(400).json({
+                message: 'department and semester are required for student invitations',
+            });
         }
 
         // 2️⃣ Admin check
@@ -455,6 +519,15 @@ export const bulkInviteUsers = async (req, res) => {
         if (!admin || admin.institution.toString() !== institutionId) {
             return res.status(403).json({ message: "Unauthorized institution access" });
         }
+
+        // Auto-allocate courses for students based on department and semester
+        const matchingCourses = await Course.find({
+            institution: institutionId,
+            department: department,
+            semesterAvailable: semester
+        }).select('_id');
+        
+        const coursesToAllocate = matchingCourses.map(c => c._id);
 
         const results = {
             successCount: 0,
@@ -489,6 +562,9 @@ export const bulkInviteUsers = async (req, res) => {
                     existing.message = message;
                     existing.sender = req.user.id;
                     existing.recipientType = recipientType;
+                    existing.department = department;
+                    existing.semester = semester;
+                    existing.courses = coursesToAllocate;
                     existing.createdAt = new Date();
                     existing.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                     await existing.save();
@@ -506,6 +582,9 @@ export const bulkInviteUsers = async (req, res) => {
                     sender: req.user.id,
                     message,
                     type: "join",
+                    department,
+                    semester,
+                    courses: coursesToAllocate,
                     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 });
 
