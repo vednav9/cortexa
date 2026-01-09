@@ -20,6 +20,8 @@ import MyInstitutionsTab from "./MyInstitutionsTab";
 import Notifications from "./Notifications";
 import QueryDesk from "./QueryDesk";
 import { socket } from "../../socket";
+import { useNotification } from "../../context/NotificationContext";
+
 
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
@@ -33,8 +35,10 @@ const CortexaDashboard = () => {
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [myInstitutions, setMyInstitutions] = useState([]);
     const [institutionsLoading, setInstitutionsLoading] = useState(true);
-    const [globalNotifications, setGlobalNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
+    // const [globalNotifications, setGlobalNotifications] = useState([]);
+    // const [unreadCount, setUnreadCount] = useState(0);
+    const { notificationCount, clearNotifications } = useNotification();
+
 
     const profileMenuRef = useRef(null);
 
@@ -106,51 +110,80 @@ const CortexaDashboard = () => {
         };
     }, [profileMenuOpen]);
 
-    useEffect(() => {
-        if (!user?.id) return;
+    // useEffect(() => {
+    //     if (!user?.id) return;
 
-        if (!socket.connected) {
-            socket.connect();
-            console.log("🔌 SOCKET CONNECT CALLED");
-        }
+    //     if (!socket.connected) {
+    //         socket.connect();
+    //         console.log("🔌 SOCKET CONNECT CALLED");
+    //     }
 
-        socket.on("connect", () => {
-            console.log("🟢 SOCKET CONNECTED:", socket.id);
-            socket.emit("join:user", user.id);
-        });
+    //     socket.on("connect", () => {
+    //         console.log("🟢 SOCKET CONNECTED:", socket.id);
+    //         socket.emit("join:user", user.id);
+    //     });
 
-        socket.on("invitation:new", (data) => {
-            console.log("📩 INVITATION RECEIVED:", data);
-            setUnreadCount(prev => prev + 1);
-        });
+    //     socket.on("invitation:new", (data) => {
+    //         console.log("📩 INVITATION RECEIVED:", data);
+    //         setUnreadCount(prev => prev + 1);
+    //     });
 
-        return () => {
-            socket.off("connect");
-            socket.off("invitation:new");
-        };
-    }, [user?.id]);
-
-
+    //     return () => {
+    //         socket.off("connect");
+    //         socket.off("invitation:new");
+    //     };
+    // }, [user?.id]);
 
 
-    useEffect(() => {
-        if (!user?.id) return;
 
-        const handleInvitation = (invitation) => {
-            console.log("📩 INVITATION RECEIVED:", invitation);
 
-            setGlobalNotifications(prev => [invitation, ...prev]);
-            setUnreadCount(prev => prev + 1);
+    // useEffect(() => {
+    //     if (!user?.id) return;
 
-            toast.success("📩 New invitation received");
-        };
+    //     const handleInvitation = (invitation) => {
+    //         console.log("📩 INVITATION RECEIVED:", invitation);
 
-        socket.on("invitation:new", handleInvitation);
+    //         setGlobalNotifications(prev => [invitation, ...prev]);
+    //         setUnreadCount(prev => prev + 1);
 
-        return () => {
-            socket.off("invitation:new", handleInvitation);
-        };
-    }, [user?.id]);
+    //         toast.success("📩 New invitation received");
+    //     };
+
+    //     socket.on("invitation:new", handleInvitation);
+
+    //     return () => {
+    //         socket.off("invitation:new", handleInvitation);
+    //     };
+    // }, [user?.id]);
+
+    // useEffect(() => {
+    //     if (!user?._id) return;
+
+    //     // connect socket only once
+    //     if (!socket.connected) {
+    //         socket.connect();
+    //     }
+
+    //     // join personal room
+    //     socket.emit("join:user", user._id);
+    //     console.log("👤 Joined socket room:", user._id);
+
+    //     const handleInvitation = (invitation) => {
+    //         console.log("📩 INVITATION RECEIVED:", invitation);
+
+    //         setGlobalNotifications(prev => [invitation, ...prev]);
+    //         setUnreadCount(prev => prev + 1);
+
+    //         toast.success("📩 New invitation received");
+    //     };
+
+    //     socket.on("invitation:new", handleInvitation);
+
+    //     return () => {
+    //         socket.off("invitation:new", handleInvitation);
+    //     };
+    // }, [user?._id]);
+
 
 
 
@@ -200,7 +233,7 @@ const CortexaDashboard = () => {
                 onClose={() => setSidebarOpen(false)}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
-                unreadCount={unreadCount}   // ✅ ADD THIS
+                unreadCount={notificationCount}
             />
 
 
@@ -357,9 +390,10 @@ const CortexaDashboard = () => {
                                             className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
                                         >
                                             <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Notifications</p>
-                                            <p className="text-4xl font-bold mt-2">{unreadCount}</p>
+                                            <p className="text-4xl font-bold mt-2">{notificationCount}</p>
+
                                             <p className="text-emerald-100 text-xs mt-1">
-                                                {unreadCount > 0 ? "New notifications" : "All caught up!"}
+                                                {notificationCount > 0 ? "New notifications" : "All caught up!"}
                                             </p>
 
                                         </motion.div>
@@ -436,8 +470,7 @@ const CortexaDashboard = () => {
                     {/* NOTIFICATIONS TAB */}
                     {activeTab === "notifications" && (
                         <Notifications
-                            realtimeInvites={globalNotifications}
-                            clearUnread={() => setUnreadCount(0)}
+                            clearUnread={clearNotifications}
                         />
                     )}
 
