@@ -25,6 +25,7 @@ const institutionSchema = new mongoose.Schema(
 
     branding: {
       logo: { type: String, default: "" },
+      banner: { type: String, default: "" },
       primaryColor: { type: String, default: "#10b981" },
     },
 

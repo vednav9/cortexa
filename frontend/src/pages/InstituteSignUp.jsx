@@ -53,6 +53,7 @@ const InstituteSignUp = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
   const [logoFile, setLogoFile] = useState(null);
+  const [bannerFile, setBannerFile] = useState(null);
   const [canSubmit, setCanSubmit] = useState(false); // Flag to control submission
 
 
@@ -96,6 +97,14 @@ const InstituteSignUp = () => {
     const file = e.target.files[0];
     if (file) {
       setLogoFile(file);
+    }
+  };
+
+  // handle banner file change
+  const handleBannerChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setBannerFile(file);
     }
   };
 
@@ -232,6 +241,11 @@ const InstituteSignUp = () => {
         formPayload.append("logo", logoFile);
       }
 
+      // 🔹 Append banner if selected
+      if (bannerFile) {
+        formPayload.append("banner", bannerFile);
+      }
+
       // 🔹 API call (IMPORTANT: store response)
       const response = await axios.post(
         "http://localhost:5000/api/admin/register",
@@ -271,11 +285,13 @@ const InstituteSignUp = () => {
 
   //logo
   const logoPreview = logoFile ? URL.createObjectURL(logoFile) : null;
+  const bannerPreview = bannerFile ? URL.createObjectURL(bannerFile) : null;
   useEffect(() => {
     return () => {
       if (logoPreview) URL.revokeObjectURL(logoPreview);
+      if (bannerPreview) URL.revokeObjectURL(bannerPreview);
     };
-  }, [logoPreview]);
+  }, [logoPreview, bannerPreview]);
 
 
 
@@ -782,6 +798,40 @@ const InstituteSignUp = () => {
                       </p>
                     </label>
 
+                  </div>
+
+                  {/* Banner Upload Placeholder */}
+                  <div>
+                    <label className="text-gray-300 text-sm font-medium mb-2 block">
+                      Institution Banner (Optional)
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBannerChange}
+                      className="hidden"
+                      id="bannerUpload"
+                    />
+
+                    <label
+                      htmlFor="bannerUpload"
+                      className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center hover:border-emerald-500/50 transition-colors cursor-pointer bg-gray-800/20 block"
+                    >
+                      <FiImage className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-400 text-sm">
+                        {bannerFile ? bannerFile.name : "Click to upload banner"}
+                      </p>
+                    </label>
+
+                    {bannerPreview && (
+                      <div className="mt-4 rounded-xl overflow-hidden border border-gray-700/50">
+                        <img
+                          src={bannerPreview}
+                          alt="Institution Banner Preview"
+                          className="w-full h-40 object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Preview */}
