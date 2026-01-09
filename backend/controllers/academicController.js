@@ -324,10 +324,15 @@ export const deleteCourse = async (req, res) => {
 export const getSemesters = async (req, res) => {
   try {
     const { institutionId } = req.params;
+    console.log('=== GET SEMESTERS ===');
+    console.log('Institution ID:', institutionId);
 
     const semesters = await Semester.find({ institution: institutionId })
       .populate("courses", "code name credits")
       .sort({ startDate: -1 });
+
+    console.log('Found semesters:', semesters.length);
+    console.log('Semesters data:', JSON.stringify(semesters, null, 2));
 
     res.status(200).json({
       success: true,

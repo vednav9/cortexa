@@ -4,6 +4,7 @@ import { FiBook, FiPlus, FiEdit2, FiTrash2, FiX, FiSearch, FiFilter, FiUsers } f
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
+import toast from 'react-hot-toast';
 
 function Courses() {
   const { hasAccess, institution } = useOutletContext();
@@ -22,7 +23,7 @@ function Courses() {
     description: '',
     department: '',
     credits: 3,
-    semester: '',
+    semester: 1,
     maxCapacity: 60,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -41,9 +42,14 @@ function Courses() {
         academicAPI.getDepartments(institution._id),
         academicAPI.getSemesters(institution._id),
       ]);
-      setCourses(Array.isArray(coursesRes.data) ? coursesRes.data : []);
-      setDepartments(Array.isArray(deptsRes.data) ? deptsRes.data : []);
-      setSemesters(Array.isArray(semsRes.data) ? semsRes.data : []);
+      // Backend returns { success, count, data: [...] }
+      const coursesData = coursesRes.data.data || coursesRes.data || [];
+      const deptsData = deptsRes.data.data || deptsRes.data || [];
+      const semsData = semsRes.data.data || semsRes.data || [];
+      
+      setCourses(Array.isArray(coursesData) ? coursesData : []);
+      setDepartments(Array.isArray(deptsData) ? deptsData : []);
+      setSemesters(Array.isArray(semsData) ? semsData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       setCourses([]);
@@ -60,14 +66,16 @@ function Courses() {
       setSubmitting(true);
       if (editingCourse) {
         await academicAPI.updateCourse(editingCourse._id, formData);
+        toast.success('Course updated successfully!');
       } else {
         await academicAPI.createCourse(institution._id, formData);
+        toast.success('Course created successfully!');
       }
-      fetchData();
+      await fetchData();
       closeModal();
     } catch (error) {
       console.error('Error saving course:', error);
-      alert(error.response?.data?.message || 'Failed to save course');
+      toast.error(error.response?.data?.message || 'Failed to save course');
     } finally {
       setSubmitting(false);
     }
@@ -77,10 +85,11 @@ function Courses() {
     if (!window.confirm('Are you sure you want to delete this course?')) return;
     try {
       await academicAPI.deleteCourse(id);
-      fetchData();
+      toast.success('Course deleted successfully!');
+      await fetchData();
     } catch (error) {
       console.error('Error deleting course:', error);
-      alert(error.response?.data?.message || 'Failed to delete course');
+      toast.error(error.response?.data?.message || 'Failed to delete course');
     }
   };
 
@@ -93,7 +102,7 @@ function Courses() {
         description: course.description || '',
         department: course.department._id || course.department,
         credits: course.credits,
-        semester: course.semester || '',
+        semester: course.semester || 1,
         maxCapacity: course.maxCapacity || 60,
       });
     } else {
@@ -104,7 +113,7 @@ function Courses() {
         description: '',
         department: '',
         credits: 3,
-        semester: '',
+        semester: 1,
         maxCapacity: 60,
       });
     }
@@ -410,16 +419,32 @@ function Courses() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Max Capacity
+                      Semester *
                     </label>
                     <input
                       type="number"
+                      required
                       min="1"
-                      value={formData.maxCapacity}
-                      onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
+                      max="8"
+                      value={formData.semester}
+                      onChange={(e) => setFormData({ ...formData, semester: parseInt(e.target.value) })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="e.g., 1, 2, 3..."
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Max Capacity
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.maxCapacity}
+                    onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
                 </div>
 
                 <div className="flex gap-3 pt-4">
