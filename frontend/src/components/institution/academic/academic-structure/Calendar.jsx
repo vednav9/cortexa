@@ -15,7 +15,7 @@ function Calendar() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    eventType: 'class',
+    eventType: 'event',
     startDate: '',
     endDate: '',
     allDay: true,
@@ -23,14 +23,14 @@ function Calendar() {
     targetAudience: 'all',
   });
 
-  const eventTypes = ['class', 'exam', 'holiday', 'event', 'deadline'];
+  const eventTypes = ['event', 'exam', 'holiday', 'deadline', 'other'];
   const audiences = ['all', 'students', 'faculty', 'staff'];
   const eventColors = {
-    class: 'blue',
+    event: 'yellow',
     exam: 'red',
     holiday: 'green',
-    event: 'yellow',
     deadline: 'orange',
+    other: 'blue',
   };
 
   useEffect(() => {
@@ -55,6 +55,14 @@ function Calendar() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      console.log('Submitting calendar event with data:', formData);
+      
+      // Validate dates
+      if (!formData.startDate || !formData.endDate) {
+        toast.error('Start date and end date are required');
+        return;
+      }
+      
       if (editingEvent) {
         await academicAPI.updateCalendarEvent(editingEvent._id, formData);
         toast.success('Event updated successfully!');
@@ -65,6 +73,8 @@ function Calendar() {
       await fetchEvents();
       closeModal();
     } catch (error) {
+      console.error('Calendar event error:', error);
+      console.error('Error response:', error.response);
       toast.error(error.response?.data?.message || 'Failed to save event');
     }
   };
@@ -98,7 +108,7 @@ function Calendar() {
       setFormData({
         title: '',
         description: '',
-        eventType: 'class',
+        eventType: 'event',
         startDate: '',
         endDate: '',
         allDay: true,
@@ -142,11 +152,11 @@ function Calendar() {
       <div className="space-y-4">
         {events.map((event, index) => {
           const colorMap = {
-            class: { bg: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-800' },
+            event: { bg: 'bg-yellow-50', border: 'border-yellow-500', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-800' },
             exam: { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-600', badge: 'bg-red-100 text-red-800' },
             holiday: { bg: 'bg-green-50', border: 'border-green-500', text: 'text-green-600', badge: 'bg-green-100 text-green-800' },
-            event: { bg: 'bg-purple-50', border: 'border-purple-500', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-800' },
             deadline: { bg: 'bg-orange-50', border: 'border-orange-500', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-800' },
+            other: { bg: 'bg-blue-50', border: 'border-blue-500', text: 'text-blue-600', badge: 'bg-blue-100 text-blue-800' },
           };
           const colors = colorMap[event.eventType] || colorMap.event;
           
@@ -317,15 +327,28 @@ function Calendar() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Start Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">End Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
+                    />
+                  </div>
                 </div>
 
                 <div>
