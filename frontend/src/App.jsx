@@ -49,6 +49,7 @@ import Faculty from "./components/institution/academic/academic-structure/Facult
 // Dashboard
 import CortexaDashboard from "./components/dashboard/CortexaDashboard";
 import CortexaAdminLogin from "./components/dashboard/cortexaAdminLogin";
+import InstitutionDashboard from "./components/institution/Dashboard";
 // Layout
 import Navbar from "./components/Navbar";
 

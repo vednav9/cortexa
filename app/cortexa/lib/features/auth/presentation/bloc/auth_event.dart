@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../data/models/user_hive_model.dart';
 
 /// Base class for all authentication events
 abstract class AuthEvent extends Equatable {
@@ -67,4 +68,14 @@ class PasswordResetRequested extends AuthEvent {
   
   @override
   List<Object?> get props => [email];
+}
+
+/// Event when user data is updated (e.g., joining an institution)
+class UserUpdated extends AuthEvent {
+  final UserHiveModel user;
+  
+  const UserUpdated(this.user);
+  
+  @override
+  List<Object?> get props => [user];
 }

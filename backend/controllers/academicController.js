@@ -170,6 +170,8 @@ export const getCourses = async (req, res) => {
     const courses = await Course.find(filter)
       .populate("department", "name code")
       .populate("instructor", "fullName email jobTitle")
+      .populate("semesterAvailable", "name academicYear")
+      .populate("facultyAvailable", "fullName email jobTitle")
       .sort({ code: 1 });
 
     res.status(200).json({
@@ -197,15 +199,17 @@ export const createCourse = async (req, res) => {
       description,
       credits,
       semester,
+      semesterAvailable,
       instructor,
+      facultyAvailable,
       maxCapacity,
       syllabus,
     } = req.body;
 
-    if (!department || !code || !name || !credits || !semester) {
+    if (!department || !code || !name || !credits) {
       return res.status(400).json({
         success: false,
-        message: "Department, code, name, credits, and semester are required",
+        message: "Department, code, name, and credits are required",
       });
     }
 
@@ -216,8 +220,10 @@ export const createCourse = async (req, res) => {
       name,
       description,
       credits,
-      semester,
+      semester: semester || null,
+      semesterAvailable: semesterAvailable || null,
       instructor: instructor || null,
+      facultyAvailable: facultyAvailable || null,
       maxCapacity: maxCapacity || 60,
       syllabus,
     });
@@ -225,6 +231,8 @@ export const createCourse = async (req, res) => {
     await course.populate([
       { path: "department", select: "name code" },
       { path: "instructor", select: "fullName email jobTitle" },
+      { path: "semesterAvailable", select: "name academicYear" },
+      { path: "facultyAvailable", select: "fullName email jobTitle" },
     ]);
 
     res.status(201).json({
@@ -266,6 +274,8 @@ export const updateCourse = async (req, res) => {
     ).populate([
       { path: "department", select: "name code" },
       { path: "instructor", select: "fullName email jobTitle" },
+      { path: "semesterAvailable", select: "name academicYear" },
+      { path: "facultyAvailable", select: "fullName email jobTitle" },
     ]);
 
     if (!course) {
@@ -324,10 +334,15 @@ export const deleteCourse = async (req, res) => {
 export const getSemesters = async (req, res) => {
   try {
     const { institutionId } = req.params;
+    console.log('=== GET SEMESTERS ===');
+    console.log('Institution ID:', institutionId);
 
     const semesters = await Semester.find({ institution: institutionId })
       .populate("courses", "code name credits")
       .sort({ startDate: -1 });
+
+    console.log('Found semesters:', semesters.length);
+    console.log('Semesters data:', JSON.stringify(semesters, null, 2));
 
     res.status(200).json({
       success: true,

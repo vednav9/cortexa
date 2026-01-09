@@ -4,7 +4,7 @@ import '../../../../core/constants/app_colors.dart';
 enum DashboardTab {
   dashboard,
   notifications,
-  invitePeople, // Only for admin
+  queryDesk,
 }
 
 class DashboardDrawer extends StatelessWidget {
@@ -15,6 +15,7 @@ class DashboardDrawer extends StatelessWidget {
   final VoidCallback? onProfileTap;
   final String userName;
   final String userRole;
+  final String? userEmail;
 
   const DashboardDrawer({
     super.key,
@@ -25,6 +26,7 @@ class DashboardDrawer extends StatelessWidget {
     this.onProfileTap,
     required this.userName,
     required this.userRole,
+    this.userEmail,
   });
 
   @override
@@ -71,14 +73,30 @@ class DashboardDrawer extends StatelessWidget {
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: Text(
-                        userName,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            userName,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (userEmail != null && userEmail!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              userEmail!,
+                              style: TextStyle(
+                                color: AppColors.textSecondary.withValues(alpha: 0.8),
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     if (onProfileTap != null)
@@ -103,7 +121,7 @@ class DashboardDrawer extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
                   _buildDrawerItem(
-                    icon: Icons.dashboard_outlined,
+                    icon: Icons.home_outlined,
                     title: 'Dashboard',
                     tab: DashboardTab.dashboard,
                     context: context,
@@ -114,37 +132,55 @@ class DashboardDrawer extends StatelessWidget {
                     tab: DashboardTab.notifications,
                     context: context,
                   ),
-                  if (isAdmin)
-                    _buildDrawerItem(
-                      icon: Icons.person_add_outlined,
-                      title: 'Invite People',
-                      tab: DashboardTab.invitePeople,
-                      context: context,
-                    ),
-                  const Divider(
-                    color: AppColors.borderDark,
-                    height: 32,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.logout,
-                      color: AppColors.error,
-                    ),
-                    title: const Text(
-                      'Logout',
-                      style: TextStyle(
-                        color: AppColors.error,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      onLogout();
-                    },
+                  _buildDrawerItem(
+                    icon: Icons.help_outline,
+                    title: 'Query Desk',
+                    tab: DashboardTab.queryDesk,
+                    context: context,
                   ),
                 ],
+              ),
+            ),
+
+            // Logout button at bottom
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  onLogout();
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.error,
+                      width: 1,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.logout,
+                        color: AppColors.error,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
 

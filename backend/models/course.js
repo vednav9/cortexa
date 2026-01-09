@@ -34,10 +34,17 @@ const courseSchema = new mongoose.Schema(
     },
     semester: {
       type: Number,
-      required: true,
       min: 1,
     },
+    semesterAvailable: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Semester",
+    },
     instructor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Teacher",
+    },
+    facultyAvailable: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Teacher",
     },

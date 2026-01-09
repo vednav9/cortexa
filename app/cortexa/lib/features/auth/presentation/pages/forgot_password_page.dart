@@ -61,6 +61,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           
           return SafeArea(
             child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
               padding: const EdgeInsets.all(24),
               child: Form(
                 key: _formKey,

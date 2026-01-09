@@ -12,35 +12,35 @@ abstract class Failure extends Equatable {
 
 /// Server-related failures (API errors)
 class ServerFailure extends Failure {
-  const ServerFailure([String message = 'Server error occurred']) : super(message);
+  const ServerFailure([super.message = 'Server error occurred']);
 }
 
 /// Network connection failures
 class NetworkFailure extends Failure {
-  const NetworkFailure([String message = 'No internet connection']) : super(message);
+  const NetworkFailure([super.message = 'No internet connection']);
 }
 
 /// Authentication failures
 class AuthenticationFailure extends Failure {
-  const AuthenticationFailure([String message = 'Authentication failed']) : super(message);
+  const AuthenticationFailure([super.message = 'Authentication failed']);
 }
 
 /// Validation failures (form validation)
 class ValidationFailure extends Failure {
-  const ValidationFailure([String message = 'Validation failed']) : super(message);
+  const ValidationFailure([super.message = 'Validation failed']);
 }
 
 /// Cache failures (local storage errors)
 class CacheFailure extends Failure {
-  const CacheFailure([String message = 'Cache error occurred']) : super(message);
+  const CacheFailure([super.message = 'Cache error occurred']);
 }
 
 /// Unauthorized access
 class UnauthorizedFailure extends Failure {
-  const UnauthorizedFailure([String message = 'Unauthorized access']) : super(message);
+  const UnauthorizedFailure([super.message = 'Unauthorized access']);
 }
 
 /// Generic failure
 class GenericFailure extends Failure {
-  const GenericFailure([String message = 'An error occurred']) : super(message);
+  const GenericFailure([super.message = 'An error occurred']);
 }

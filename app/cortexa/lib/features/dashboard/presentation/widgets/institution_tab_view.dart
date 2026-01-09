@@ -10,7 +10,7 @@ class InstitutionTabView extends StatefulWidget {
   final List<InstitutionDisplayModel> myInstitutions;
   final bool isLoading;
   final VoidCallback onRefresh;
-  final Function(InstitutionDisplayModel) onInstitutionTap;
+  final Function(InstitutionDisplayModel, bool isFromMyInstitutionsTab) onInstitutionTap;
   final String userRole;
 
   const InstitutionTabView({
@@ -49,7 +49,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
             children: [
               Expanded(
                 child: _buildTab(
-                  'All Institutions',
+                  'Browse Institutions',
                   InstitutionTabType.allInstitutions,
                   widget.allInstitutions.length,
                 ),
@@ -101,7 +101,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
               style: TextStyle(
                 color: isSelected ? AppColors.primary : AppColors.textSecondary,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 16,
+                fontSize: 15,
               ),
             ),
             const SizedBox(width: 6),
@@ -147,10 +147,11 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
         itemCount: institutions.length,
         itemBuilder: (context, index) {
           final institution = institutions[index];
+          final isFromMyInstitutionsTab = _selectedTab == InstitutionTabType.myInstitutions;
           return InstitutionCard(
             institution: institution,
             userRole: widget.userRole,
-            onCardTapped: () => widget.onInstitutionTap(institution),
+            onCardTapped: () => widget.onInstitutionTap(institution, isFromMyInstitutionsTab),
           );
         },
       ),
@@ -159,6 +160,16 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
 
   Widget _buildEmptyState() {
     final isAllColleges = _selectedTab == InstitutionTabType.allInstitutions;
+    final isAdmin = widget.userRole == 'admin';
+
+    String message;
+    if (isAllColleges) {
+      message = 'Try adjusting your search or filters';
+    } else if (isAdmin) {
+      message = 'Your registered institution will appear here after registration';
+    } else {
+      message = 'Accept invitations to see your institutes here';
+    }
 
     return Center(
       child: Column(
@@ -180,9 +191,7 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
           ),
           const SizedBox(height: 8),
           Text(
-            isAllColleges
-                ? 'Try adjusting your search or filters'
-                : 'Accept invitations to see your institutes here',
+            message,
             style: TextStyle(
               color: AppColors.textTertiary.withValues(alpha: 0.7),
               fontSize: 14,

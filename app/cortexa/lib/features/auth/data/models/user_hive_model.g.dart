@@ -25,13 +25,16 @@ class UserHiveModelAdapter extends TypeAdapter<UserHiveModel> {
       createdAt: fields[5] as DateTime,
       updatedAt: fields[6] as DateTime?,
       role: fields[7] as String,
+      institutionId: fields[8] as String?,
+      institutionRole: fields[9] as String?,
+      institutionJoinedAt: fields[10] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, UserHiveModel obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +50,13 @@ class UserHiveModelAdapter extends TypeAdapter<UserHiveModel> {
       ..writeByte(6)
       ..write(obj.updatedAt)
       ..writeByte(7)
-      ..write(obj.role);
+      ..write(obj.role)
+      ..writeByte(8)
+      ..write(obj.institutionId)
+      ..writeByte(9)
+      ..write(obj.institutionRole)
+      ..writeByte(10)
+      ..write(obj.institutionJoinedAt);
   }
 
   @override

@@ -4,6 +4,7 @@ import { FiClock, FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiCalendar } from 're
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
+import toast from 'react-hot-toast';
 
 function Semesters() {
   const { hasAccess, institution } = useOutletContext();
@@ -13,7 +14,7 @@ function Semesters() {
   const [editingSemester, setEditingSemester] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    academicYear: new Date().getFullYear(),
+    academicYear: String(new Date().getFullYear()),
     startDate: '',
     endDate: '',
     isActive: false,
@@ -29,10 +30,19 @@ function Semesters() {
   const fetchSemesters = async () => {
     try {
       setLoading(true);
+      console.log('Fetching semesters for institution:', institution._id);
       const response = await academicAPI.getSemesters(institution._id);
-      setSemesters(Array.isArray(response.data) ? response.data : []);
+      console.log('Semesters response:', response);
+      console.log('Semesters response.data:', response.data);
+      console.log('Semesters response.data.data:', response.data.data);
+      
+      // Backend returns { success, count, data: [...] }
+      const semestersData = response.data.data || response.data || [];
+      console.log('Final semesters data:', semestersData);
+      setSemesters(Array.isArray(semestersData) ? semestersData : []);
     } catch (error) {
       console.error('Error fetching semesters:', error);
+      console.error('Error response:', error.response);
       setSemesters([]);
     } finally {
       setLoading(false);
@@ -43,16 +53,26 @@ function Semesters() {
     e.preventDefault();
     try {
       setSubmitting(true);
+      console.log('Submitting semester with data:', formData);
+      console.log('Institution ID:', institution._id);
+      
+      let response;
       if (editingSemester) {
-        await academicAPI.updateSemester(editingSemester._id, formData);
+        response = await academicAPI.updateSemester(editingSemester._id, formData);
+        toast.success('Semester updated successfully!');
       } else {
-        await academicAPI.createSemester(institution._id, formData);
+        response = await academicAPI.createSemester(institution._id, formData);
+        toast.success('Semester created successfully!');
       }
-      fetchSemesters();
+      console.log('Semester saved successfully:', response.data);
+      
+      // Wait for fetch to complete before closing modal
+      await fetchSemesters();
       closeModal();
     } catch (error) {
       console.error('Error saving semester:', error);
-      alert(error.response?.data?.message || 'Failed to save semester');
+      console.error('Error response:', error.response);
+      toast.error(error.response?.data?.message || 'Failed to save semester');
     } finally {
       setSubmitting(false);
     }
@@ -62,9 +82,10 @@ function Semesters() {
     if (!window.confirm('Delete this semester?')) return;
     try {
       await academicAPI.deleteSemester(id);
-      fetchSemesters();
+      toast.success('Semester deleted successfully!');
+      await fetchSemesters();
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to delete semester');
+      toast.error(error.response?.data?.message || 'Failed to delete semester');
     }
   };
 
@@ -82,7 +103,7 @@ function Semesters() {
       setEditingSemester(null);
       setFormData({
         name: '',
-        academicYear: new Date().getFullYear(),
+        academicYear: String(new Date().getFullYear()),
         startDate: '',
         endDate: '',
         isActive: false,
@@ -100,7 +121,7 @@ function Semesters() {
     return (
       <GenericPage title="Semesters" icon={FiClock}>
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600"></div>
         </div>
       </GenericPage>
     );
@@ -114,7 +135,7 @@ function Semesters() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => openModal()}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl font-medium"
+            className="flex items-center gap-2 bg-gradient-to-r from-pink-600 to-pink-700 text-white px-6 py-3 rounded-xl hover:from-pink-700 hover:to-pink-800 transition-all shadow-lg hover:shadow-xl font-medium"
           >
             <FiPlus className="w-5 h-5" /> Add Semester
           </motion.button>
@@ -129,17 +150,17 @@ function Semesters() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
             whileHover={{ y: -4 }}
-            className={`bg-gradient-to-br from-white to-purple-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border ${
-              sem.isActive ? 'border-purple-400 ring-2 ring-purple-400 ring-offset-2' : 'border-purple-100/50'
+            className={`bg-gradient-to-br from-white to-pink-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border ${
+              sem.isActive ? 'border-pink-400 ring-2 ring-pink-400 ring-offset-2' : 'border-pink-100/50'
             }`}
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
-                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg mb-3">
+                <div className="w-14 h-14 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg mb-3">
                   <FiClock className="text-white text-2xl" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-800 mb-1">{sem.name}</h3>
-                <p className="text-sm text-purple-600 font-semibold bg-purple-50 px-2 py-1 rounded-md inline-block">
+                <p className="text-sm text-pink-600 font-semibold bg-pink-50 px-2 py-1 rounded-md inline-block">
                   {sem.academicYear}
                 </p>
                 {sem.isActive && (
@@ -156,7 +177,7 @@ function Semesters() {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => openModal(sem)}
-                    className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-600 hover:text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
                   >
                     <FiEdit2 className="w-4 h-4" />
                   </motion.button>
@@ -195,8 +216,8 @@ function Semesters() {
                   </p>
                 </div>
               </div>
-              <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
-                <p className="text-xs text-purple-600 font-semibold mb-1">COURSES</p>
+              <div className="mt-4 p-3 bg-gradient-to-r from-pink-50 to-pink-50 rounded-xl border border-pink-100">
+                <p className="text-xs text-pink-600 font-semibold mb-1">COURSES</p>
                 <p className="text-lg font-bold text-gray-800">{sem.courses?.length || 0}</p>
               </div>
             </div>
@@ -210,8 +231,8 @@ function Semesters() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center py-16 px-4"
         >
-          <div className="w-24 h-24 bg-gradient-to-br from-purple-100 to-purple-200 rounded-full flex items-center justify-center mx-auto mb-6">
-            <FiClock className="w-12 h-12 text-purple-600" />
+          <div className="w-24 h-24 bg-gradient-to-br from-pink-100 to-pink-200 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FiClock className="w-12 h-12 text-pink-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-800 mb-2">No semesters yet</h3>
           <p className="text-gray-600 mb-6 max-w-md mx-auto">
@@ -222,7 +243,7 @@ function Semesters() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => openModal()}
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-xl hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl font-medium"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-600 to-pink-700 text-white px-6 py-3 rounded-xl hover:from-pink-700 hover:to-pink-800 transition-all shadow-lg hover:shadow-xl font-medium"
             >
               <FiPlus className="w-5 h-5" /> Create First Semester
             </motion.button>
@@ -261,7 +282,7 @@ function Semesters() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500"
                     placeholder="e.g., Fall 2024"
                   />
                 </div>
@@ -272,8 +293,8 @@ function Semesters() {
                     type="number"
                     required
                     value={formData.academicYear}
-                    onChange={(e) => setFormData({ ...formData, academicYear: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                    onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500"
                   />
                 </div>
 
@@ -285,7 +306,7 @@ function Semesters() {
                       required
                       value={formData.startDate}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500"
                     />
                   </div>
                   <div>
@@ -295,7 +316,7 @@ function Semesters() {
                       required
                       value={formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500"
                     />
                   </div>
                 </div>
@@ -305,7 +326,7 @@ function Semesters() {
                     type="checkbox"
                     checked={formData.isActive}
                     onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                    className="w-4 h-4 text-pink-600 rounded focus:ring-pink-500"
                   />
                   <label className="text-sm text-gray-700">Mark as active semester</label>
                 </div>
@@ -317,7 +338,7 @@ function Semesters() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                    className="flex-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50"
                   >
                     {submitting ? 'Saving...' : editingSemester ? 'Update' : 'Create'}
                   </button>

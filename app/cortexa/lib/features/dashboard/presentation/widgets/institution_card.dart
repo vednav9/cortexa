@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../../../../core/constants/app_colors.dart';
 import '../../data/models/institution_display_model.dart';
 
@@ -46,15 +47,10 @@ class InstitutionCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           child: Stack(
             children: [
-              // Background Image (full width)
+              // Background Image (full width) - Using banner image
               Positioned.fill(
-                child: institution.logoUrl != null
-                    ? Image.network(
-                        institution.logoUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _buildPlaceholderBackground(),
-                      )
+                child: institution.bannerImageUrl != null
+                    ? _buildBackgroundImage(institution.bannerImageUrl!)
                     : _buildPlaceholderBackground(),
               ),
               // Gradient Overlay (transparent to black, right to left)
@@ -210,6 +206,59 @@ class InstitutionCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildBackgroundImage(String imageUrl) {
+    // Check if it's a file path (for preview) or network URL
+    final isFilePath = imageUrl.startsWith('/') || 
+                       imageUrl.contains('\\') || 
+                       !imageUrl.startsWith('http');
+    
+    if (isFilePath) {
+      // Local file preview
+      final file = File(imageUrl);
+      print('📷 Loading banner image from file: $imageUrl');
+      print('📷 File exists: ${file.existsSync()}');
+      
+      if (!file.existsSync()) {
+        print('⚠️ Banner image file does not exist, using placeholder');
+        return _buildPlaceholderBackground();
+      }
+      
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          print('❌ Error loading banner image file: $error');
+          return _buildPlaceholderBackground();
+        },
+      );
+    } else {
+      // Network image
+      print('📷 Loading banner image from network: $imageUrl');
+      return Image.network(
+        imageUrl,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            color: AppColors.cardBackground,
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+                color: AppColors.primary,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('❌ Error loading banner image from network: $error');
+          return _buildPlaceholderBackground();
+        },
+      );
+    }
   }
 
   Widget _buildPlaceholderBackground() {

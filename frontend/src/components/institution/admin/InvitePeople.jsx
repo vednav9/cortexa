@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiUpload,
@@ -15,7 +15,7 @@ import { HiSparkles } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useOutletContext } from 'react-router-dom';
 import { useAuth } from '../../../context/authcontext';
-import { invitationAPI, adminInvitationAPI } from '../../../services/api';
+import { invitationAPI, adminInvitationAPI, academicAPI } from '../../../services/api';
 
 
 
@@ -36,6 +36,17 @@ const InvitePeople = () => {
     email: '',
     message: '',
   });
+
+  // Academic data states
+  const [departments, setDepartments] = useState([]);
+  const [semesters, setSemesters] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedSemester, setSelectedSemester] = useState('');
+  const [selectedCourses, setSelectedCourses] = useState([]);
+  const [filteredCourses, setFilteredCourses] = useState([]);
+  const [loadingAcademic, setLoadingAcademic] = useState(false);
+
   // ===============================
   // INVITATION STATUS MODAL (ADMIN)
   // ===============================
@@ -44,6 +55,51 @@ const InvitePeople = () => {
   const [adminInvites, setAdminInvites] = useState([]);
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [filterRole, setFilterRole] = useState('all'); // all | Student | Teacher
+
+  // Fetch academic data on mount
+  useEffect(() => {
+    if (institution?._id) {
+      fetchAcademicData();
+    }
+  }, [institution]);
+
+  // Filter courses when department or semester changes
+  useEffect(() => {
+    if (selectedDepartment && selectedSemester) {
+      const filtered = courses.filter(
+        course =>
+          course.department?._id === selectedDepartment &&
+          course.semesterAvailable?._id === selectedSemester
+      );
+      setFilteredCourses(filtered);
+    } else {
+      setFilteredCourses([]);
+    }
+  }, [selectedDepartment, selectedSemester, courses]);
+
+  const fetchAcademicData = async () => {
+    try {
+      setLoadingAcademic(true);
+      const [deptsRes, semsRes, coursesRes] = await Promise.all([
+        academicAPI.getDepartments(institution._id),
+        academicAPI.getSemesters(institution._id),
+        academicAPI.getCourses(institution._id),
+      ]);
+
+      const deptsData = deptsRes.data.data || deptsRes.data || [];
+      const semsData = semsRes.data.data || semsRes.data || [];
+      const coursesData = coursesRes.data.data || coursesRes.data || [];
+
+      setDepartments(Array.isArray(deptsData) ? deptsData : []);
+      setSemesters(Array.isArray(semsData) ? semsData : []);
+      setCourses(Array.isArray(coursesData) ? coursesData : []);
+    } catch (error) {
+      console.error('Error fetching academic data:', error);
+      toast.error('Failed to load academic data');
+    } finally {
+      setLoadingAcademic(false);
+    }
+  };
 
 
 
@@ -143,6 +199,16 @@ const InvitePeople = () => {
       return;
     }
 
+    if (!selectedDepartment || !selectedSemester) {
+      toast.error('Department and semester are required');
+      return;
+    }
+
+    if (userType === 'teacher' && selectedCourses.length === 0) {
+      toast.error('At least one course is required for teachers');
+      return;
+    }
+
     if (!institutionId) {
       toast.error('Institution not found');
       return;
@@ -155,6 +221,9 @@ const InvitePeople = () => {
         email: manualForm.email,
         fullName: manualForm.fullName,
         message: manualForm.message || 'You are invited to join the institution',
+        department: selectedDepartment,
+        semester: selectedSemester,
+        courses: userType === 'teacher' ? selectedCourses : undefined,
       };
 
       await invitationAPI.create(payload);
@@ -166,6 +235,9 @@ const InvitePeople = () => {
         email: '',
         message: '',
       });
+      setSelectedDepartment('');
+      setSelectedSemester('');
+      setSelectedCourses([]);
     } catch (error) {
       console.error(error);
       toast.error(
@@ -200,6 +272,11 @@ const InvitePeople = () => {
       return;
     }
 
+    if (!selectedDepartment || !selectedSemester) {
+      toast.error('Department and semester are required for bulk upload');
+      return;
+    }
+
     if (!institutionId) {
       toast.error('Institution ID not found');
       console.error('Institution object:', institution);
@@ -213,12 +290,14 @@ const InvitePeople = () => {
     try {
       const payload = {
         institutionId,
-        recipientType: userType === 'student' ? 'Student' : 'Teacher',
+        recipientType: 'Student', // Only students can be bulk uploaded
         users: users.map(u => ({
           fullName: u.fullName,
           email: u.email,
           message: u.message || 'You are invited to join the institution',
         })),
+        department: selectedDepartment,
+        semester: selectedSemester,
       };
 
       const response = await invitationAPI.bulkInviteUsers(payload);
@@ -231,6 +310,8 @@ const InvitePeople = () => {
       }
 
       setUsers([]);
+      setSelectedDepartment('');
+      setSelectedSemester('');
     } catch (error) {
       console.error('Full error object:', error);
       console.error('Error response:', error.response);
@@ -424,7 +505,57 @@ const InvitePeople = () => {
             </div>
 
             {/* Upload Zone */}
-            <div className="p-8">
+            <div className="p-8 space-y-6">
+              {/* Department and Semester Selection for CSV */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Department <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedDepartment}
+                    onChange={(e) => setSelectedDepartment(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map(dept => (
+                      <option key={dept._id} value={dept._id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Semester <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedSemester}
+                    onChange={(e) => setSelectedSemester(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
+                  >
+                    <option value="">Select Semester</option>
+                    {semesters.map(sem => (
+                      <option key={sem._id} value={sem._id}>{sem.name} ({sem.academicYear})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex gap-3">
+                    <FiAlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-900">CSV Bulk Upload - Students Only</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        All students will be automatically enrolled in courses matching the selected department and semester.
+                        {filteredCourses.length > 0 && ` (${filteredCourses.length} course${filteredCourses.length !== 1 ? 's' : ''} will be assigned)`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
@@ -471,7 +602,7 @@ const InvitePeople = () => {
                       <p><strong>Required columns:</strong> fullName, email</p>
                       <p><strong>Optional:</strong> message</p>
                       <p className="text-xs text-blue-700 mt-1">
-                        Invitations will be sent as {userType === 'student' ? 'Student' : 'Teacher'}
+                        <strong>Note:</strong> CSV bulk upload is only available for students. Teachers must be added manually with course selection.
                       </p>
 
                     </div>
@@ -535,9 +666,102 @@ const InvitePeople = () => {
 
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-700">
-                    Message <span className="text-red-500">*</span>
+                    Department <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedDepartment}
+                    onChange={(e) => setSelectedDepartment(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map(dept => (
+                      <option key={dept._id} value={dept._id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Semester <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedSemester}
+                    onChange={(e) => setSelectedSemester(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
+                  >
+                    <option value="">Select Semester</option>
+                    {semesters.map(sem => (
+                      <option key={sem._id} value={sem._id}>{sem.name} ({sem.academicYear})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {userType === 'teacher' && (
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700">
+                      Authorized Courses <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto hover:border-gray-300 transition-all">
+                      {filteredCourses.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-4">
+                          {selectedDepartment && selectedSemester 
+                            ? 'No courses available for selected department and semester' 
+                            : 'Select department and semester first'}
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {filteredCourses.map(course => (
+                            <label key={course._id} className="flex items-center gap-3 p-2 hover:bg-emerald-50 rounded-lg cursor-pointer transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={selectedCourses.includes(course._id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedCourses([...selectedCourses, course._id]);
+                                  } else {
+                                    setSelectedCourses(selectedCourses.filter(id => id !== course._id));
+                                  }
+                                }}
+                                className="w-5 h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                              />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{course.name}</p>
+                                <p className="text-xs text-gray-500">{course.code}</p>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Teacher will only have full access to selected courses for notes upload, MCQ generation, voice-to-text, and Q&A portal.
+                    </p>
+                  </div>
+                )}
+
+                {userType === 'student' && (
+                  <div className="md:col-span-2 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex gap-3">
+                      <FiAlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-900">Auto Course Enrollment</p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          Student will be automatically enrolled in all courses matching the selected department and semester.
+                          {filteredCourses.length > 0 && ` (${filteredCourses.length} course${filteredCourses.length !== 1 ? 's' : ''} available)`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Message
                   </label>
                   <textarea
+                    value={manualForm.message}
                     onChange={(e) => setManualForm({ ...manualForm, message: e.target.value })}
 
                     placeholder="You are invited to join the institution"

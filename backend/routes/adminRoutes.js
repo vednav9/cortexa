@@ -10,6 +10,8 @@ import {
   deleteUser,
   toggleUserStatus,
   removeUserFromInstitution,
+  getInstitutionStudents,
+  getInstitutionTeachers,
 } from "../controllers/adminController.js";
 
 import { authenticate } from "../middleware/auth.js";
@@ -20,7 +22,16 @@ const router = express.Router();
 /* =========================
    AUTH
 ========================= */
-router.post("/register", upload.single("logo"), registerAdmin);
+// Accept optional `logo` and `banner` uploads in the same multipart request.
+// Keep fields optional so existing clients continue working.
+router.post(
+  "/register",
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "banner", maxCount: 1 },
+  ]),
+  registerAdmin
+);
 router.post("/login", loginAdmin);
 router.post("/logout", authenticate, logoutAdmin);
 
@@ -28,6 +39,10 @@ router.post("/logout", authenticate, logoutAdmin);
    INSTITUTION
 ========================= */
 router.get("/institution", authenticate, getMyInstitution);
+
+// Dashboard stats endpoints
+router.get("/institutions/:institutionId/students", authenticate, getInstitutionStudents);
+router.get("/institutions/:institutionId/teachers", authenticate, getInstitutionTeachers);
 
 /* =========================
    USER MANAGEMENT

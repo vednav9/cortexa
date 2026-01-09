@@ -4,6 +4,11 @@ import Institution from '../models/institution.js';
 import Membership from '../models/membership.js';
 import Invitation from '../models/invitation.js';
 import Admin from '../models/admin.js';
+import Student from '../models/student.js';
+import Teacher from '../models/teacher.js';
+import Course from '../models/course.js';
+import Department from '../models/department.js';
+import Semester from '../models/semester.js';
 
 const router = express.Router();
 
@@ -11,13 +16,34 @@ const router = express.Router();
 router.get('/browse', async (req, res) => {
   try {
     const institutions = await Institution.find()
-      .select('name slug code type description address contact branding stats departments established')
+      .select('name slug code type description address contact branding departments established')
       .sort('name');
+    
+    // Calculate stats for each institution
+    const institutionsWithStats = await Promise.all(institutions.map(async (institution) => {
+      const [totalStudents, totalFaculty, totalCourses, activeSemesters, totalDepartments] = await Promise.all([
+        Student.countDocuments({ institution: institution._id, status: 'active' }),
+        Teacher.countDocuments({ institution: institution._id, status: 'active' }),
+        Course.countDocuments({ institution: institution._id, isActive: true }),
+        Semester.countDocuments({ institution: institution._id, isActive: true }),
+        Department.countDocuments({ institution: institution._id })
+      ]);
+
+      const institutionObj = institution.toObject();
+      institutionObj.stats = {
+        totalStudents,
+        totalFaculty,
+        totalCourses,
+        activeSemesters,
+        totalDepartments
+      };
+      return institutionObj;
+    }));
     
     res.json({ 
       success: true,
-      count: institutions.length,
-      institutions 
+      count: institutionsWithStats.length,
+      institutions: institutionsWithStats 
     });
   } catch (error) {
     console.error('❌ Error fetching institutions:', error);
@@ -37,13 +63,13 @@ router.get('/:slug', async (req, res) => {
     
     // Try to find institution by slug
     let institution = await Institution.findOne({ slug })
-      .select('name slug code type description address contact branding stats departments established');
+      .select('name slug code type description address contact branding departments established');
     
     // If not found by slug, try by code (case-insensitive)
     if (!institution) {
       institution = await Institution.findOne({ 
         code: new RegExp(`^${slug}$`, 'i') 
-      }).select('name slug code type description address contact branding stats departments established');
+      }).select('name slug code type description address contact branding departments established');
     }
     
     if (!institution) {
@@ -52,6 +78,25 @@ router.get('/:slug', async (req, res) => {
         message: 'Institution not found' 
       });
     }
+
+    // Calculate real-time stats
+    const [totalStudents, totalFaculty, totalCourses, activeSemesters, totalDepartments] = await Promise.all([
+      Student.countDocuments({ institution: institution._id, status: 'active' }),
+      Teacher.countDocuments({ institution: institution._id, status: 'active' }),
+      Course.countDocuments({ institution: institution._id, isActive: true }),
+      Semester.countDocuments({ institution: institution._id, isActive: true }),
+      Department.countDocuments({ institution: institution._id })
+    ]);
+
+    // Convert to plain object and add stats
+    institution = institution.toObject();
+    institution.stats = {
+      totalStudents,
+      totalFaculty,
+      totalCourses,
+      activeSemesters,
+      totalDepartments
+    };
     
     res.json({ 
       success: true,

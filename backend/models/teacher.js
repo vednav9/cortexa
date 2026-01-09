@@ -32,9 +32,23 @@ const teacherSchema = new mongoose.Schema(
         },
 
         department: {
-            type: String,
-            default: null, // ✅ allow later
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Department",
+            default: null,
         },
+
+        semester: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Semester",
+            default: null,
+        },
+
+        authorizedCourses: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Course",
+            },
+        ],
 
         institution: {
             type: mongoose.Schema.Types.ObjectId,
