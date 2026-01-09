@@ -13,13 +13,11 @@ export const getMe = async (req, res) => {
             user = await Student.findById(id)
                 .populate("institution")
                 .select("fullName email role institution");
-        }
-        else if (role === "teacher") {
+        } else if (role === "teacher") {
             user = await Teacher.findById(id)
                 .populate("institution")
                 .select("fullName email role institution");
-        }
-        else if (role === "admin") {
+        } else if (role === "admin") {
             user = await Admin.findById(id)
                 .populate("institution")
                 .select("fullName email role institution");
@@ -49,7 +47,7 @@ export const getMe = async (req, res) => {
                 name: user.fullName,
                 email: user.email,
                 role: user.role,
-                institution: user.institution || null, // ✅ FIX
+                institution: user.institution || null, // Include for all roles
             },
         });
 

@@ -28,6 +28,8 @@ import Assessment from "./components/institution/teacher/Assessment";
 
 // Student Pages
 import RAGChatbot from "./components/institution/student/RAGChatbot";
+import MCQTest from "./components/institution/student/MCQTest";
+import QASection from "./components/institution/student/QASection";
 
 // Shared Pages (All Roles)
 import Announcements from "./components/institution/shared/Announcements";
@@ -127,6 +129,8 @@ function App() {
                 <Route path="assessment" element={<Assessment />} />
                 <Route path="ai-chatbot" element={<AIChatbot />} />
                 <Route path="rag-chatbot" element={<RAGChatbot />} />
+                <Route path="mcq-test" element={<MCQTest />} />
+                <Route path="qa-section" element={<QASection />} />
                 <Route path="courses" element={<CourseCatalog />} />
                 <Route path="courses/:courseCode" element={<CourseDetails />} />
               </Route>
