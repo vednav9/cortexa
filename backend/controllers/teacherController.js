@@ -203,3 +203,80 @@ export const getAuthorizedCourses = async (req, res) => {
         });
     }
 };
+
+/* =========================
+   GET STUDENTS IN AUTHORIZED COURSES
+========================= */
+export const getStudentsInAuthorizedCourses = async (req, res) => {
+    try {
+        const teacherId = req.user.id;
+        const { courseId, departmentId, semesterId } = req.query;
+
+        // Get teacher with authorized courses
+        const teacher = await Teacher.findById(teacherId)
+            .select('authorizedCourses institution department semester');
+
+        if (!teacher) {
+            return res.status(404).json({
+                success: false,
+                message: "Teacher not found"
+            });
+        }
+
+        // Build query for students
+        let studentQuery = {
+            institution: teacher.institution,
+            status: 'active'
+        };
+
+        // If specific course is requested, check if teacher is authorized
+        if (courseId) {
+            const isAuthorized = teacher.authorizedCourses.some(
+                course => course.toString() === courseId
+            );
+            
+            if (!isAuthorized) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You are not authorized to view students for this course"
+                });
+            }
+            
+            studentQuery.enrolledCourses = courseId;
+        } else {
+            // Show students enrolled in ANY of teacher's authorized courses
+            if (teacher.authorizedCourses.length > 0) {
+                studentQuery.enrolledCourses = { $in: teacher.authorizedCourses };
+            }
+        }
+
+        // Add optional filters
+        if (departmentId) {
+            studentQuery.department = departmentId;
+        }
+        if (semesterId) {
+            studentQuery.semester = semesterId;
+        }
+
+        // Fetch students with populated fields
+        const students = await Student.find(studentQuery)
+            .populate('department', 'name code')
+            .populate('semester', 'name academicYear')
+            .populate('enrolledCourses', 'name code')
+            .select('fullName email phone username enrolledCourses department semester status')
+            .sort({ fullName: 1 });
+
+        res.status(200).json({
+            success: true,
+            count: students.length,
+            students
+        });
+
+    } catch (error) {
+        console.error("Get students error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch students"
+        });
+    }
+};
