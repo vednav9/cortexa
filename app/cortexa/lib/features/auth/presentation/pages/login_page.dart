@@ -260,7 +260,7 @@ class _LoginPageState extends State<LoginPage> {
                             });
                           },
                         ),
-                        validator: Validators.validatePassword,
+                        validator: (value) => Validators.validatePassword(value, requireStrong: false),
                       ),
                       SizedBox(height: screenHeight * 0.008),
                       Align(

@@ -264,18 +264,7 @@ class _SignupPageState extends State<SignupPage> {
                         Icons.alternate_email,
                         color: AppColors.primary,
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Username is required';
-                        }
-                        if (value.length < 3) {
-                          return 'Username must be at least 3 characters';
-                        }
-                        if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
-                          return 'Username can only contain letters, numbers, and underscores';
-                        }
-                        return null;
-                      },
+                      validator: Validators.validateUsername,
                     ),
                     SizedBox(height: screenHeight * 0.012),
                     CustomTextField(

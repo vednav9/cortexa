@@ -3,17 +3,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
-import 'package:uuid/uuid.dart';
 import 'dart:io';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/custom_button.dart';
-import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../admin/data/models/institution_model.dart';
 import '../../../dashboard/data/models/institution_display_model.dart';
 import '../../../dashboard/presentation/widgets/institution_card.dart';
+import '../../data/models/auth_models.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_state.dart';
 
@@ -51,6 +51,9 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
   }
 
   InstitutionDisplayModel _buildPreviewModel() {
+    final brandHex = (_brandColor.toARGB32() & 0x00FFFFFF)
+        .toRadixString(16)
+        .padLeft(6, '0');
     return InstitutionDisplayModel(
       id: 'preview',
       name: widget.previousData.institutionName.isEmpty 
@@ -67,7 +70,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       customUrlSlug: _urlSlugController.text.isEmpty 
           ? 'your-institution' 
           : _urlSlugController.text,
-      primaryBrandColor: '#${_brandColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
+      primaryBrandColor: '#$brandHex',
       isOwnInstitution: true,
       studentCount: 0,
       teacherCount: 0,
@@ -193,58 +196,99 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
   
   void _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
+      // Show loading indicator
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+
+      final brandHex = (_brandColor.toARGB32() & 0x00FFFFFF)
+          .toRadixString(16)
+          .padLeft(6, '0');
       final institutionData = widget.previousData.copyWith(
         customUrlSlug: _urlSlugController.text.trim(),
-        primaryBrandColor: '#${_brandColor.value.toRadixString(16).padLeft(8, '0').substring(2)}',
+        primaryBrandColor: '#$brandHex',
         logoPath: _logoPath,
         bannerImagePath: _bannerImagePath,
       );
-      
-      // Generate a unique institution ID
-      const uuid = Uuid();
-      final institutionId = uuid.v4();
-      
-      // Create the Admin account and link them to the institution
+
       try {
-        final repo = context.read<AuthBloc>().authRepository;
-        repo.registerAdminUser(
-          username: institutionData.adminUsername,
+        print('🏫 Starting admin registration...');
+        print('📧 Email: ${institutionData.adminEmail}');
+        print('🏢 Institution: ${institutionData.institutionName}');
+        
+        final authRepo = getIt<AuthRepository>();
+
+        final adminRequest = AdminRegisterRequest(
+          fullName: institutionData.adminFullName,
           email: institutionData.adminEmail,
           password: institutionData.adminPassword,
-          fullName: institutionData.adminFullName,
-          institutionId: institutionId,
+          jobTitle: institutionData.adminJobTitle,
+          phone: institutionData.adminPhoneNumber,
+          institutionName: institutionData.institutionName,
+          institutionType: institutionData.institutionType,
+          website: institutionData.institutionWebsite.isEmpty ? null : institutionData.institutionWebsite,
+          address1: institutionData.addressLine1,
+          city: institutionData.city,
+          state: institutionData.stateProvince,
+          country: institutionData.country,
+          postalCode: institutionData.postalCode.isEmpty ? null : institutionData.postalCode,
+          description: institutionData.shortDescription.isEmpty ? null : institutionData.shortDescription,
+          customURL: institutionData.customUrlSlug.isEmpty ? null : institutionData.customUrlSlug,
+          brandColor: institutionData.primaryBrandColor,
         );
-      } catch (e) {
-        // Non-fatal in demo; proceed to success message
-        // In production, handle and show proper error
-        // ignore: avoid_print
-        print('⚠️ Failed to pre-create admin user: $e');
-      }
 
-      // Save institution data to Hive storage
-      try {
-        final storage = getIt<HiveStorageService>();
-        final institutionJson = institutionData.toJson();
-        institutionJson['id'] = institutionId; // Add the generated ID
-        
-        await storage.saveInstitution(institutionJson);
-        print('✅ Institution saved to storage: ${institutionData.institutionName}');
-      } catch (e) {
-        print('⚠️ Failed to save institution: $e');
-      }
-      
-      if (mounted) {
+        print('📤 Sending registration request...');
+        final result = await authRepo.registerAdminWithInstitution(
+          adminRequest,
+          logoFile: _logoFile,
+          bannerFile: _bannerImageFile,
+          bannerImagePath: institutionData.bannerImagePath,
+          username: institutionData.adminUsername,
+        );
+
+        print('✅ Registration successful!');
+        print('👤 User: ${result['user']}');
+        print('🔑 Token received: ${result['token']?.isNotEmpty ?? false}');
+
+        // Close loading dialog
+        if (!mounted) return;
+        Navigator.of(context).pop();
+
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Institution registration successful! You can now sign in as Admin.'),
+            content: Text('🎉 Institution registered successfully!'),
             backgroundColor: AppColors.success,
+            duration: Duration(seconds: 3),
           ),
         );
+
+        // Navigate to admin dashboard
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        context.go('/admin-dashboard');
         
-        // Navigate to login
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) context.go('/login');
-        });
+      } catch (e) {
+        print('❌ Registration error: $e');
+        
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop();
+          
+          // Show error message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Registration failed: ${e.toString()}'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
       }
     }
   }
@@ -505,7 +549,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '#${_brandColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                                    '#${((_brandColor.toARGB32() & 0x00FFFFFF).toRadixString(16).padLeft(6, '0')).toUpperCase()}',
                                     style: const TextStyle(
                                       color: AppColors.textPrimary,
                                       fontFamily: 'monospace',
