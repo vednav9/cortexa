@@ -1,5 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../data/repositories/mock_auth_repository.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/providers/app_state_provider.dart';
@@ -8,14 +8,14 @@ import 'auth_state.dart';
 
 /// AuthBloc handles all authentication logic
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  final MockAuthRepository authRepository;
+  final AuthRepository authRepository;
   final HiveStorageService storage;
-  final AppStateProvider appStateProvider; // ✅ Added
+  final AppStateProvider appStateProvider;
 
   AuthBloc({
     required this.authRepository,
     required this.storage,
-    required this.appStateProvider, // ✅ Added
+    required this.appStateProvider,
   }) : super(const AuthInitial()) {
     // Register event handlers
     on<CheckAuthStatus>(_onCheckAuthStatus);
@@ -26,7 +26,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<UserUpdated>(_onUserUpdated);
   }
 
-  /// Check if user is already logged in (on app start)
   /// Check if user is already logged in (on app start)
   Future<void> _onCheckAuthStatus(
     CheckAuthStatus event,
@@ -45,22 +44,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       await Future.delayed(const Duration(milliseconds: 300));
 
-      final authData = await authRepository.checkAuthStatus();
+      final isLoggedIn = authRepository.isLoggedIn();
+      final user = authRepository.getCurrentUser();
+      final token = authRepository.getToken();
 
-      if (authData != null) {
-        print('✅ [AuthBloc] User authenticated: ${authData['user'].username}');
+      if (isLoggedIn && user != null && token != null) {
+        print('✅ [AuthBloc] User authenticated: ${user.username}');
 
-        appStateProvider.setUser(
-          authData['user'],
-          authData['token'].accessToken,
-        );
+        appStateProvider.setUser(user, token);
         appStateProvider.setInitialized(true);
         appStateProvider.setLoading(false);
 
         emit(
           AuthAuthenticated(
-            user: authData['user'],
-            accessToken: authData['token'].accessToken,
+            user: user,
+            accessToken: token,
           ),
         );
       } else {
@@ -100,13 +98,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       // Update global state
-      appStateProvider.setUser(result['user'], result['token'].accessToken);
+      appStateProvider.setUser(result['user'], result['token']);
       appStateProvider.setLoading(false);
 
       emit(
         AuthAuthenticated(
           user: result['user'],
-          accessToken: result['token'].accessToken,
+          accessToken: result['token'],
         ),
       );
     } on ServerException catch (e) {
@@ -117,7 +115,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthError(message: e.message));
     } catch (e) {
       appStateProvider.setLoading(false);
-      emit(AuthError(message: 'An unexpected error occurred'));
+      emit(AuthError(message: 'An unexpected error occurred: ${e.toString()}'));
     }
   }
 
@@ -139,14 +137,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       // Update global state
-      appStateProvider.setUser(result['user'], result['token'].accessToken);
+      appStateProvider.setUser(result['user'], result['token']);
       appStateProvider.setLoading(false);
 
       // After successful signup, auto-login
       emit(
         AuthAuthenticated(
           user: result['user'],
-          accessToken: result['token'].accessToken,
+          accessToken: result['token'],
         ),
       );
     } on ServerException catch (e) {
@@ -157,7 +155,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthError(message: e.message));
     } catch (e) {
       appStateProvider.setLoading(false);
-      emit(AuthError(message: 'An unexpected error occurred'));
+      emit(AuthError(message: 'An unexpected error occurred: ${e.toString()}'));
     }
   }
 
@@ -193,9 +191,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     appStateProvider.setLoading(true);
 
     try {
-      final message = await authRepository.resetPassword(email: event.email);
+      // Password reset not implemented in backend yet
       appStateProvider.setLoading(false);
-      emit(PasswordResetEmailSent(message: message));
+      emit(const PasswordResetEmailSent(message: 'Password reset feature coming soon'));
     } on ServerException catch (e) {
       appStateProvider.setLoading(false);
       emit(AuthError(message: e.message));
@@ -213,13 +211,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       // Get current token
       final token = storage.getToken();
-      final accessToken = token?.accessToken ?? '';
       
       // Update app state provider with new user data
-      appStateProvider.setUser(event.user, accessToken);
+      appStateProvider.setUser(event.user, token ?? '');
       
       // Emit authenticated state with updated user
-      emit(AuthAuthenticated(user: event.user, accessToken: accessToken));
+      emit(AuthAuthenticated(user: event.user, accessToken: token ?? ''));
     } catch (e) {
       emit(AuthError(message: 'Failed to update user: $e'));
     }
