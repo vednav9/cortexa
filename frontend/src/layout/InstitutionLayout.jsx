@@ -154,22 +154,25 @@ export default function InstitutionLayout() {
     return (
         <InstitutionContext.Provider value={{ institution }}>
             <div className="min-h-screen bg-gray-50">
-                {/* Institution Navbar */}
-                <InstitutionNavbar 
-                    institution={institution}
-                    onBackToDashboard={handleBackToDashboard}
-                    brandColor={brandColor}
-                />
+                {/* Fixed Header Container */}
+                <div className="fixed top-0 left-0 right-0 z-50 bg-white">
+                    {/* Institution Navbar */}
+                    <InstitutionNavbar 
+                        institution={institution}
+                        onBackToDashboard={handleBackToDashboard}
+                        brandColor={brandColor}
+                    />
+                    
+                    {/* Institution Menu - Role-based horizontal menu */}
+                    <InstitutionMenu
+                        userRole={user?.role}
+                        hasAccess={hasAccess}
+                        brandColor={brandColor}
+                    />
+                </div>
                 
-                {/* Institution Menu - Role-based horizontal menu */}
-                <InstitutionMenu
-                    userRole={user?.role}
-                    hasAccess={hasAccess}
-                    brandColor={brandColor}
-                />
-                
-                {/* Page Content */}
-                <div className="relative z-0">
+                {/* Page Content - Add top padding to account for fixed header */}
+                <div className="relative pt-[112px]">
                     <Outlet context={{ hasAccess, institution }} />
                 </div>
 
