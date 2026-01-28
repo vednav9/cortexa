@@ -21,6 +21,15 @@ export default function InstitutionHome() {
     }
   };
 
+  // Helper function to ensure URL has protocol
+  const ensureProtocol = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    return `https://${url}`;
+  };
+
   if (!institution) return null;
 
   const displayData = institutionData || institution;
@@ -324,7 +333,7 @@ export default function InstitutionHome() {
 
                 {institution.contact?.website && (
                   <motion.a
-                    href={institution.contact.website}
+                    href={ensureProtocol(institution.contact.website)}
                     target="_blank"
                     rel="noopener noreferrer"
                     whileHover={{ x: 4, scale: 1.02 }}
