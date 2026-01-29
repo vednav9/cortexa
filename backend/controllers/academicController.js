@@ -22,13 +22,14 @@ export const getDepartments = async (req, res) => {
     res.status(200).json({
       success: true,
       count: departments.length,
-      data: departments,
+      departments, // Changed from 'data' to 'departments' for consistency
     });
   } catch (error) {
     console.error("Get departments error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch departments",
+      error: error.message,
     });
   }
 };
@@ -59,7 +60,7 @@ export const createDepartment = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Department created successfully",
-      data: department,
+      department,
     });
   } catch (error) {
     console.error("Create department error:", error);
@@ -74,6 +75,7 @@ export const createDepartment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create department",
+      error: error.message,
     });
   }
 };
@@ -106,13 +108,14 @@ export const updateDepartment = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Department updated successfully",
-      data: department,
+      department,
     });
   } catch (error) {
     console.error("Update department error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update department",
+      error: error.message,
     });
   }
 };
@@ -149,6 +152,7 @@ export const deleteDepartment = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete department",
+      error: error.message,
     });
   }
 };
@@ -161,11 +165,18 @@ export const deleteDepartment = async (req, res) => {
 export const getCourses = async (req, res) => {
   try {
     const { institutionId } = req.params;
-    const { departmentId, semester } = req.query;
+    const { departmentId, semester, isActive } = req.query;
+
+    console.log('=== GET COURSES ===');
+    console.log('Institution ID:', institutionId);
+    console.log('Query params:', { departmentId, semester, isActive });
 
     const filter = { institution: institutionId };
     if (departmentId) filter.department = departmentId;
     if (semester) filter.semester = parseInt(semester);
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
+
+    console.log('MongoDB filter:', filter);
 
     const courses = await Course.find(filter)
       .populate("department", "name code")
@@ -174,16 +185,25 @@ export const getCourses = async (req, res) => {
       .populate("facultyAvailable", "fullName email jobTitle")
       .sort({ code: 1 });
 
+    console.log('Found courses:', courses.length);
+    console.log('Courses data:', courses.map(c => ({ 
+      id: c._id, 
+      code: c.code, 
+      name: c.name,
+      department: c.department?.name 
+    })));
+
     res.status(200).json({
       success: true,
       count: courses.length,
-      data: courses,
+      courses, // Changed from 'data' to 'courses' for frontend consistency
     });
   } catch (error) {
     console.error("Get courses error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch courses",
+      error: error.message,
     });
   }
 };
@@ -206,10 +226,27 @@ export const createCourse = async (req, res) => {
       syllabus,
     } = req.body;
 
+    console.log('=== CREATE COURSE ===');
+    console.log('Institution ID:', institutionId);
+    console.log('Request body:', req.body);
+
     if (!department || !code || !name || !credits) {
       return res.status(400).json({
         success: false,
         message: "Department, code, name, and credits are required",
+      });
+    }
+
+    // Check if course code already exists for this institution
+    const existingCourse = await Course.findOne({
+      institution: institutionId,
+      code: code.toUpperCase(),
+    });
+
+    if (existingCourse) {
+      return res.status(400).json({
+        success: false,
+        message: `Course with code ${code.toUpperCase()} already exists`,
       });
     }
 
@@ -226,6 +263,7 @@ export const createCourse = async (req, res) => {
       facultyAvailable: facultyAvailable || null,
       maxCapacity: maxCapacity || 60,
       syllabus,
+      isActive: true,
     });
 
     await course.populate([
@@ -235,10 +273,12 @@ export const createCourse = async (req, res) => {
       { path: "facultyAvailable", select: "fullName email jobTitle" },
     ]);
 
+    console.log('Course created:', course);
+
     res.status(201).json({
       success: true,
       message: "Course created successfully",
-      data: course,
+      course,
     });
   } catch (error) {
     console.error("Create course error:", error);
@@ -246,13 +286,14 @@ export const createCourse = async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: "Course code already exists",
+        message: "Course code already exists in this institution",
       });
     }
 
     res.status(500).json({
       success: false,
       message: "Failed to create course",
+      error: error.message,
     });
   }
 };
@@ -262,6 +303,10 @@ export const updateCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
     const updateData = req.body;
+
+    console.log('=== UPDATE COURSE ===');
+    console.log('Course ID:', courseId);
+    console.log('Update data:', updateData);
 
     if (updateData.code) {
       updateData.code = updateData.code.toUpperCase();
@@ -285,16 +330,19 @@ export const updateCourse = async (req, res) => {
       });
     }
 
+    console.log('Course updated:', course);
+
     res.status(200).json({
       success: true,
       message: "Course updated successfully",
-      data: course,
+      course,
     });
   } catch (error) {
     console.error("Update course error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update course",
+      error: error.message,
     });
   }
 };
@@ -303,6 +351,9 @@ export const updateCourse = async (req, res) => {
 export const deleteCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
+
+    console.log('=== DELETE COURSE ===');
+    console.log('Course ID:', courseId);
 
     const course = await Course.findByIdAndDelete(courseId);
 
@@ -313,6 +364,8 @@ export const deleteCourse = async (req, res) => {
       });
     }
 
+    console.log('Course deleted:', course.code);
+
     res.status(200).json({
       success: true,
       message: "Course deleted successfully",
@@ -322,6 +375,7 @@ export const deleteCourse = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete course",
+      error: error.message,
     });
   }
 };
@@ -342,18 +396,18 @@ export const getSemesters = async (req, res) => {
       .sort({ startDate: -1 });
 
     console.log('Found semesters:', semesters.length);
-    console.log('Semesters data:', JSON.stringify(semesters, null, 2));
 
     res.status(200).json({
       success: true,
       count: semesters.length,
-      data: semesters,
+      semesters, // Changed from 'data' to 'semesters'
     });
   } catch (error) {
     console.error("Get semesters error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch semesters",
+      error: error.message,
     });
   }
 };
@@ -383,13 +437,14 @@ export const createSemester = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Semester created successfully",
-      data: semester,
+      semester,
     });
   } catch (error) {
     console.error("Create semester error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to create semester",
+      error: error.message,
     });
   }
 };
@@ -415,13 +470,14 @@ export const updateSemester = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Semester updated successfully",
-      data: semester,
+      semester,
     });
   } catch (error) {
     console.error("Update semester error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update semester",
+      error: error.message,
     });
   }
 };
@@ -449,6 +505,7 @@ export const deleteSemester = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete semester",
+      error: error.message,
     });
   }
 };
@@ -476,13 +533,14 @@ export const getCalendarEvents = async (req, res) => {
     res.status(200).json({
       success: true,
       count: events.length,
-      data: events,
+      events, // Changed from 'data' to 'events'
     });
   } catch (error) {
     console.error("Get calendar events error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch calendar events",
+      error: error.message,
     });
   }
 };
@@ -524,13 +582,14 @@ export const createCalendarEvent = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Calendar event created successfully",
-      data: event,
+      event,
     });
   } catch (error) {
     console.error("Create calendar event error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to create calendar event",
+      error: error.message,
     });
   }
 };
@@ -556,13 +615,14 @@ export const updateCalendarEvent = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Calendar event updated successfully",
-      data: event,
+      event,
     });
   } catch (error) {
     console.error("Update calendar event error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update calendar event",
+      error: error.message,
     });
   }
 };
@@ -590,6 +650,7 @@ export const deleteCalendarEvent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete calendar event",
+      error: error.message,
     });
   }
 };
@@ -622,13 +683,14 @@ export const getFaculty = async (req, res) => {
     res.status(200).json({
       success: true,
       count: result.length,
-      data: result,
+      faculty: result, // Changed from 'data' to 'faculty'
     });
   } catch (error) {
     console.error("Get faculty error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch faculty",
+      error: error.message,
     });
   }
 };
