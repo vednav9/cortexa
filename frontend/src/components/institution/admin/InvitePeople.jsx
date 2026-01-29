@@ -17,8 +17,6 @@ import { useOutletContext } from 'react-router-dom';
 import { useAuth } from '../../../context/authcontext';
 import { invitationAPI, adminInvitationAPI, academicAPI } from '../../../services/api';
 
-
-
 const InvitePeople = () => {
   const { user } = useAuth();
   const { institution, hasAccess } = useOutletContext();
@@ -32,8 +30,7 @@ const InvitePeople = () => {
   const [users, setUsers] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [manualForm, setManualForm] = useState({
-    fullName: '',
-    email: '',
+    emailOrUsername: '', // Changed from email
     message: '',
   });
 
@@ -101,8 +98,6 @@ const InvitePeople = () => {
     }
   };
 
-
-
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -133,34 +128,31 @@ const InvitePeople = () => {
         const lines = text.split('\n').filter(line => line.trim());
         const headers = lines[0].split(',').map(h => h.trim());
 
-        const allowedHeaders = ['fullName', 'email', 'message'];
+        // Updated: Remove fullName, use emailOrUsername
+        const allowedHeaders = ['emailOrUsername', 'message'];
 
         const isValid = headers.every(h => allowedHeaders.includes(h));
         if (!isValid) {
-          toast.error('Invalid CSV format. Use: fullName,email,message');
+          toast.error('Invalid CSV format. Use: emailOrUsername,message');
           return;
         }
-
 
         const newUsers = [];
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',').map(v => v.trim());
           const user = {
             id: Date.now() + i,
-            fullName: '',
-            email: '',
+            emailOrUsername: '',
             message: '',
           };
-
 
           headers.forEach((header, index) => {
             user[header] = values[index] || '';
           });
 
-          if (user.fullName && user.email) {
+          if (user.emailOrUsername) {
             newUsers.push(user);
           }
-
         }
 
         setUsers(prev => [...prev, ...newUsers]);
@@ -172,8 +164,8 @@ const InvitePeople = () => {
     };
     reader.readAsText(file);
   };
-  const fetchAdminInvitations = async (status = 'all', role = 'all') => {
 
+  const fetchAdminInvitations = async (status = 'all', role = 'all') => {
     try {
       setLoadingInvites(true);
       const params = {};
@@ -190,12 +182,11 @@ const InvitePeople = () => {
     }
   };
 
-
   const handleManualSubmit = async (e) => {
     e.preventDefault();
 
-    if (!manualForm.fullName || !manualForm.email) {
-      toast.error('Full name and email are required');
+    if (!manualForm.emailOrUsername) {
+      toast.error('Email or username is required');
       return;
     }
 
@@ -218,8 +209,7 @@ const InvitePeople = () => {
       const payload = {
         institutionId,
         recipientType: userType === 'student' ? 'Student' : 'Teacher',
-        email: manualForm.email,
-        fullName: manualForm.fullName,
+        emailOrUsername: manualForm.emailOrUsername, // Changed from email
         message: manualForm.message || 'You are invited to join the institution',
         department: selectedDepartment,
         semester: selectedSemester,
@@ -231,8 +221,7 @@ const InvitePeople = () => {
       toast.success('Invitation sent successfully');
 
       setManualForm({
-        fullName: '',
-        email: '',
+        emailOrUsername: '',
         message: '',
       });
       setSelectedDepartment('');
@@ -252,8 +241,10 @@ const InvitePeople = () => {
   };
 
   const downloadTemplate = () => {
-    const headers = 'fullName,email,message\n';
-    const blob = new Blob([headers], { type: 'text/csv' });
+    // Updated CSV template
+    const headers = 'emailOrUsername,message\n';
+    const example = 'john@example.com,Welcome to our institution!\njohn_doe,Join our learning platform!\n';
+    const blob = new Blob([headers + example], { type: 'text/csv' });
 
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -264,7 +255,6 @@ const InvitePeople = () => {
     window.URL.revokeObjectURL(url);
     toast.success('CSV template downloaded');
   };
-
 
   const handleBulkUpload = async () => {
     if (users.length === 0) {
@@ -292,8 +282,7 @@ const InvitePeople = () => {
         institutionId,
         recipientType: 'Student', // Only students can be bulk uploaded
         users: users.map(u => ({
-          fullName: u.fullName,
-          email: u.email,
+          emailOrUsername: u.emailOrUsername, // Changed from email and fullName
           message: u.message || 'You are invited to join the institution',
         })),
         department: selectedDepartment,
@@ -349,7 +338,6 @@ const InvitePeople = () => {
 
   const displayedUsers = users;
 
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-6">
       {/* Header with Stats */}
@@ -370,30 +358,30 @@ const InvitePeople = () => {
                     Add students and teachers to {institution?.name}
                   </p>
                 </div>
-
               </div>
             </div>
 
             {/* User Type Toggle */}
             {uploadMethod === 'manual' && (
               <div className="flex gap-2 p-1.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
-
                 <button
                   onClick={() => setUserType('student')}
-                  className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${userType === 'student'
-                    ? 'bg-white text-emerald-600 shadow-lg'
-                    : 'text-white hover:bg-white/10'
-                    }`}
+                  className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${
+                    userType === 'student'
+                      ? 'bg-white text-emerald-600 shadow-lg'
+                      : 'text-white hover:bg-white/10'
+                  }`}
                 >
                   <FiUsers className="w-4 h-4" />
                   Students
                 </button>
                 <button
                   onClick={() => setUserType('teacher')}
-                  className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${userType === 'teacher'
-                    ? 'bg-white text-emerald-600 shadow-lg'
-                    : 'text-white hover:bg-white/10'
-                    }`}
+                  className={`px-5 py-2.5 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 ${
+                    userType === 'teacher'
+                      ? 'bg-white text-emerald-600 shadow-lg'
+                      : 'text-white hover:bg-white/10'
+                  }`}
                 >
                   <FiUsers className="w-4 h-4" />
                   Teachers
@@ -410,14 +398,18 @@ const InvitePeople = () => {
           whileHover={{ scale: 1.02, y: -2 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setUploadMethod('csv')}
-          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${uploadMethod === 'csv'
-            ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
-            : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
-            }`}
+          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${
+            uploadMethod === 'csv'
+              ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
+              : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
+          }`}
         >
           <div className="relative z-10 flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${uploadMethod === 'csv' ? 'bg-emerald-500' : 'bg-gray-100'
-              }`}>
+            <div
+              className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                uploadMethod === 'csv' ? 'bg-emerald-500' : 'bg-gray-100'
+              }`}
+            >
               <FiFile className={`w-7 h-7 ${uploadMethod === 'csv' ? 'text-white' : 'text-gray-600'}`} />
             </div>
             <div className="flex-1 text-left">
@@ -426,10 +418,7 @@ const InvitePeople = () => {
             </div>
           </div>
           {uploadMethod === 'csv' && (
-            <motion.div
-              layoutId="activeMethod"
-              className="absolute top-4 right-4"
-            >
+            <motion.div layoutId="activeMethod" className="absolute top-4 right-4">
               <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
                 <FiCheckCircle className="w-5 h-5 text-white" />
               </div>
@@ -441,14 +430,18 @@ const InvitePeople = () => {
           whileHover={{ scale: 1.02, y: -2 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setUploadMethod('manual')}
-          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${uploadMethod === 'manual'
-            ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
-            : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
-            }`}
+          className={`relative overflow-hidden rounded-2xl p-6 border-2 transition-all ${
+            uploadMethod === 'manual'
+              ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-100'
+              : 'border-gray-200 bg-white hover:border-emerald-200 hover:shadow-md'
+          }`}
         >
           <div className="relative z-10 flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${uploadMethod === 'manual' ? 'bg-emerald-500' : 'bg-gray-100'
-              }`}>
+            <div
+              className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                uploadMethod === 'manual' ? 'bg-emerald-500' : 'bg-gray-100'
+              }`}
+            >
               <FiEdit2 className={`w-7 h-7 ${uploadMethod === 'manual' ? 'text-white' : 'text-gray-600'}`} />
             </div>
             <div className="flex-1 text-left">
@@ -457,10 +450,7 @@ const InvitePeople = () => {
             </div>
           </div>
           {uploadMethod === 'manual' && (
-            <motion.div
-              layoutId="activeMethod"
-              className="absolute top-4 right-4"
-            >
+            <motion.div layoutId="activeMethod" className="absolute top-4 right-4">
               <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
                 <FiCheckCircle className="w-5 h-5 text-white" />
               </div>
@@ -561,10 +551,11 @@ const InvitePeople = () => {
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                className={`relative border-2 border-dashed rounded-2xl p-16 text-center transition-all ${dragActive
-                  ? 'border-emerald-500 bg-emerald-50 scale-[1.01]'
-                  : 'border-gray-300 bg-gradient-to-br from-gray-50 to-white hover:border-emerald-400'
-                  }`}
+                className={`relative border-2 border-dashed rounded-2xl p-16 text-center transition-all ${
+                  dragActive
+                    ? 'border-emerald-500 bg-emerald-50 scale-[1.01]'
+                    : 'border-gray-300 bg-gradient-to-br from-gray-50 to-white hover:border-emerald-400'
+                }`}
               >
                 <input
                   type="file"
@@ -599,12 +590,14 @@ const InvitePeople = () => {
                   <div className="flex-1">
                     <h4 className="text-sm font-bold text-blue-900 mb-2">CSV Format Guidelines</h4>
                     <div className="space-y-1 text-sm text-blue-800">
-                      <p><strong>Required columns:</strong> fullName, email</p>
+                      <p><strong>Required columns:</strong> emailOrUsername</p>
                       <p><strong>Optional:</strong> message</p>
                       <p className="text-xs text-blue-700 mt-1">
-                        <strong>Note:</strong> CSV bulk upload is only available for students. Teachers must be added manually with course selection.
+                        <strong>Note:</strong> You can use either email addresses (john@example.com) or usernames (john_doe) in the emailOrUsername column.
                       </p>
-
+                      <p className="text-xs text-blue-700">
+                        CSV bulk upload is only available for students. Teachers must be added manually with course selection.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -636,32 +629,21 @@ const InvitePeople = () => {
             {/* Form */}
             <form onSubmit={handleManualSubmit} className="p-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700">
-                    Full Name <span className="text-red-500">*</span>
+                    Email or Username <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={manualForm.fullName}
-                    onChange={(e) => setManualForm({ ...manualForm, fullName: e.target.value })}
+                    value={manualForm.emailOrUsername}
+                    onChange={(e) => setManualForm({ ...manualForm, emailOrUsername: e.target.value })}
                     required
-                    placeholder="John Doe"
+                    placeholder="john@example.com or john_doe"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700">
-                    Email Address <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={manualForm.email}
-                    onChange={(e) => setManualForm({ ...manualForm, email: e.target.value })}
-                    required
-                    placeholder="john@example.com"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
-                  />
+                  <p className="text-xs text-gray-500">
+                    Enter either an email address or a username
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -706,8 +688,8 @@ const InvitePeople = () => {
                     <div className="border-2 border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto hover:border-gray-300 transition-all">
                       {filteredCourses.length === 0 ? (
                         <p className="text-sm text-gray-500 text-center py-4">
-                          {selectedDepartment && selectedSemester 
-                            ? 'No courses available for selected department and semester' 
+                          {selectedDepartment && selectedSemester
+                            ? 'No courses available for selected department and semester'
                             : 'Select department and semester first'}
                         </p>
                       ) : (
@@ -763,16 +745,14 @@ const InvitePeople = () => {
                   <textarea
                     value={manualForm.message}
                     onChange={(e) => setManualForm({ ...manualForm, message: e.target.value })}
-
+                    rows="3"
                     placeholder="You are invited to join the institution"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
                   />
                 </div>
-
-
               </div>
 
-              <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+              <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end gap-4">
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -784,20 +764,18 @@ const InvitePeople = () => {
                 </motion.button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     setShowStatusModal(true);
                     fetchAdminInvitations(inviteStatus, filterRole);
-
                   }}
-                  className="bg-white text-emerald-600 px-5 py-2 rounded-xl font-bold shadow border border-emerald-200 hover:shadow-md ml-4 flex items-center gap-2"
+                  className="bg-white text-emerald-600 px-5 py-2 rounded-xl font-bold shadow border border-emerald-200 hover:shadow-md flex items-center gap-2"
                 >
                   Check Status
                 </button>
-
               </div>
             </form>
           </motion.div>
-
         )}
       </AnimatePresence>
 
@@ -853,8 +831,7 @@ const InvitePeople = () => {
                 <thead>
                   <tr className="bg-gradient-to-r from-emerald-50 to-green-50 border-b-2 border-emerald-100">
                     <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">#</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Email/Username</th>
                     <th className="px-6 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Message</th>
                     <th className="px-6 py-4 text-center text-xs font-bold text-emerald-700 uppercase tracking-wider">Action</th>
                   </tr>
@@ -873,12 +850,7 @@ const InvitePeople = () => {
                       </td>
 
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                        {user.fullName}
-                      </td>
-
-
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {user.email}
+                        {user.emailOrUsername}
                       </td>
 
                       <td className="px-6 py-4 text-sm italic text-gray-500">
@@ -904,46 +876,56 @@ const InvitePeople = () => {
         )}
       </AnimatePresence>
 
+      {/* Status Modal */}
       <AnimatePresence>
         {showStatusModal && (
           <motion.div
-            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            onClick={() => setShowStatusModal(false)}
           >
             <motion.div
-              className="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-xl"
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-4xl shadow-2xl max-h-[90vh] overflow-y-auto"
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">Invitation Status</h2>
-                <button onClick={() => setShowStatusModal(false)}>✕</button>
+              <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-100">
+                <h2 className="text-2xl font-bold text-gray-900">Invitation Status</h2>
+                <button
+                  onClick={() => setShowStatusModal(false)}
+                  className="w-10 h-10 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-900 transition-all"
+                >
+                  ✕
+                </button>
               </div>
 
-              {/* Tabs */}
-              <div className="flex gap-3 mb-4">
+              {/* Status Filter Tabs */}
+              <div className="flex gap-3 mb-4 overflow-x-auto pb-2">
                 {['all', 'pending', 'accepted', 'rejected'].map(status => (
                   <button
                     key={status}
                     onClick={() => {
                       setInviteStatus(status);
                       fetchAdminInvitations(status, filterRole);
-
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold ${inviteStatus === status
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-gray-100 text-gray-700'
-                      }`}
+                    className={`px-6 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
+                      inviteStatus === status
+                        ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   >
                     {status.toUpperCase()}
                   </button>
                 ))}
               </div>
 
-              <div className="flex gap-3 mb-4">
+              {/* Role Filter */}
+              <div className="flex gap-3 mb-6">
                 {['all', 'Student', 'Teacher'].map(role => (
                   <button
                     key={role}
@@ -951,47 +933,70 @@ const InvitePeople = () => {
                       setFilterRole(role);
                       fetchAdminInvitations(inviteStatus, role);
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold ${filterRole === role
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-700'
-                      }`}
+                    className={`px-6 py-3 rounded-xl text-sm font-bold transition-all ${
+                      filterRole === role
+                        ? 'bg-blue-500 text-white shadow-lg'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   >
                     {role === 'all' ? 'ALL ROLES' : role}
                   </button>
                 ))}
               </div>
 
-
               {/* Content */}
               {loadingInvites ? (
-                <p className="text-center py-10">Loading...</p>
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-gray-600 font-medium">Loading invitations...</p>
+                </div>
               ) : adminInvites.length === 0 ? (
-                <p className="text-center text-gray-500 py-10">
-                  No invitations found
-                </p>
+                <div className="text-center py-16">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FiAlertCircle className="w-10 h-10 text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 font-medium text-lg">No invitations found</p>
+                  <p className="text-gray-400 text-sm mt-1">Try adjusting your filters</p>
+                </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto rounded-xl border-2 border-gray-100">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2">Email</th>
-                        <th className="text-center py-2">Status</th>
-                        <th className="text-center py-2">Role</th>
-                        <th className="text-center py-2">Sent On</th>
+                      <tr className="bg-gradient-to-r from-emerald-50 to-green-50 border-b-2 border-emerald-100">
+                        <th className="text-left py-4 px-4 font-bold text-emerald-700">Email/Username</th>
+                        <th className="text-center py-4 px-4 font-bold text-emerald-700">Status</th>
+                        <th className="text-center py-4 px-4 font-bold text-emerald-700">Role</th>
+                        <th className="text-center py-4 px-4 font-bold text-emerald-700">Sent On</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-100">
                       {adminInvites.map(inv => (
-                        <tr key={inv._id} className="border-b">
-                          <td className="py-2">{inv.email}</td>
-                          <td className="text-center py-2 font-semibold">
-                            {inv.status}
+                        <tr key={inv._id} className="hover:bg-emerald-50/30 transition-all">
+                          <td className="py-4 px-4 font-medium text-gray-900">{inv.email}</td>
+                          <td className="text-center py-4 px-4">
+                            <span
+                              className={`inline-block px-3 py-1.5 rounded-lg text-xs font-bold ${
+                                inv.status === 'accepted'
+                                  ? 'bg-green-100 text-green-700'
+                                  : inv.status === 'pending'
+                                  ? 'bg-yellow-100 text-yellow-700'
+                                  : inv.status === 'rejected'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {inv.status.toUpperCase()}
+                            </span>
                           </td>
-                          <td className="text-center py-2">
+                          <td className="text-center py-4 px-4 font-medium text-gray-700">
                             {inv.recipientType}
                           </td>
-                          <td className="text-center py-2">
-                            {new Date(inv.createdAt).toLocaleDateString()}
+                          <td className="text-center py-4 px-4 text-gray-600">
+                            {new Date(inv.createdAt).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
                           </td>
                         </tr>
                       ))}
@@ -1003,7 +1008,6 @@ const InvitePeople = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 };
