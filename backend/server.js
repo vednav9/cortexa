@@ -6,6 +6,11 @@ import app from "./app.js";
 
 dotenv.config();
 
+// Debug endpoint to confirm this server instance is running
+app.get('/api/__ping', (req, res) => {
+    res.json({ ok: true, message: 'pong', time: new Date().toISOString() });
+});
+
 const server = http.createServer(app);
 
 const io = new Server(server, {

@@ -17,6 +17,7 @@ import teacherMCQRoutes from "./routes/teacherMCQRoutes.js";
 import studentMCQRoutes from "./routes/studentMCQRoutes.js";
 import teacherQARoutes from "./routes/teacherQARoutes.js";
 import studentQARoutes from "./routes/studentQARoutes.js";
+import queryRoutes from "./routes/queryRoutes.js";
 
 
 dotenv.config();
@@ -55,6 +56,8 @@ app.use("/api/teacher-mcq", teacherMCQRoutes);
 app.use("/api/student-mcq", studentMCQRoutes);
 app.use("/api/teacher-qa", teacherQARoutes);
 app.use("/api/student-qa", studentQARoutes);
+app.use("/api/queries", queryRoutes);
 
+console.log("✅ All routes registered, including /api/queries");
 
 export default app;

@@ -4,6 +4,29 @@ import Student from '../models/student.js';
 import Teacher from '../models/teacher.js';
 import Admin from '../models/admin.js';
 import Course from '../models/course.js';
+
+// ===============================
+// HELPER: Find user by email or username
+// ===============================
+const findUserByEmailOrUsername = async (identifier, recipientType) => {
+    const normalizedIdentifier = identifier.toLowerCase().trim();
+    
+    const UserModel = recipientType === 'Student' ? Student : Teacher;
+    
+    // Try to find by email first, then by username
+    let user = await UserModel.findOne({ 
+        email: normalizedIdentifier 
+    }).select('_id email fullName');
+    
+    if (!user) {
+        user = await UserModel.findOne({ 
+            username: normalizedIdentifier 
+        }).select('_id email fullName');
+    }
+    
+    return user;
+};
+
 // ===============================
 // GET USER INVITATIONS
 // ===============================
@@ -12,13 +35,16 @@ export const getInvitations = async (req, res) => {
         const { status } = req.query;
 
         let userEmail = null;
+        let userUsername = null;
 
         if (req.user.role === 'student') {
-            const student = await Student.findById(req.user.id).select('email');
+            const student = await Student.findById(req.user.id).select('email username');
             userEmail = student?.email?.toLowerCase();
+            userUsername = student?.username?.toLowerCase();
         } else if (req.user.role === 'teacher') {
-            const teacher = await Teacher.findById(req.user.id).select('email');
+            const teacher = await Teacher.findById(req.user.id).select('email username');
             userEmail = teacher?.email?.toLowerCase();
+            userUsername = teacher?.username?.toLowerCase();
         }
 
         const query = {
@@ -27,6 +53,13 @@ export const getInvitations = async (req, res) => {
                 { recipient: req.user.id },
                 ...(userEmail ? [{
                     email: userEmail,
+                    $or: [
+                        { recipient: null },
+                        { recipient: { $exists: false } }
+                    ]
+                }] : []),
+                ...(userUsername ? [{
+                    email: userUsername,
                     $or: [
                         { recipient: null },
                         { recipient: { $exists: false } }
@@ -42,6 +75,9 @@ export const getInvitations = async (req, res) => {
         const invitations = await Invitation.find(query)
             .populate('institution', 'name code logo description')
             .populate('sender', 'fullName email')
+            .populate('department', 'name code')
+            .populate('semester', 'name')
+            .populate('courses', 'name code')
             .sort('-createdAt');
 
         res.json({ invitations });
@@ -56,14 +92,13 @@ export const getInvitations = async (req, res) => {
 // ===============================
 // CREATE INVITATION (ADMIN)
 // ===============================
-
 export const createInvitation = async (req, res) => {
     try {
         const {
             institutionId,
             recipientId,
             recipientType,
-            email,
+            emailOrUsername,
             message,
             type = "join",
             department,
@@ -115,7 +150,6 @@ export const createInvitation = async (req, res) => {
         let coursesToAllocate = courses || [];
         
         if (recipientType === 'Student') {
-            // Find all courses matching department and semester
             const matchingCourses = await Course.find({
                 institution: institutionId,
                 department: department,
@@ -126,17 +160,20 @@ export const createInvitation = async (req, res) => {
         }
 
         /* ======================================================
-           EMAIL-BASED INVITE (RESEND SUPPORTED)
+           EMAIL/USERNAME-BASED INVITE (RESEND SUPPORTED)
         ====================================================== */
-        if (email) {
-            const normalizedEmail = email.toLowerCase();
+        if (emailOrUsername) {
+            const normalizedIdentifier = emailOrUsername.toLowerCase().trim();
+
+            // Check if user already exists
+            const existingUser = await findUserByEmailOrUsername(normalizedIdentifier, recipientType);
 
             const existingInvite = await Invitation.findOne({
                 institution: institutionId,
-                email: normalizedEmail,
+                email: normalizedIdentifier,
                 status: 'pending',
             });
-            console.log("🚨 EMITTING INVITATION SOCKET EVENT");
+
             // 🔁 RESEND INSTEAD OF BLOCK
             if (existingInvite) {
                 existingInvite.message = message;
@@ -145,12 +182,26 @@ export const createInvitation = async (req, res) => {
                 existingInvite.department = department;
                 existingInvite.semester = semester;
                 existingInvite.courses = coursesToAllocate;
+                existingInvite.recipient = existingUser?._id || null;
                 existingInvite.createdAt = new Date();
                 existingInvite.expiresAt = new Date(
-                    Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
+                    Date.now() + 30 * 24 * 60 * 60 * 1000
                 );
 
                 await existingInvite.save();
+
+                // 🔔 REALTIME NOTIFICATION - FIXED
+                if (existingUser?._id) {
+                    console.log('🔔 Emitting invitation to user:', existingUser._id);
+                    global.io?.to(`user:${existingUser._id}`).emit("invitation:new", {
+                        _id: existingInvite._id,
+                        email: existingInvite.email,
+                        institution: existingInvite.institution,
+                        recipientType: existingInvite.recipientType,
+                        message: existingInvite.message,
+                        createdAt: existingInvite.createdAt,
+                    });
+                }
 
                 return res.status(200).json({
                     message: 'Invitation re-sent successfully',
@@ -162,7 +213,8 @@ export const createInvitation = async (req, res) => {
             const invitation = await Invitation.create({
                 institution: institutionId,
                 recipientType,
-                email: normalizedEmail,
+                email: normalizedIdentifier,
+                recipient: existingUser?._id || null,
                 sender: req.user.id,
                 message,
                 type,
@@ -174,12 +226,10 @@ export const createInvitation = async (req, res) => {
                 ),
             });
 
-            console.log("🚨 EMITTING INVITATION SOCKET EVENT");
-            // 🔔 REALTIME NOTIFICATION (EMAIL BASED)
-            // EMAIL invite → broadcast (no userId yet)
-            global.io
-                .to(`user:${invitation.recipient}`)
-                .emit("invitation:new", {
+            // 🔔 REALTIME NOTIFICATION - FIXED
+            if (existingUser?._id) {
+                console.log('🔔 Emitting new invitation to user:', existingUser._id);
+                global.io?.to(`user:${existingUser._id}`).emit("invitation:new", {
                     _id: invitation._id,
                     email: invitation.email,
                     institution: invitation.institution,
@@ -187,8 +237,7 @@ export const createInvitation = async (req, res) => {
                     message: invitation.message,
                     createdAt: invitation.createdAt,
                 });
-
-
+            }
 
             return res.status(201).json({
                 message: 'Invitation sent successfully',
@@ -201,7 +250,7 @@ export const createInvitation = async (req, res) => {
         ====================================================== */
         if (!recipientId) {
             return res.status(400).json({
-                message: 'recipientId or email is required',
+                message: 'recipientId or emailOrUsername is required',
             });
         }
 
@@ -224,22 +273,24 @@ export const createInvitation = async (req, res) => {
             sender: req.user.id,
             message,
             type,
+            department,
+            semester,
+            courses: coursesToAllocate,
             expiresAt: new Date(
                 Date.now() + 30 * 24 * 60 * 60 * 1000
             ),
         });
-        // 🔔 REALTIME NOTIFICATION (USER-ID BASED)
-        global.io
-            .to(`user:${recipientId}`)
-            .emit("invitation:new", {
-                invitationId: invitation._id,
-                recipient: recipientId,
-                recipientType: invitation.recipientType,
-                institution: institutionId,
-                message: invitation.message,
-                createdAt: invitation.createdAt,
-            });
 
+        // 🔔 REALTIME NOTIFICATION (USER-ID BASED)
+        console.log('🔔 Emitting invitation to recipient:', recipientId);
+        global.io?.to(`user:${recipientId}`).emit("invitation:new", {
+            invitationId: invitation._id,
+            recipient: recipientId,
+            recipientType: invitation.recipientType,
+            institution: institutionId,
+            message: invitation.message,
+            createdAt: invitation.createdAt,
+        });
 
         res.status(201).json({
             message: 'Invitation sent successfully',
@@ -271,7 +322,7 @@ export const acceptInvitation = async (req, res) => {
             return res.status(400).json({ message: "Invitation already processed" });
         }
 
-        // Expiry check (SAFE)
+        // Expiry check
         if (invitation.expiresAt && invitation.expiresAt < new Date()) {
             invitation.status = "expired";
             await invitation.save();
@@ -279,11 +330,25 @@ export const acceptInvitation = async (req, res) => {
         }
 
         // 🔐 Authorization
-        if (
-            invitation.recipient &&
-            invitation.recipient.toString() !== req.user.id
-        ) {
-            return res.status(403).json({ message: "Not authorized" });
+        let isAuthorized = false;
+        
+        if (invitation.recipient && invitation.recipient.toString() === req.user.id) {
+            isAuthorized = true;
+        } else if (invitation.email) {
+            const UserModel = invitation.recipientType === 'Student' ? Student : Teacher;
+            const currentUser = await UserModel.findById(req.user.id).select('email username');
+            
+            const normalizedEmail = invitation.email.toLowerCase();
+            const userEmail = currentUser?.email?.toLowerCase();
+            const userUsername = currentUser?.username?.toLowerCase();
+            
+            if (normalizedEmail === userEmail || normalizedEmail === userUsername) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({ message: "Not authorized to accept this invitation" });
         }
 
         // 🚫 Enforce single institution
@@ -325,48 +390,13 @@ export const acceptInvitation = async (req, res) => {
             await teacher.save();
         }
 
-        // // 📊 Update institution (SAFE)
-        // const institution = await Institution.findById(invitation.institution);
-        // if (institution) {
-        //     // ✅ ensure arrays
-        //     institution.students = institution.students || [];
-        //     institution.teachers = institution.teachers || [];
-
-        //     // ✅ ensure stats object
-        //     institution.stats = institution.stats || {
-        //         totalStudents: 0,
-        //         totalTeachers: 0,
-        //     };
-
-        //     if (
-        //         invitation.recipientType === "Student" &&
-        //         !institution.students.includes(req.user.id)
-        //     ) {
-        //         institution.students.push(req.user.id);
-        //         institution.stats.totalStudents += 1;
-        //     }
-
-        //     if (
-        //         invitation.recipientType === "Teacher" &&
-        //         !institution.teachers.includes(req.user.id)
-        //     ) {
-        //         institution.teachers.push(req.user.id);
-        //         institution.stats.totalTeachers += 1;
-        //     }
-
-        //     await institution.save();
-        // }
-
-
         // Finalize invitation
         invitation.status = "accepted";
         invitation.recipient = req.user.id;
         invitation.respondedAt = new Date();
         await invitation.save();
 
-        global.io
-            .to(`user:${req.user.id}`)
-            .emit("auth:refresh");
+        global.io?.to(`user:${req.user.id}`).emit("auth:refresh");
 
         res.json({ message: "Invitation accepted successfully" });
 
@@ -377,7 +407,6 @@ export const acceptInvitation = async (req, res) => {
         });
     }
 };
-
 
 // ===============================
 // REJECT INVITATION
@@ -390,7 +419,25 @@ export const rejectInvitation = async (req, res) => {
             return res.status(404).json({ message: 'Invitation not found' });
         }
 
-        if (invitation.recipient && invitation.recipient.toString() !== req.user.id) {
+        // Authorization check
+        let isAuthorized = false;
+        
+        if (invitation.recipient && invitation.recipient.toString() === req.user.id) {
+            isAuthorized = true;
+        } else if (invitation.email) {
+            const UserModel = invitation.recipientType === 'Student' ? Student : Teacher;
+            const currentUser = await UserModel.findById(req.user.id).select('email username');
+            
+            const normalizedEmail = invitation.email.toLowerCase();
+            const userEmail = currentUser?.email?.toLowerCase();
+            const userUsername = currentUser?.username?.toLowerCase();
+            
+            if (normalizedEmail === userEmail || normalizedEmail === userUsername) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
@@ -423,7 +470,8 @@ export const deleteInvitation = async (req, res) => {
             return res.status(404).json({ message: 'Invitation not found' });
         }
 
-        if (invitation.institution.admin.toString() !== req.user.id) {
+        const admin = await Admin.findById(req.user.id);
+        if (!admin || admin.institution.toString() !== invitation.institution._id.toString()) {
             return res.status(403).json({ message: 'Not authorized' });
         }
 
@@ -460,7 +508,6 @@ export const getAdminInvitations = async (req, res) => {
             query.status = req.query.status;
         }
 
-        // 👇 Explicit expiry handling
         query.$or = [
             { expiresAt: { $gt: new Date() } },
             { status: { $ne: 'pending' } }
@@ -468,6 +515,10 @@ export const getAdminInvitations = async (req, res) => {
 
         const invitations = await Invitation.find(query)
             .populate('sender', 'fullName email')
+            .populate('recipient', 'fullName email username')
+            .populate('department', 'name code')
+            .populate('semester', 'name')
+            .populate('courses', 'name code')
             .sort('-createdAt');
 
         res.json({
@@ -483,34 +534,30 @@ export const getAdminInvitations = async (req, res) => {
 };
 
 // ===============================
-// BULK INVITE USERS (STUDENT / TEACHER)
+// BULK INVITE USERS (STUDENT ONLY)
 // ===============================
 export const bulkInviteUsers = async (req, res) => {
     try {
-        const { institutionId, recipientType, users, department, semester, courses } = req.body;
+        const { institutionId, recipientType, users, department, semester } = req.body;
 
-        // 1️⃣ Validation
+        // Validation
         if (!institutionId || !recipientType || !Array.isArray(users)) {
             return res.status(400).json({ message: "Invalid payload" });
         }
 
-        if (!["Student", "Teacher"].includes(recipientType)) {
-            return res.status(400).json({ message: "Invalid recipientType" });
+        if (recipientType !== "Student") {
+            return res.status(400).json({ 
+                message: "Bulk invite is only available for students. Use manual entry for teachers." 
+            });
         }
 
-        // Teachers cannot be bulk invited - only students
-        if (recipientType === "Teacher") {
-            return res.status(400).json({ message: "Bulk invite is only available for students. Use manual entry for teachers." });
-        }
-
-        // Validate department and semester for Students
-        if (recipientType === 'Student' && (!department || !semester)) {
+        if (!department || !semester) {
             return res.status(400).json({
                 message: 'department and semester are required for student invitations',
             });
         }
 
-        // 2️⃣ Admin check
+        // Admin check
         if (req.user.role !== "admin") {
             return res.status(403).json({ message: "Only admins can invite users" });
         }
@@ -520,7 +567,7 @@ export const bulkInviteUsers = async (req, res) => {
             return res.status(403).json({ message: "Unauthorized institution access" });
         }
 
-        // Auto-allocate courses for students based on department and semester
+        // Auto-allocate courses
         const matchingCourses = await Course.find({
             institution: institutionId,
             department: department,
@@ -534,34 +581,35 @@ export const bulkInviteUsers = async (req, res) => {
             errors: [],
         };
 
-        // 3️⃣ Loop users
+        // Loop users
         for (let i = 0; i < users.length; i++) {
-            const { fullName, email, message } = users[i];
+            const { emailOrUsername, message } = users[i];
 
             try {
-                if (!fullName || !email) {
+                if (!emailOrUsername) {
                     results.errors.push({
                         index: i,
-                        email,
-                        error: "fullName and email required",
+                        emailOrUsername: null,
+                        error: "emailOrUsername required",
                     });
                     continue;
                 }
 
-                const normalizedEmail = email.toLowerCase();
+                const normalizedIdentifier = emailOrUsername.toLowerCase().trim();
+                const existingUser = await findUserByEmailOrUsername(normalizedIdentifier, recipientType);
 
-                // 4️⃣ Check existing pending invite
                 const existing = await Invitation.findOne({
                     institution: institutionId,
-                    email: normalizedEmail,
+                    email: normalizedIdentifier,
                     status: "pending",
                 });
 
                 if (existing) {
-                    // 🔁 RESEND
+                    // RESEND
                     existing.message = message;
                     existing.sender = req.user.id;
                     existing.recipientType = recipientType;
+                    existing.recipient = existingUser?._id || null;
                     existing.department = department;
                     existing.semester = semester;
                     existing.courses = coursesToAllocate;
@@ -569,15 +617,27 @@ export const bulkInviteUsers = async (req, res) => {
                     existing.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                     await existing.save();
 
+                    if (existingUser?._id) {
+                        console.log('🔔 Bulk: Emitting to user:', existingUser._id);
+                        global.io?.to(`user:${existingUser._id}`).emit("invitation:new", {
+                            _id: existing._id,
+                            email: existing.email,
+                            institution: existing.institution,
+                            recipientType: existing.recipientType,
+                            message: existing.message,
+                            createdAt: existing.createdAt,
+                        });
+                    }
+
                     results.successCount++;
                     continue;
                 }
 
-                // 5️⃣ Create new invite
+                // Create new invite
                 const invite = await Invitation.create({
                     institution: institutionId,
-                    email: normalizedEmail,
-                    fullName,
+                    email: normalizedIdentifier,
+                    recipient: existingUser?._id || null,
                     recipientType,
                     sender: req.user.id,
                     message,
@@ -588,30 +648,28 @@ export const bulkInviteUsers = async (req, res) => {
                     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 });
 
-                // 🔔 SOCKET EMIT (REALTIME)
-                global.io
-                    .to(`user:${invitation.recipient}`)
-                    .emit("invitation:new", {
-                        _id: invitation._id,
-                        email: invitation.email,
-                        institution: invitation.institution,
-                        recipientType: invitation.recipientType,
-                        message: invitation.message,
-                        createdAt: invitation.createdAt,
+                if (existingUser?._id) {
+                    console.log('🔔 Bulk: Emitting new invitation to user:', existingUser._id);
+                    global.io?.to(`user:${existingUser._id}`).emit("invitation:new", {
+                        _id: invite._id,
+                        email: invite.email,
+                        institution: invite.institution,
+                        recipientType: invite.recipientType,
+                        message: invite.message,
+                        createdAt: invite.createdAt,
                     });
-
+                }
 
                 results.successCount++;
             } catch (err) {
                 results.errors.push({
                     index: i,
-                    email,
+                    emailOrUsername,
                     error: err.message,
                 });
             }
         }
 
-        // 6️⃣ Final response
         res.status(200).json({
             success: true,
             successCount: results.successCount,
@@ -623,4 +681,3 @@ export const bulkInviteUsers = async (req, res) => {
         res.status(500).json({ message: "Bulk invite failed" });
     }
 };
-
