@@ -116,7 +116,14 @@ const ManageUsers = () => {
     };
 
     // Get unique departments
-    const departments = [...new Set(users.map(u => u.department).filter(Boolean))];
+    const departments = [
+        ...new Map(
+          users
+            .filter(u => u.department?._id)
+            .map(u => [u.department._id, u.department])
+        ).values()
+      ];
+      
 
     // Calculate stats
     const stats = {
@@ -140,8 +147,8 @@ const ManageUsers = () => {
             email: user.email,
             password: '',
             phone: user.phone || '',
-            department: user.department || '',
-            semester: user.semester || '',
+            department: user.department?._id || '',
+            semester: user.semester?._id || '',            
             expertise: user.expertise || '',
             jobTitle: user.jobTitle || '',
             status: user.status || 'active'
@@ -389,8 +396,11 @@ const ManageUsers = () => {
                     >
                         <option value="all">All Departments</option>
                         {departments.map(dept => (
-                            <option key={dept} value={dept}>{dept}</option>
-                        ))}
+  <option key={dept._id} value={dept._id}>
+    {dept.name}
+  </option>
+))}
+
                     </select>
                 </div>
             </div>
@@ -405,7 +415,7 @@ const ManageUsers = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Active</th>
+                                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Active</th> */}
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
@@ -450,11 +460,29 @@ const ManageUsers = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-gray-900">{user.department}</div>
-                                            <div className="text-xs text-gray-500">
-                                                {user.semester ? `Semester ${user.semester}` : user.expertise}
-                                            </div>
-                                        </td>
+  <div className="text-sm text-gray-900">
+    {user.department?.name || "—"}
+  </div>
+
+  <div className="text-xs text-gray-500">
+  {user.role === "student" ? (
+    user.semester
+      ? `Semester ${user.semester.name || user.semester}`
+      : "—"
+  ) : user.role === "teacher" ? (
+    user.authorizedCourses?.length > 0 ? (
+      user.authorizedCourses.map(course => course.name).join(", ")
+    ) : (
+      "—"
+    )
+  ) : (
+    "—"
+  )}
+</div>
+
+</td>
+
+
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <button
                                                 onClick={() => handleStatusToggle(user._id, user.role)}
@@ -466,12 +494,12 @@ const ManageUsers = () => {
                                                 {user.status?.charAt(0).toUpperCase() + user.status?.slice(1) || "Active"}
                                             </button>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             <div className="flex items-center gap-1">
                                                 <FiCalendar className="w-3 h-3" />
                                                 {user.lastActive ? new Date(user.lastActive).toLocaleDateString() : "-"}
                                             </div>
-                                        </td>
+                                        </td> */}
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                                             <div className="flex items-center gap-2">
                                                 <button
@@ -535,8 +563,11 @@ const ManageUsers = () => {
                                         </label>
                                         <input
                                             type="text"
-                                            value={editForm.name}
-                                            onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                            value={formData.fullName}
+                                            onChange={(e) =>
+                                              setFormData({ ...formData, fullName: e.target.value })
+                                            }
+                                            
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
                                     </div>
@@ -547,8 +578,11 @@ const ManageUsers = () => {
                                         </label>
                                         <input
                                             type="email"
-                                            value={editForm.email}
-                                            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                                            value={formData.email}
+                                            onChange={(e) =>
+                                              setFormData({ ...formData, email: e.target.value })
+                                            }
+                                            
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
                                     </div>
@@ -559,8 +593,11 @@ const ManageUsers = () => {
                                         </label>
                                         <input
                                             type="tel"
-                                            value={editForm.phone}
-                                            onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                                            value={formData.phone}
+onChange={(e) =>
+  setFormData({ ...formData, phone: e.target.value })
+}
+
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         />
                                     </div>
@@ -570,11 +607,11 @@ const ManageUsers = () => {
                                             Department
                                         </label>
                                         <input
-                                            type="text"
-                                            value={editForm.department}
-                                            onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        />
+  type="text"
+  value={selectedUser?.department?.name || ''}
+ className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+/>
+
                                     </div>
 
                                     {selectedUser?.role === "student" && (
@@ -583,11 +620,15 @@ const ManageUsers = () => {
                                                 Semester
                                             </label>
                                             <input
-                                                type="text"
-                                                value={editForm.semester}
-                                                onChange={(e) => setEditForm({ ...editForm, semester: e.target.value })}
-                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            />
+  type="text"
+  value={
+    selectedUser?.semester
+      ? `Semester ${selectedUser.semester.name || selectedUser.semester}`
+      : ''
+  }
+className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+/>
+
                                         </div>
                                     )}
 
@@ -598,8 +639,11 @@ const ManageUsers = () => {
                                             </label>
                                             <input
                                                 type="text"
-                                                value={editForm.expertise}
-                                                onChange={(e) => setEditForm({ ...editForm, expertise: e.target.value })}
+                                                value={formData.expertise}
+onChange={(e) =>
+  setFormData({ ...formData, expertise: e.target.value })
+}
+
                                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                             />
                                         </div>
@@ -610,8 +654,11 @@ const ManageUsers = () => {
                                             Status
                                         </label>
                                         <select
-                                            value={editForm.status}
-                                            onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                                            value={formData.status}
+                                            onChange={(e) =>
+                                              setFormData({ ...formData, status: e.target.value })
+                                            }
+                                            
                                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         >
                                             <option value="active">Active</option>
@@ -665,7 +712,8 @@ const ManageUsers = () => {
                                 </div>
                                 <h3 className="text-xl font-bold text-gray-900 text-center mb-2">Delete User</h3>
                                 <p className="text-gray-600 text-center mb-6">
-                                    Are you sure you want to delete <strong>{userToDelete?.name}</strong>? This action cannot be undone.
+                                    Are you sure you want to delete <strong>{userToDelete?.fullName}</strong>
+                                    ? This action cannot be undone.
                                 </p>
                                 <div className="flex gap-3">
                                     <button

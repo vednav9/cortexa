@@ -342,7 +342,7 @@ export const getUsers = async (req, res) => {
     const { role = "all", status, department, search } = req.query;
 
     // 🔐 Verify admin
-    const admin = await Admin.findById(req.user.id);
+    const admin = await Admin.findById(req.user._id);
     if (!admin || admin.institution.toString() !== institutionId) {
       return res.status(403).json({ message: "Access denied" });
     }
@@ -368,15 +368,25 @@ export const getUsers = async (req, res) => {
     let students = [];
     let teachers = [];
 
-    // 👥 FETCH USERS
+    // 👥 FETCH STUDENTS
     if (role === "all" || role === "student") {
-      students = await Student.find(buildQuery()).lean();
+      students = await Student.find(buildQuery())
+        .populate("department", "name code")
+        .populate("semester", "name academicYear")
+        .lean();
+
       students = students.map(u => ({ ...u, role: "student" }));
     }
 
+    // 👥 FETCH TEACHERS
     if (role === "all" || role === "teacher") {
-      teachers = await Teacher.find(buildQuery()).lean();
-      teachers = teachers.map(u => ({ ...u, role: "teacher" }));
+      teachers = await Teacher.find(buildQuery())
+      .populate("department", "name")
+      .populate("authorizedCourses", "name code")
+      .lean();
+    
+    teachers = teachers.map(u => ({ ...u, role: "teacher" }));
+    
     }
 
     users = [...students, ...teachers];
@@ -401,6 +411,7 @@ export const getUsers = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch users" });
   }
 };
+
 
 
 

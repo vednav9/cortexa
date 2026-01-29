@@ -605,13 +605,19 @@ export const getFaculty = async (req, res) => {
     const { departmentId } = req.query;
 
     const filter = { institution: institutionId };
-    
+
     const faculty = await Teacher.find(filter)
-      .select("fullName email phone jobTitle department qualifications specialization")
+      .select(
+        "fullName email phone jobTitle department qualifications specialization authorizedCourses"
+      )
       .populate("department", "name code")
+      .populate({
+        path: "authorizedCourses",
+        select: "code name semesterAvailable",
+      })
       .sort({ fullName: 1 });
 
-    // Filter by department if provided
+    // Optional department filter
     let result = faculty;
     if (departmentId) {
       result = faculty.filter(
@@ -632,3 +638,4 @@ export const getFaculty = async (req, res) => {
     });
   }
 };
+
