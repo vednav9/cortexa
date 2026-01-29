@@ -35,6 +35,8 @@ const CortexaDashboard = () => {
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [myInstitutions, setMyInstitutions] = useState([]);
     const [institutionsLoading, setInstitutionsLoading] = useState(true);
+    const [browseCount, setBrowseCount] = useState(0);
+
     // const [globalNotifications, setGlobalNotifications] = useState([]);
     // const [unreadCount, setUnreadCount] = useState(0);
     const { notificationCount, clearNotifications } = useNotification();
@@ -46,34 +48,46 @@ const CortexaDashboard = () => {
     // 🔁 Re-fetch institutions (used by dashboard + events)
     const fetchInstitutions = async () => {
         if (!user || !user.role) return;
-
+      
         try {
-            setInstitutionsLoading(true);
-            const role = user.role.toLowerCase();
-
-            if (role === "student") {
-                const { data } = await studentAPI.getMyInstitution();
-                setMyInstitutions(data.institution ? [data.institution] : []);
-            }
-            else if (role === 'teacher') {
-                const { data } = await teacherAPI.getMyInstitution();
-                setMyInstitutions(data.institution ? [data.institution] : []);
-            }
-
-            else if (role === "admin") {
-                const { data } = await adminAPI.getInstitution();
-                setMyInstitutions(data.institution ? [data.institution] : []);
-            }
-            else {
-                setMyInstitutions([]);
-            }
-        } catch (err) {
-            console.error("Failed to fetch institutions:", err);
+          setInstitutionsLoading(true);
+          const role = user.role.toLowerCase();
+      
+          if (role === "student") {
+            const { data } = await studentAPI.getMyInstitution();
+            setMyInstitutions(
+              data.institution
+                ? [{ ...data.institution, role: "student" }]
+                : []
+            );
+          }
+          else if (role === "teacher") {
+            const { data } = await teacherAPI.getMyInstitution();
+            setMyInstitutions(
+              data.institution
+                ? [{ ...data.institution, role: "teacher" }]
+                : []
+            );
+          }
+          else if (role === "admin") {
+            const { data } = await adminAPI.getInstitution();
+            setMyInstitutions(
+              data.institution
+                ? [{ ...data.institution, role: "admin" }]
+                : []
+            );
+          }
+          else {
             setMyInstitutions([]);
+          }
+        } catch (err) {
+          console.error("Failed to fetch institutions:", err);
+          setMyInstitutions([]);
         } finally {
-            setInstitutionsLoading(false);
+          setInstitutionsLoading(false);
         }
-    };
+      };
+      
 
     useEffect(() => {
         if (!user) return;
@@ -221,7 +235,7 @@ const CortexaDashboard = () => {
 
 
 
-    const browseCount = 5;
+
 
 
 
@@ -459,9 +473,11 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <BrowseInstitutionsTab
-                                        excludeInstitutionId={user?.institution?._id}
-                                    />
+                                <BrowseInstitutionsTab
+  excludeInstitutionId={user?.institution?._id}
+  onCountChange={setBrowseCount}
+/>
+
                                 </div>
                             </motion.section>
                         </div>

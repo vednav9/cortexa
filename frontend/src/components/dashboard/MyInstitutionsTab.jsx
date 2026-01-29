@@ -39,6 +39,7 @@ export default function MyInstitutionsTab({ institutions = [] }) {
   }
 
   const institution = institutions[0];
+  console.log("INSTITUTION STATS:", institution.stats);
 
   return (
     <motion.div

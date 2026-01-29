@@ -1,6 +1,7 @@
 import Admin from "../models/admin.js";
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
+import Course from "../models/course.js";
 import Institution from "../models/institution.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
@@ -296,10 +297,11 @@ export const getMyInstitution = async (req, res) => {
 
     const institutionId = admin.institution._id;
 
-    // 🔥 DYNAMIC COUNTS
-    const [studentsCount, teachersCount] = await Promise.all([
+    // 🔥 DYNAMIC COUNTS (NOW COMPLETE)
+    const [studentsCount, teachersCount, coursesCount] = await Promise.all([
       Student.countDocuments({ institution: institutionId }),
       Teacher.countDocuments({ institution: institutionId }),
+      Course.countDocuments({ institution: institutionId }),
     ]);
 
     res.json({
@@ -308,7 +310,7 @@ export const getMyInstitution = async (req, res) => {
         stats: {
           students: studentsCount,
           teachers: teachersCount,
-          courses: 0, // placeholder for future
+          courses: coursesCount, // ✅ FIXED
         },
       },
     });
