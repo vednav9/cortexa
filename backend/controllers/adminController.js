@@ -49,6 +49,7 @@ export const registerAdmin = async (req, res) => {
       fullName,
       email,
       password,
+      username,
       jobTitle,
       phone,
       institutionName,
@@ -69,6 +70,7 @@ export const registerAdmin = async (req, res) => {
       !fullName ||
       !email ||
       !password ||
+      !username ||
       !jobTitle ||
       !phone ||
       !institutionName ||
@@ -84,12 +86,28 @@ export const registerAdmin = async (req, res) => {
       });
     }
 
+    if (!username || username.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: "Username is required",
+      });
+    }
+
     // 🔴 CHECK EXISTING ADMIN
     const exists = await Admin.findOne({ email });
     if (exists) {
       return res.status(400).json({
         success: false,
         message: "Admin already exists",
+      });
+    }
+
+    // Check if username is already taken
+    const existingUsername = await Admin.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({
+        success: false,
+        message: "Username already exists",
       });
     }
 
@@ -153,6 +171,7 @@ export const registerAdmin = async (req, res) => {
       fullName,
       email,
       password,
+      username,
       jobTitle,
       phone,
       institution: institution._id,
@@ -197,14 +216,37 @@ export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const admin = await Admin.findOne({ email })
+    const admin = await Admin.findOne({ 
+      $or: [{ email }, { username: email }] 
+    })
       .select("+password")
       .populate("institution", "name code");
 
     if (!admin) {
+      // Check if email/username exists in other roles
+      const student = await Student.findOne({ 
+        $or: [{ email }, { username: email }] 
+      });
+      if (student) {
+        return res.status(400).json({
+          success: false,
+          message: "This account is registered as a Student. Please select Student role.",
+        });
+      }
+
+      const teacher = await Teacher.findOne({ 
+        $or: [{ email }, { username: email }] 
+      });
+      if (teacher) {
+        return res.status(400).json({
+          success: false,
+          message: "This account is registered as a Teacher. Please select Teacher role.",
+        });
+      }
+
       return res.status(404).json({
         success: false,
-        message: "Admin not found",
+        message: "Invalid email/username or password",
       });
     }
 
@@ -212,7 +254,7 @@ export const loginAdmin = async (req, res) => {
     if (!match) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: "Invalid email/username or password",
       });
     }
 
@@ -366,7 +408,7 @@ export const getUsers = async (req, res) => {
 export const addUser = async (req, res) => {
   try {
     const { institutionId } = req.params;
-    const { role, fullName, email, password, phone, department, semester, expertise, jobTitle } = req.body;
+    const { role, fullName, email, password, phone, department, semester, expertise, jobTitle, authorizedCourses } = req.body;
 
     // Verify admin belongs to this institution
     const admin = await Admin.findById(req.user.id);
@@ -389,6 +431,7 @@ export const addUser = async (req, res) => {
     let newUser;
 
     if (role === 'student') {
+      // Create student
       newUser = await Student.create({
         fullName,
         email,
@@ -399,7 +442,24 @@ export const addUser = async (req, res) => {
         institution: institutionId,
         status: 'active'
       });
+
+      // Auto-enroll in courses based on department and semester
+      if (department && semester) {
+        const Course = (await import('../models/course.js')).default;
+        const coursesToEnroll = await Course.find({
+          institution: institutionId,
+          department,
+          semesterAvailable: semester,
+          isActive: true
+        }).select('_id');
+
+        if (coursesToEnroll.length > 0) {
+          newUser.enrolledCourses = coursesToEnroll.map(c => c._id);
+          await newUser.save();
+        }
+      }
     } else if (role === 'teacher') {
+      // Create teacher with authorized courses
       newUser = await Teacher.create({
         fullName,
         email,
@@ -408,7 +468,8 @@ export const addUser = async (req, res) => {
         department,
         expertise,
         institution: institutionId,
-        status: 'active'
+        status: 'active',
+        authorizedCourses: authorizedCourses || [] // Only selected courses
       });
     } else if (role === 'admin') {
       newUser = await Admin.create({
@@ -546,174 +607,155 @@ export const toggleUserStatus = async (req, res) => {
   }
 };
 
-// // Bulk add multiple users
-// export const bulkAddUsers = async (req, res) => {
-//   try {
-//     const { institutionId } = req.params;
-//     const { users } = req.body;
+// Bulk add multiple users (CSV import - students only, no teachers via CSV per requirements)
+export const bulkAddUsers = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const { users } = req.body;
 
-//     console.log('Bulk upload request:', {
-//       institutionId,
-//       userId: req.user.id,
-//       userRole: req.user.role,
-//       usersCount: users?.length
-//     });
+    console.log('Bulk upload request:', {
+      institutionId,
+      userId: req.user.id,
+      userRole: req.user.role,
+      usersCount: users?.length
+    });
 
-//     // Verify admin permissions
-//     const admin = await Admin.findById(req.user.id);
-//     if (!admin) {
-//       console.error('Admin not found:', req.user.id);
-//       return res.status(403).json({ message: "Admin not found" });
-//     }
+    // Verify admin permissions
+    const admin = await Admin.findById(req.user.id);
+    if (!admin) {
+      console.error('Admin not found:', req.user.id);
+      return res.status(403).json({ message: "Admin not found" });
+    }
 
-//     console.log('Admin institution:', admin.institution.toString());
-//     console.log('Requested institution:', institutionId);
+    if (admin.institution.toString() !== institutionId) {
+      return res.status(403).json({ 
+        message: "Access denied - Institution mismatch"
+      });
+    }
 
-//     if (admin.institution.toString() !== institutionId) {
-//       console.error('Institution mismatch:', {
-//         adminInstitution: admin.institution.toString(),
-//         requestedInstitution: institutionId
-//       });
-//       return res.status(403).json({ 
-//         message: "Access denied - Institution mismatch",
-//         adminInstitution: admin.institution.toString(),
-//         requestedInstitution: institutionId
-//       });
-//     }
+    // Validate institution exists
+    const institution = await Institution.findById(institutionId);
+    if (!institution) {
+      return res.status(404).json({ message: "Institution not found" });
+    }
 
-//     // Validate institution exists
-//     const institution = await Institution.findById(institutionId);
-//     if (!institution) {
-//       return res.status(404).json({ message: "Institution not found" });
-//     }
+    // Validate users array
+    if (!Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({ message: "Users array is required and must not be empty" });
+    }
 
-//     // Validate users array
-//     if (!Array.isArray(users) || users.length === 0) {
-//       return res.status(400).json({ message: "Users array is required and must not be empty" });
-//     }
+    const Course = (await import('../models/course.js')).default;
+    
+    const results = {
+      successCount: 0,
+      errors: []
+    };
 
-//     const results = {
-//       successCount: 0,
-//       errors: []
-//     };
+    // Process each user
+    for (let i = 0; i < users.length; i++) {
+      const userData = users[i];
 
-//     // Process each user
-//     for (let i = 0; i < users.length; i++) {
-//       const userData = users[i];
+      try {
+        // Validate required fields
+        if (!userData.fullName || !userData.email || !userData.mobile || !userData.department || !userData.username || !userData.role) {
+          results.errors.push({
+            index: i,
+            email: userData.email || 'unknown',
+            error: 'Missing required fields'
+          });
+          continue;
+        }
 
-//       try {
-//         // Validate required fields
-//         if (!userData.fullName || !userData.email || !userData.mobile || !userData.department || !userData.username || !userData.role) {
-//           results.errors.push({
-//             index: i,
-//             email: userData.email || 'unknown',
-//             error: 'Missing required fields'
-//           });
-//           continue;
-//         }
+        // CSV upload only for students (per user requirements)
+        if (userData.role !== 'student') {
+          results.errors.push({
+            index: i,
+            email: userData.email,
+            error: 'CSV upload only supports students. Teachers must be added manually.'
+          });
+          continue;
+        }
 
-//         // Check for duplicate email in database
-//         const existingStudent = await Student.findOne({ email: userData.email });
-//         const existingTeacher = await Teacher.findOne({ email: userData.email });
-//         const existingAdmin = await Admin.findOne({ email: userData.email });
+        // Check for duplicate email in database
+        const existingStudent = await Student.findOne({ email: userData.email });
+        const existingTeacher = await Teacher.findOne({ email: userData.email });
+        const existingAdmin = await Admin.findOne({ email: userData.email });
 
-//         if (existingStudent || existingTeacher || existingAdmin) {
-//           results.errors.push({
-//             index: i,
-//             email: userData.email,
-//             error: 'Email already exists'
-//           });
-//           continue;
-//         }
+        if (existingStudent || existingTeacher || existingAdmin) {
+          results.errors.push({
+            index: i,
+            email: userData.email,
+            error: 'Email already exists'
+          });
+          continue;
+        }
 
-//         // Generate default password
-//         const defaultPassword = 'Welcome@123';
-//         const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+        // Generate default password
+        const defaultPassword = 'Welcome@123';
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-//         // Create user based on role
-//         if (userData.role === 'student') {
-//           // Validate student-specific fields
-//           if (!userData.year || !userData.division) {
-//             results.errors.push({
-//               index: i,
-//               email: userData.email,
-//               error: 'Year and division are required for students'
-//             });
-//             continue;
-//           }
+        // Validate student-specific fields
+        if (!userData.semester) {
+          results.errors.push({
+            index: i,
+            email: userData.email,
+            error: 'Semester is required for students'
+          });
+          continue;
+        }
 
-//           await Student.create({
-//             fullName: userData.fullName,
-//             email: userData.email,
-//             password: hashedPassword,
-//             username: userData.username,
-//             phone: userData.mobile,
-//             department: userData.department,
-//             institution: institutionId,
-//             year: userData.year,
-//             division: userData.division,
-//             status: 'active'
-//           });
+        // Create student
+        const newStudent = await Student.create({
+          fullName: userData.fullName,
+          email: userData.email,
+          password: hashedPassword,
+          username: userData.username,
+          phone: userData.mobile,
+          department: userData.department,
+          semester: userData.semester,
+          institution: institutionId,
+          status: 'active'
+        });
 
-//           results.successCount++;
+        // Auto-enroll in courses based on department and semester
+        if (userData.department && userData.semester) {
+          const coursesToEnroll = await Course.find({
+            institution: institutionId,
+            department: userData.department,
+            semesterAvailable: userData.semester,
+            isActive: true
+          }).select('_id');
 
-//         } else if (userData.role === 'teacher') {
-//           // Validate teacher-specific fields
-//           if (!userData.jobTitle || !userData.qualifications) {
-//             results.errors.push({
-//               index: i,
-//               email: userData.email,
-//               error: 'Job title and qualifications are required for teachers'
-//             });
-//             continue;
-//           }
+          if (coursesToEnroll.length > 0) {
+            newStudent.enrolledCourses = coursesToEnroll.map(c => c._id);
+            await newStudent.save();
+          }
+        }
 
-//           await Teacher.create({
-//             fullName: userData.fullName,
-//             email: userData.email,
-//             password: hashedPassword,
-//             username: userData.username,
-//             phone: userData.mobile,
-//             department: userData.department,
-//             institution: institutionId,
-//             jobTitle: userData.jobTitle,
-//             qualifications: userData.qualifications,
-//             specialization: userData.specialization || '',
-//             status: 'active'
-//           });
+        results.successCount++;
 
-//           results.successCount++;
+      } catch (error) {
+        results.errors.push({
+          index: i,
+          email: userData.email || 'unknown',
+          error: error.message
+        });
+      }
+    }
 
-//         } else {
-//           results.errors.push({
-//             index: i,
-//             email: userData.email,
-//             error: 'Invalid role. Must be student or teacher'
-//           });
-//         }
+    res.status(200).json({
+      success: true,
+      message: `Bulk upload completed. ${results.successCount} students added successfully.`,
+      successCount: results.successCount,
+      errors: results.errors,
+      totalProcessed: users.length
+    });
 
-//       } catch (error) {
-//         results.errors.push({
-//           index: i,
-//           email: userData.email || 'unknown',
-//           error: error.message
-//         });
-//       }
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: `Bulk upload completed. ${results.successCount} users added successfully.`,
-//       successCount: results.successCount,
-//       errors: results.errors,
-//       totalProcessed: users.length
-//     });
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: "Failed to bulk add users" });
-//   }
-// };
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to bulk add users" });
+  }
+};
 
 export const removeUserFromInstitution = async (req, res) => {
   try {

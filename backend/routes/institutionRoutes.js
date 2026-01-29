@@ -12,13 +12,17 @@ import Semester from '../models/semester.js';
 
 const router = express.Router();
 
+// ============================================
+// PUBLIC ROUTES (More specific routes FIRST)
+// ============================================
+
 // Get all institutions (public browse)
 router.get('/browse', async (req, res) => {
   try {
     const institutions = await Institution.find()
       .select('name slug code type description address contact branding departments established')
       .sort('name');
-    
+
     // Calculate stats for each institution
     const institutionsWithStats = await Promise.all(institutions.map(async (institution) => {
       const [totalStudents, totalFaculty, totalCourses, activeSemesters, totalDepartments] = await Promise.all([
@@ -37,45 +41,45 @@ router.get('/browse', async (req, res) => {
         activeSemesters,
         totalDepartments
       };
+
       return institutionObj;
     }));
-    
-    res.json({ 
+
+    res.json({
       success: true,
       count: institutionsWithStats.length,
-      institutions: institutionsWithStats 
+      institutions: institutionsWithStats
     });
   } catch (error) {
     console.error('❌ Error fetching institutions:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Error fetching institutions', 
-      error: error.message 
+      message: 'Error fetching institutions',
+      error: error.message
     });
   }
 });
 
-// Get institution by slug (PUBLIC - for institution pages)
-// Support both /slug/:slug and /:slug for flexibility
-router.get('/:slug', async (req, res) => {
+// Get institution by slug (PUBLIC) - MUST BE BEFORE /:slug route
+router.get('/slug/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
-    
+
     // Try to find institution by slug
     let institution = await Institution.findOne({ slug })
       .select('name slug code type description address contact branding departments established');
-    
+
     // If not found by slug, try by code (case-insensitive)
     if (!institution) {
-      institution = await Institution.findOne({ 
-        code: new RegExp(`^${slug}$`, 'i') 
+      institution = await Institution.findOne({
+        code: new RegExp(`^${slug}$`, 'i')
       }).select('name slug code type description address contact branding departments established');
     }
-    
+
     if (!institution) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: 'Institution not found' 
+        message: 'Institution not found'
       });
     }
 
@@ -97,59 +101,18 @@ router.get('/:slug', async (req, res) => {
       activeSemesters,
       totalDepartments
     };
-    
-    res.json({ 
+
+    res.json({
       success: true,
-      institution 
+      institution
     });
   } catch (error) {
     console.error('❌ Error fetching institution by slug:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Error fetching institution', 
-      error: error.message 
+      message: 'Error fetching institution',
+      error: error.message
     });
-  }
-});
-
-// LEGACY: Get institution by slug (PUBLIC - for institution pages)
-router.get('/slug/:slug', async (req, res) => {
-  try {
-    // Mock data mapping for now
-    const slugToData = {
-      'mumbai-university': {
-        slug: 'mumbai-university',
-        name: 'University of Mumbai',
-        shortName: 'MU',
-        type: 'University',
-        description: 'One of the oldest and premier universities in India',
-        logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/f/f5/University_of_Mumbai_coat_of_arms.svg/150px-University_of_Mumbai_coat_of_arms.svg.png',
-        branding: {
-          primaryColor: '#0052A5',
-          accentColor: '#003366'
-        },
-        stats: {
-          totalStudents: 45000,
-          totalFaculty: 850,
-          totalCourses: 320,
-          activeSemesters: 2
-        },
-        departments: [
-          { id: 1, name: 'Computer Science', code: 'CS' },
-          { id: 2, name: 'Information Technology', code: 'IT' }
-        ]
-      }
-    };
-
-    const institution = slugToData[req.params.slug];
-    
-    if (!institution) {
-      return res.status(404).json({ message: 'Institution not found' });
-    }
-    
-    res.json({ institution });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching institution', error: error.message });
   }
 });
 
@@ -181,7 +144,7 @@ router.get('/slug/:slug/courses', async (req, res) => {
         department: 'CS'
       }
     ];
-    
+
     res.json({ courses });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching courses', error: error.message });
@@ -219,25 +182,29 @@ router.get('/slug/:slug/courses/:courseCode', async (req, res) => {
         'Algorithm Design'
       ]
     };
-    
+
     res.json({ course });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching course', error: error.message });
   }
 });
 
-// Get institution by ID (AUTHENTICATED)
+// ============================================
+// AUTHENTICATED ROUTES
+// ============================================
+
+// Get institution by ID (AUTHENTICATED) - This stays after /slug routes
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const institution = await Institution.findById(req.params.id)
       .populate('admin', 'fullName email')
       .populate('students', 'fullName email')
       .populate('teachers', 'fullName email');
-    
+
     if (!institution) {
       return res.status(404).json({ message: 'Institution not found' });
     }
-    
+
     res.json({ institution });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching institution', error: error.message });
@@ -248,13 +215,13 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     const { name, code, description, type, address, contact, settings } = req.body;
-    
+
     // Check if code already exists
     const existing = await Institution.findOne({ code });
     if (existing) {
       return res.status(400).json({ message: 'Institution code already exists' });
     }
-    
+
     const institution = new Institution({
       name,
       code,
@@ -265,147 +232,15 @@ router.post('/', authenticate, async (req, res) => {
       settings,
       admin: req.user.userId
     });
-    
+
     await institution.save();
-    
-    res.status(201).json({ 
-      message: 'Institution created successfully', 
-      institution 
+
+    res.status(201).json({
+      message: 'Institution created successfully',
+      institution
     });
   } catch (error) {
     res.status(500).json({ message: 'Error creating institution', error: error.message });
-  }
-});
-
-// Update institution (admin only)
-router.put('/:id', authenticate, async (req, res) => {
-  try {
-    const institution = await Institution.findById(req.params.id);
-    
-    if (!institution) {
-      return res.status(404).json({ message: 'Institution not found' });
-    }
-    
-    // Check if user is admin of this institution
-    if (institution.admin.toString() !== req.user.userId) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-    
-    const allowedUpdates = ['name', 'description', 'logo', 'address', 'contact', 'settings'];
-    const updates = {};
-    
-    allowedUpdates.forEach(field => {
-      if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
-      }
-    });
-    
-    Object.assign(institution, updates);
-    await institution.save();
-    
-    res.json({ message: 'Institution updated successfully', institution });
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating institution', error: error.message });
-  }
-});
-
-// Delete institution (admin only)
-router.delete('/:id', authenticate, async (req, res) => {
-  try {
-    const institution = await Institution.findById(req.params.id);
-    
-    if (!institution) {
-      return res.status(404).json({ message: 'Institution not found' });
-    }
-    
-    // Check if user is admin of this institution
-    if (institution.admin.toString() !== req.user.userId) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-    
-    // Soft delete
-    institution.isActive = false;
-    await institution.save();
-    
-    res.json({ message: 'Institution deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error deleting institution', error: error.message });
-  }
-});
-
-// Join institution (for students/teachers)
-router.post('/:id/join', authenticate, async (req, res) => {
-  try {
-    const institution = await Institution.findById(req.params.id);
-    
-    if (!institution) {
-      return res.status(404).json({ message: 'Institution not found' });
-    }
-    
-    // Check if already a member
-    const existingMembership = await Membership.findOne({
-      user: req.user.userId,
-      institution: req.params.id
-    });
-    
-    if (existingMembership) {
-      return res.status(400).json({ message: 'Already a member' });
-    }
-    
-    const membership = new Membership({
-      user: req.user.userId,
-      userType: req.user.role === 'student' ? 'Student' : 'Teacher',
-      institution: req.params.id,
-      role: req.user.role
-    });
-    
-    await membership.save();
-    
-    // Update institution
-    if (req.user.role === 'student') {
-      institution.students.push(req.user.userId);
-      institution.stats.totalStudents += 1;
-    } else {
-      institution.teachers.push(req.user.userId);
-      institution.stats.totalTeachers += 1;
-    }
-    
-    await institution.save();
-    
-    res.json({ message: 'Joined institution successfully', membership });
-  } catch (error) {
-    res.status(500).json({ message: 'Error joining institution', error: error.message });
-  }
-});
-
-// Leave institution
-router.post('/:id/leave', authenticate, async (req, res) => {
-  try {
-    const membership = await Membership.findOneAndDelete({
-      user: req.user.userId,
-      institution: req.params.id
-    });
-    
-    if (!membership) {
-      return res.status(404).json({ message: 'Not a member' });
-    }
-    
-    // Update institution
-    const institution = await Institution.findById(req.params.id);
-    if (institution) {
-      if (req.user.role === 'student') {
-        institution.students.pull(req.user.userId);
-        institution.stats.totalStudents = Math.max(0, institution.stats.totalStudents - 1);
-      } else {
-        institution.teachers.pull(req.user.userId);
-        institution.stats.totalTeachers = Math.max(0, institution.stats.totalTeachers - 1);
-      }
-      await institution.save();
-    }
-    
-    res.json({ message: 'Left institution successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error leaving institution', error: error.message });
   }
 });
 
@@ -417,7 +252,7 @@ router.put('/update', authenticate, async (req, res) => {
 
     // Get admin to verify institution
     const admin = await Admin.findById(adminId).populate('institution');
-    
+
     if (!admin || !admin.institution) {
       return res.status(404).json({
         success: false,
@@ -458,6 +293,107 @@ router.put('/update', authenticate, async (req, res) => {
       message: "Failed to update institution",
       error: error.message
     });
+  }
+});
+
+// Join institution (for students/teachers)
+router.post('/:id/join', authenticate, async (req, res) => {
+  try {
+    const institution = await Institution.findById(req.params.id);
+
+    if (!institution) {
+      return res.status(404).json({ message: 'Institution not found' });
+    }
+
+    // Check if already a member
+    const existingMembership = await Membership.findOne({
+      user: req.user.userId,
+      institution: req.params.id
+    });
+
+    if (existingMembership) {
+      return res.status(400).json({ message: 'Already a member' });
+    }
+
+    const membership = new Membership({
+      user: req.user.userId,
+      userType: req.user.role === 'student' ? 'Student' : 'Teacher',
+      institution: req.params.id,
+      role: req.user.role
+    });
+
+    await membership.save();
+
+    // Update institution
+    if (req.user.role === 'student') {
+      institution.students.push(req.user.userId);
+      institution.stats.totalStudents += 1;
+    } else {
+      institution.teachers.push(req.user.userId);
+      institution.stats.totalTeachers += 1;
+    }
+
+    await institution.save();
+
+    res.json({ message: 'Joined institution successfully', membership });
+  } catch (error) {
+    res.status(500).json({ message: 'Error joining institution', error: error.message });
+  }
+});
+
+// Leave institution
+router.post('/:id/leave', authenticate, async (req, res) => {
+  try {
+    const membership = await Membership.findOneAndDelete({
+      user: req.user.userId,
+      institution: req.params.id
+    });
+
+    if (!membership) {
+      return res.status(404).json({ message: 'Not a member' });
+    }
+
+    // Update institution
+    const institution = await Institution.findById(req.params.id);
+    if (institution) {
+      if (req.user.role === 'student') {
+        institution.students.pull(req.user.userId);
+        institution.stats.totalStudents = Math.max(0, institution.stats.totalStudents - 1);
+      } else {
+        institution.teachers.pull(req.user.userId);
+        institution.stats.totalTeachers = Math.max(0, institution.stats.totalTeachers - 1);
+      }
+
+      await institution.save();
+    }
+
+    res.json({ message: 'Left institution successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error leaving institution', error: error.message });
+  }
+});
+
+// Delete institution (admin only)
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const institution = await Institution.findById(req.params.id);
+
+    if (!institution) {
+      return res.status(404).json({ message: 'Institution not found' });
+    }
+
+    // Check if user is admin of this institution
+    if (institution.admin.toString() !== req.user.userId) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    // Soft delete
+    institution.isActive = false;
+    await institution.save();
+
+    res.json({ message: 'Institution deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting institution', error: error.message });
   }
 });
 

@@ -88,34 +88,34 @@ class HiveStorageService {
 
   // ===== Token Methods =====
 
-  /// Save authentication tokens
-  Future<void> saveToken(AuthTokenModel token) async {
+  /// Save authentication token (just the string)
+  Future<void> saveAuthToken(String token) async {
     await _appBox.put(_currentTokenKey, token);
+    print('🔐 Auth token saved');
   }
 
-  /// Get current token
-  AuthTokenModel? getToken() {
-    return _appBox.get(_currentTokenKey) as AuthTokenModel?;
-  }
-
-  /// Get access token string
-  Future<String?> getAccessToken() async {
-    final token = getToken();
-    if (token != null && !token.isExpired) {
-      return token.accessToken;
-    }
-    return null;
+  /// Get authentication token string
+  String? getToken() {
+    return _appBox.get(_currentTokenKey) as String?;
   }
 
   /// Delete tokens
   Future<void> deleteTokens() async {
     await _appBox.delete(_currentTokenKey);
+    print('🗑️ Auth token deleted');
   }
 
   /// Check if user is logged in (has valid token)
-  Future<bool> isLoggedIn() async {
-    final token = getToken();
-    return token != null && !token.isExpired;
+  bool isLoggedIn() {
+    return _appBox.containsKey(_currentTokenKey) && 
+           _appBox.get(_currentTokenKey) != null;
+  }
+
+  /// Clear auth data (user + token)
+  Future<void> clearAuthData() async {
+    await deleteUser();
+    await deleteTokens();
+    print('🧹 Auth data cleared');
   }
 
   // ===== Settings Methods =====
@@ -146,9 +146,9 @@ class HiveStorageService {
 
   /// Logout - clear all user data
   Future<void> logout() async {
-    await deleteUser();
-    await deleteTokens();
+    await clearAuthData();
     await _appBox.delete(_currentInstitutionKey);
+    print('👋 User logged out');
     // Keep settings and other data
   }
 
@@ -257,6 +257,20 @@ class HiveStorageService {
     final institutions = _appBox.get(_institutionsKey, defaultValue: <String, dynamic>{}) as Map;
     final updatedInstitutions = Map<String, dynamic>.from(institutions);
     final institutionId = institutionData['id'] as String;
+    // Preserve banner image if backend doesn't support it.
+    final existing = updatedInstitutions[institutionId];
+    if (existing is Map) {
+      final existingMap = Map<String, dynamic>.from(existing);
+      final existingBanner = existingMap['banner_image_path'];
+      final newBanner = institutionData['banner_image_path'];
+      if ((newBanner == null || (newBanner is String && newBanner.isEmpty)) &&
+          existingBanner is String &&
+          existingBanner.isNotEmpty) {
+        institutionData = Map<String, dynamic>.from(institutionData)
+          ..['banner_image_path'] = existingBanner;
+      }
+    }
+
     updatedInstitutions[institutionId] = institutionData;
     await _appBox.put(_institutionsKey, updatedInstitutions);
     print('💾 Institution saved: ${institutionData['institution_name'] ?? institutionData['name'] ?? 'Unknown'}');

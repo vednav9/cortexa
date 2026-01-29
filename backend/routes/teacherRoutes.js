@@ -4,6 +4,7 @@ import {
   loginTeacher,
   logoutTeacher,
   getMyInstitution,
+  getAuthorizedCourses,
 } from "../controllers/teacherController.js";
 import { authenticate } from "../middleware/auth.js";
 
@@ -17,5 +18,12 @@ router.post("/logout", logoutTeacher);
 // Institution (1 teacher → 1 institution)
 router.get("/my-institution", authenticate, getMyInstitution);
 // router.delete("/leave-institution", authenticate, leaveInstitution);
+
+// Courses
+router.get("/authorized-courses", authenticate, getAuthorizedCourses);
+
+// Students
+// TODO: Implement getStudentsInAuthorizedCourses in teacherController.js
+// router.get("/students", authenticate, getStudentsInAuthorizedCourses);
 
 export default router;

@@ -59,12 +59,11 @@ export default function GenerateMCQ() {
 
     const fetchCourses = async () => {
         try {
-            const response = await api.get(
-                `/academic/courses?institutionId=${currentInstitution._id}`
-            );
+            const response = await api.get('/teacher/authorized-courses');
             setCourses(response.data.courses || []);
         } catch (error) {
             console.error("Fetch courses error:", error);
+            toast.error("Failed to load courses");
         }
     };
 
