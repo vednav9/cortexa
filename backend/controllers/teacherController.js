@@ -1,6 +1,8 @@
 // controllers/teacherController.js
 import Teacher from "../models/teacher.js";
 import Student from "../models/student.js";
+import Admin from "../models/admin.js";
+import Course from "../models/course.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
@@ -14,12 +16,19 @@ import { cookieOptions } from "../utils/cookieOptions.js";
 ========================= */
 export const registerTeacher = async (req, res) => {
     try {
-        const { fullName, email, password } = req.body;
+        const { fullName, email, password, username } = req.body;
 
         if (!fullName || !email || !password) {
             return res.status(400).json({
                 success: false,
                 message: "All fields are required",
+            });
+        }
+
+        if (!username || username.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                message: "Username is required",
             });
         }
 
@@ -31,10 +40,20 @@ export const registerTeacher = async (req, res) => {
             });
         }
 
+        // Check if username is already taken
+        const existingUsername = await Teacher.findOne({ username });
+        if (existingUsername) {
+            return res.status(400).json({
+                success: false,
+                message: "Username already exists",
+            });
+        }
+
         const teacher = await Teacher.create({
             fullName,
             email,
             password,
+            username,
             role: "teacher",
         });
 
@@ -77,11 +96,35 @@ export const loginTeacher = async (req, res) => {
             });
         }
 
-        const teacher = await Teacher.findOne({ email }).select("+password");
+        const teacher = await Teacher.findOne({ 
+            $or: [{ email }, { username: email }] 
+        }).select("+password");
+        
         if (!teacher) {
+            // Check if email/username exists in other roles
+            const student = await Student.findOne({ 
+                $or: [{ email }, { username: email }] 
+            });
+            if (student) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This account is registered as a Student. Please select Student role.",
+                });
+            }
+
+            const admin = await Admin.findOne({ 
+                $or: [{ email }, { username: email }] 
+            });
+            if (admin) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This account is registered as an Admin. Please select Admin role.",
+                });
+            }
+
             return res.status(404).json({
                 success: false,
-                message: "Teacher not found",
+                message: "Invalid email/username or password",
             });
         }
 
@@ -89,7 +132,7 @@ export const loginTeacher = async (req, res) => {
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
-                message: "Invalid credentials",
+                message: "Invalid email/username or password",
             });
         }
 
@@ -159,5 +202,123 @@ export const getMyInstitution = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Failed to fetch institution" });
+    }
+};
+
+/* =========================
+   GET AUTHORIZED COURSES
+========================= */
+export const getAuthorizedCourses = async (req, res) => {
+    try {
+        const teacherId = req.user.id;
+        
+        // Get teacher with populated authorized courses
+        const teacher = await Teacher.findById(teacherId)
+            .populate({
+                path: "authorizedCourses",
+                populate: [
+                    { path: "department", select: "name code" },
+                    { path: "semesterAvailable", select: "name academicYear" }
+                ]
+            });
+
+        if (!teacher) {
+            return res.status(404).json({
+                success: false,
+                message: "Teacher not found"
+            });
+        }
+
+        // Filter only active courses
+        const activeCourses = teacher.authorizedCourses.filter(course => course.isActive);
+
+        res.status(200).json({
+            success: true,
+            count: activeCourses.length,
+            courses: activeCourses
+        });
+    } catch (error) {
+        console.error("Get authorized courses error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch authorized courses"
+        });
+    }
+};
+
+/* =========================
+   GET STUDENTS IN AUTHORIZED COURSES
+========================= */
+export const getStudentsInAuthorizedCourses = async (req, res) => {
+    try {
+        const teacherId = req.user.id;
+        const { courseId, departmentId, semesterId } = req.query;
+
+        // Get teacher with authorized courses
+        const teacher = await Teacher.findById(teacherId)
+            .select('authorizedCourses institution department semester');
+
+        if (!teacher) {
+            return res.status(404).json({
+                success: false,
+                message: "Teacher not found"
+            });
+        }
+
+        // Build query for students
+        let studentQuery = {
+            institution: teacher.institution,
+            status: 'active'
+        };
+
+        // If specific course is requested, check if teacher is authorized
+        if (courseId) {
+            const isAuthorized = teacher.authorizedCourses.some(
+                course => course.toString() === courseId
+            );
+            
+            if (!isAuthorized) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You are not authorized to view students for this course"
+                });
+            }
+            
+            studentQuery.enrolledCourses = courseId;
+        } else {
+            // Show students enrolled in ANY of teacher's authorized courses
+            if (teacher.authorizedCourses.length > 0) {
+                studentQuery.enrolledCourses = { $in: teacher.authorizedCourses };
+            }
+        }
+
+        // Add optional filters
+        if (departmentId) {
+            studentQuery.department = departmentId;
+        }
+        if (semesterId) {
+            studentQuery.semester = semesterId;
+        }
+
+        // Fetch students with populated fields
+        const students = await Student.find(studentQuery)
+            .populate('department', 'name code')
+            .populate('semester', 'name academicYear')
+            .populate('enrolledCourses', 'name code')
+            .select('fullName email phone username enrolledCourses department semester status')
+            .sort({ fullName: 1 });
+
+        res.status(200).json({
+            success: true,
+            count: students.length,
+            students
+        });
+
+    } catch (error) {
+        console.error("Get students error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch students"
+        });
     }
 };

@@ -76,7 +76,7 @@ class MockAuthRepository {
     // Generate mock tokens
     final accessToken = _generateToken();
     final refreshToken = _generateToken();
-    
+
     // CRITICAL FIX: Check if user has accepted invitations (institution data recovery)
     // If registeredUsersBox has null but user accepted an invitation, restore from invitations
     String? institutionId = user['institution_id'];
@@ -135,7 +135,7 @@ class MockAuthRepository {
     
     // Save to local storage
     await _storage.saveUser(userModel);
-    await _storage.saveToken(tokenModel);
+    await _storage.saveAuthToken(tokenModel.accessToken);
     
     return {
       'user': userModel,
@@ -289,7 +289,7 @@ class MockAuthRepository {
     
     // Save to local storage (current user session)
     await _storage.saveUser(userModel);
-    await _storage.saveToken(tokenModel);
+    await _storage.saveAuthToken(tokenModel.accessToken);
     
     return {
       'user': userModel,
@@ -305,7 +305,7 @@ class MockAuthRepository {
   
   /// Check authentication status
   Future<Map<String, dynamic>?> checkAuthStatus() async {
-    final isLoggedIn = await _storage.isLoggedIn();
+    final isLoggedIn = _storage.isLoggedIn();
     if (!isLoggedIn) return null;
     
     final user = _storage.getCurrentUser();
@@ -313,9 +313,16 @@ class MockAuthRepository {
     
     if (user == null || token == null) return null;
     
+    final tokenModel = AuthTokenModel(
+      accessToken: token,
+      refreshToken: '',
+      expiresAt: DateTime.now().add(const Duration(days: 7)),
+      createdAt: DateTime.now(),
+    );
+    
     return {
       'user': user,
-      'token': token,
+      'token': tokenModel,
     };
   }
   

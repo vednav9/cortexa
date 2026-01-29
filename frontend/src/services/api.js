@@ -224,4 +224,17 @@ export const academicAPI = {
   getFaculty: (institutionId, params) => api.get(`/academic/institutions/${institutionId}/faculty`, { params }),
 };
 
+// ============================================
+// QUERY DESK APIs
+// ============================================
+export const queryAPI = {
+  getAll: (institutionId, params) => api.get(`/queries/institution/${institutionId}`, { params }),
+  getStats: (institutionId) => api.get(`/queries/institution/${institutionId}/stats`),
+  create: (institutionId, data) => api.post(`/queries/institution/${institutionId}`, data),
+  getById: (queryId) => api.get(`/queries/${queryId}`),
+  addReply: (queryId, data) => api.post(`/queries/${queryId}/reply`, data),
+  updateStatus: (queryId, status) => api.patch(`/queries/${queryId}/status`, { status }),
+  delete: (queryId) => api.delete(`/queries/${queryId}`),
+};
+
 export default api;

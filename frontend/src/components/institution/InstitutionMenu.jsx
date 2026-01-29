@@ -51,7 +51,7 @@ export default function InstitutionMenu({
         console.log('✅ Admin with access - showing full menu');
         return [
           {
-            id: "institution-dashboard",
+            id: "",
             label: "Institution Dashboard",
             icon: FiHome,
             items: [],
@@ -98,7 +98,7 @@ export default function InstitutionMenu({
         console.log('⚠️ Admin without access - showing limited menu');
         return [
           {
-            id: "institution-dashboard",
+            id: "",
             label: "Institution Dashboard",
             icon: FiHome,
             items: [],
@@ -120,7 +120,7 @@ export default function InstitutionMenu({
         console.log('✅ Teacher with access - showing full menu');
         return [
           {
-            id: "institution-dashboard",
+            id: "",
             label: "Institution Dashboard",
             icon: FiHome,
             items: [],
@@ -185,7 +185,7 @@ export default function InstitutionMenu({
         console.log('⚠️ Teacher without access - showing limited menu');
         return [
           {
-            id: "institution-dashboard",
+            id: "",
             label: "Institution Dashboard",
             icon: FiHome,
             items: [],
@@ -207,7 +207,7 @@ export default function InstitutionMenu({
         console.log('✅ Student with access - showing full menu');
         return [
           {
-            id: "institution-dashboard",
+            id: "",
             label: "Institution Dashboard",
             icon: FiHome,
             items: [],
@@ -254,7 +254,7 @@ export default function InstitutionMenu({
         console.log('⚠️ Student without access - showing limited menu');
         return [
           {
-            id: "institution-dashboard",
+            id: "",
             label: "Institution Dashboard",
             icon: FiHome,
             items: [],
@@ -273,7 +273,7 @@ export default function InstitutionMenu({
     console.log('⚠️ No role matched or not logged in - showing public menu');
     return [
       {
-        id: "institution-dashboard",
+        id: "",
         label: "Institution Dashboard",
         icon: FiHome,
         items: [],
@@ -292,7 +292,7 @@ export default function InstitutionMenu({
   // Determine active view from current location
   const getCurrentView = () => {
     const path = location.pathname.replace(`/${slug}`, "") || "/";
-    if (path === "/" || path === "") return "institution-dashboard";
+    if (path === "/" || path === "") return "";
 
     // Remove leading slash and get the path
     const cleanPath = path.replace(/^\//, "");

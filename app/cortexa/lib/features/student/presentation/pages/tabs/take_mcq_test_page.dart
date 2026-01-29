@@ -17,7 +17,7 @@ class TakeMCQTestPage extends StatefulWidget {
 
 class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
   late List<Map<String, dynamic>> _questions;
-  Map<int, int> _selectedAnswers = {};
+  final Map<int, int> _selectedAnswers = {};
   int _currentQuestionIndex = 0;
   bool _isTestCompleted = false;
   int? _score;

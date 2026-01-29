@@ -86,7 +86,11 @@ class _SignupPageState extends State<SignupPage> {
             final userRole = state.user.role.toLowerCase();
             if (userRole == 'admin') {
               context.go('/admin-dashboard');
+            } else if (userRole == 'student' || userRole == 'teacher') {
+              context.go('/user-dashboard');
             } else {
+              // Unknown role - default to user dashboard
+              print('⚠️ Unknown role: $userRole, defaulting to user dashboard');
               context.go('/user-dashboard');
             }
           }
@@ -264,18 +268,7 @@ class _SignupPageState extends State<SignupPage> {
                         Icons.alternate_email,
                         color: AppColors.primary,
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Username is required';
-                        }
-                        if (value.length < 3) {
-                          return 'Username must be at least 3 characters';
-                        }
-                        if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
-                          return 'Username can only contain letters, numbers, and underscores';
-                        }
-                        return null;
-                      },
+                      validator: Validators.validateUsername,
                     ),
                     SizedBox(height: screenHeight * 0.012),
                     CustomTextField(
@@ -412,7 +405,7 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       child: CustomButton(
                         text: 'Create Account',
-                        onPressed: _handleSignup,
+                        onPressed: isLoading ? null : _handleSignup,
                         isLoading: isLoading,
                       ),
                     ),
