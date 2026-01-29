@@ -168,8 +168,8 @@ export default function InstitutionMenu({
             items: [],
           },
           {
-            id: "ai-chatbot",
-            label: "AI Chatbot Personal",
+            id: "rag-chatbot",
+            label: "RAG Chatbot",
             icon: HiSparkles,
             items: [],
           },
