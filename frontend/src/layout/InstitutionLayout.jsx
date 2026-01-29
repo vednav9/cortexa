@@ -21,7 +21,8 @@ export default function InstitutionLayout() {
     useEffect(() => {
         const fetchInstitution = async () => {
             try {
-                const res = await api.get(`/institutions/${slug}`);
+                // FIX: Use the correct endpoint with /slug/ prefix
+                const res = await api.get(`/institutions/slug/${slug}`);
                 setInstitution(res.data.institution);
                 
                 // Check if user has access to this institution
@@ -71,7 +72,9 @@ export default function InstitutionLayout() {
             }
         };
 
-        fetchInstitution();
+        if (slug) {
+            fetchInstitution();
+        }
     }, [slug, user]);
 
     // Handle scroll to show/hide scroll-to-top button
