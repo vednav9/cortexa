@@ -492,7 +492,10 @@ const CortexaDashboard = () => {
 
 
                     {/* QUERY DESK */}
-                    {activeTab === "querydesk" && <QueryDesk />}
+                    {activeTab === "querydesk" && (
+  <QueryDesk institution={myInstitutions[0]} />
+)}
+
                 </main>
             </div>
         </div>
