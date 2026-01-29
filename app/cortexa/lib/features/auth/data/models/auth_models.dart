@@ -38,6 +38,7 @@ class AdminRegisterRequest {
   final String fullName;
   final String email;
   final String password;
+  final String username;
   final String jobTitle;
   final String phone;
   final String institutionName;
@@ -56,6 +57,7 @@ class AdminRegisterRequest {
     required this.fullName,
     required this.email,
     required this.password,
+    required this.username,
     required this.jobTitle,
     required this.phone,
     required this.institutionName,
@@ -75,6 +77,7 @@ class AdminRegisterRequest {
         'fullName': fullName,
         'email': email,
         'password': password,
+        'username': username,
         'jobTitle': jobTitle,
         'phone': phone,
         'institutionName': institutionName,

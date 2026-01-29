@@ -132,9 +132,50 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       );
       
       if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final fileSize = await file.length();
+        
+        // Check file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+        if (fileSize > maxSize) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File is too large. Maximum size is 5MB.'),
+                backgroundColor: AppColors.error,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+        
+        // Validate image dimensions (recommended: square or close to square for logos)
+        try {
+          final bytes = await file.readAsBytes();
+          final image = await decodeImageFromList(bytes);
+          
+          // Warn if dimensions are too large (performance impact)
+          if (image.width > 2048 || image.height > 2048) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Image is very large (${image.width}x${image.height}). Consider using a smaller image for better performance.',
+                  ),
+                  backgroundColor: AppColors.warning,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          print('⚠️ Could not decode image: $e');
+        }
+        
         setState(() {
           _logoPath = result.files.single.path;
-          _logoFile = File(result.files.single.path!);
+          _logoFile = file;
         });
         
         if (mounted) {
@@ -167,9 +208,63 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       );
       
       if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final fileSize = await file.length();
+        
+        // Check file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+        if (fileSize > maxSize) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File is too large. Maximum size is 5MB.'),
+                backgroundColor: AppColors.error,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+        
+        // Validate image dimensions (banners should be landscape)
+        try {
+          final bytes = await file.readAsBytes();
+          final image = await decodeImageFromList(bytes);
+          
+          // Warn if dimensions are too large
+          if (image.width > 2560 || image.height > 1440) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Image is very large (${image.width}x${image.height}). Consider using a smaller image for better performance.',
+                  ),
+                  backgroundColor: AppColors.warning,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+          
+          // Info message for very tall images (not ideal for banners)
+          if (image.height > image.width) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Tip: Landscape images work best for banners.'),
+                  backgroundColor: AppColors.info,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          print('⚠️ Could not decode image: $e');
+        }
+        
         setState(() {
           _bannerImagePath = result.files.single.path;
-          _bannerImageFile = File(result.files.single.path!);
+          _bannerImageFile = file;
         });
         
         if (mounted) {
@@ -196,13 +291,88 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
   
   void _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
-      // Show loading indicator
+      // Show professional loading dialog
       if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+        builder: (context) => WillPopScope(
+          onWillPop: () async => false,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1F2937),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.3),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.2),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Animated loading indicator
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Title
+                  const Text(
+                    'Creating Your Institution',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Description
+                  const Text(
+                    'Uploading files and setting up your account...',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Sub text
+                  const Text(
+                    'This may take a moment',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       );
 
@@ -227,6 +397,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
           fullName: institutionData.adminFullName,
           email: institutionData.adminEmail,
           password: institutionData.adminPassword,
+          username: institutionData.adminUsername,
           jobTitle: institutionData.adminJobTitle,
           phone: institutionData.adminPhoneNumber,
           institutionName: institutionData.institutionName,
@@ -248,7 +419,6 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
           logoFile: _logoFile,
           bannerFile: _bannerImageFile,
           bannerImagePath: institutionData.bannerImagePath,
-          username: institutionData.adminUsername,
         );
 
         print('✅ Registration successful!');
@@ -276,11 +446,13 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       } catch (e) {
         print('❌ Registration error: $e');
         
-        // Close loading dialog
-        if (mounted) {
+        // Close loading dialog safely
+        if (mounted && Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
+        }
           
-          // Show error message
+        // Show error message
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Registration failed: ${e.toString()}'),

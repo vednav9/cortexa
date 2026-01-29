@@ -86,7 +86,11 @@ class _SignupPageState extends State<SignupPage> {
             final userRole = state.user.role.toLowerCase();
             if (userRole == 'admin') {
               context.go('/admin-dashboard');
+            } else if (userRole == 'student' || userRole == 'teacher') {
+              context.go('/user-dashboard');
             } else {
+              // Unknown role - default to user dashboard
+              print('⚠️ Unknown role: $userRole, defaulting to user dashboard');
               context.go('/user-dashboard');
             }
           }
@@ -401,7 +405,7 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       child: CustomButton(
                         text: 'Create Account',
-                        onPressed: _handleSignup,
+                        onPressed: isLoading ? null : _handleSignup,
                         isLoading: isLoading,
                       ),
                     ),

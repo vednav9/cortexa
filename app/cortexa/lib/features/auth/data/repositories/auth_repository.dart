@@ -178,8 +178,9 @@ class AuthRepository {
       print('✅ Institution stored successfully');
     } catch (e) {
       print('❌ Error fetching institution: $e');
-      // Re-throw to let caller handle
-      rethrow;
+      // Don't rethrow - institution fetch is optional
+      // User login/registration should succeed even if institution data fetch fails
+      // Institution can be fetched later when user accesses dashboard
     }
   }
 
