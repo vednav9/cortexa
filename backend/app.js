@@ -18,6 +18,7 @@ import studentMCQRoutes from "./routes/studentMCQRoutes.js";
 import teacherQARoutes from "./routes/teacherQARoutes.js";
 import studentQARoutes from "./routes/studentQARoutes.js";
 import queryRoutes from "./routes/queryRoutes.js";
+import qaRoutes from './routes/qaRoutes.js';
 
 
 dotenv.config();
@@ -57,6 +58,7 @@ app.use("/api/student-mcq", studentMCQRoutes);
 app.use("/api/teacher-qa", teacherQARoutes);
 app.use("/api/student-qa", studentQARoutes);
 app.use("/api/queries", queryRoutes);
+app.use('/api/qa', qaRoutes);
 
 console.log("✅ All routes registered, including /api/queries");
 

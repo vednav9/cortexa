@@ -156,8 +156,8 @@ export default function InstitutionMenu({
             items: [],
           },
           {
-            id: "qa-portal",
-            label: "Q&A Portal",
+            id: "qa-section",
+            label: "Q&A Section",
             icon: FiMessageSquare,
             items: [],
           },
