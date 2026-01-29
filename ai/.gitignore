@@ -3,3 +3,4 @@ models_cache
 chunks_only.json
 embeddings_store.json
 documents
+venv/
