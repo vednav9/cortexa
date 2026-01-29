@@ -16,13 +16,35 @@ export const getDepartments = async (req, res) => {
 
     const departments = await Department.find({ institution: institutionId })
       .populate("headOfDepartment", "fullName email jobTitle")
-      .populate("faculty", "fullName email jobTitle")
-      .sort({ name: 1 });
+      .sort({ name: 1 })
+      .lean(); // IMPORTANT for spreading
+
+    const departmentsWithCounts = await Promise.all(
+      departments.map(async (dept) => {
+        const facultyCount = await Teacher.countDocuments({
+          department: dept._id,
+          institution: institutionId,
+          status: "active",
+        });
+
+        const studentCount = await Student.countDocuments({
+          department: dept._id,
+          institution: institutionId,
+          status: "active",
+        });
+
+        return {
+          ...dept,
+          facultyCount,
+          studentCount,
+        };
+      })
+    );
 
     res.status(200).json({
       success: true,
-      count: departments.length,
-      departments, // Changed from 'data' to 'departments' for consistency
+      count: departmentsWithCounts.length,
+      data: departmentsWithCounts,
     });
   } catch (error) {
     console.error("Get departments error:", error);
@@ -392,15 +414,32 @@ export const getSemesters = async (req, res) => {
     console.log('Institution ID:', institutionId);
 
     const semesters = await Semester.find({ institution: institutionId })
-      .populate("courses", "code name credits")
-      .sort({ startDate: -1 });
+      .sort({ startDate: -1 })
+      .lean(); // ✅ needed so we can attach new field
 
-    console.log('Found semesters:', semesters.length);
+    // ✅ ADD coursesCount per semester (KEY FIX)
+    const semestersWithCourseCount = await Promise.all(
+      semesters.map(async (sem) => {
+        const count = await Course.countDocuments({
+          semesterAvailable: sem._id,
+          institution: institutionId,
+          isActive: true,
+        });
+
+        return {
+          ...sem,
+          coursesCount: count,
+        };
+      })
+    );
+
+    console.log('Found semesters:', semestersWithCourseCount.length);
+    console.log('Semesters data:', JSON.stringify(semestersWithCourseCount, null, 2));
 
     res.status(200).json({
       success: true,
-      count: semesters.length,
-      semesters, // Changed from 'data' to 'semesters'
+      count: semestersWithCourseCount.length,
+      data: semestersWithCourseCount,
     });
   } catch (error) {
     console.error("Get semesters error:", error);
@@ -411,6 +450,7 @@ export const getSemesters = async (req, res) => {
     });
   }
 };
+
 
 // Create semester
 export const createSemester = async (req, res) => {
@@ -666,13 +706,19 @@ export const getFaculty = async (req, res) => {
     const { departmentId } = req.query;
 
     const filter = { institution: institutionId };
-    
+
     const faculty = await Teacher.find(filter)
-      .select("fullName email phone jobTitle department qualifications specialization")
+      .select(
+        "fullName email phone jobTitle department qualifications specialization authorizedCourses"
+      )
       .populate("department", "name code")
+      .populate({
+        path: "authorizedCourses",
+        select: "code name semesterAvailable",
+      })
       .sort({ fullName: 1 });
 
-    // Filter by department if provided
+    // Optional department filter
     let result = faculty;
     if (departmentId) {
       result = faculty.filter(
@@ -694,3 +740,4 @@ export const getFaculty = async (req, res) => {
     });
   }
 };
+
