@@ -1,15 +1,25 @@
 import 'package:flutter/foundation.dart';
 
 class ApiConfig {
-  // For physical devices, update this IP to your PC's LAN IP
-  // Find it by running: ipconfig (Windows) or ifconfig (Mac/Linux)
-  static const String _physicalDeviceIP = '192.168.1.5';
+  // NGROK SETUP: When ngrok is running, paste your ngrok URL here (without /api)
+  // Example: 'https://abc123-def456.ngrok-free.app'
+  // To run ngrok: ngrok http 5000
+  static const String _ngrokUrl = 'https://526ae04954ff.ngrok-free.app';
+  
+  // Fallback local IP for when NOT using ngrok
+  static const String _physicalDeviceIP = '192.168.11.213';
   static const int _backendPort = 5000;
   
   static String get baseUrl {
     const overridden = String.fromEnvironment('API_BASE_URL');
     if (overridden.isNotEmpty) return overridden;
 
+    // If ngrok URL is set, use it (works on any network!)
+    if (_ngrokUrl != 'PASTE_YOUR_NGROK_URL_HERE') {
+      return '$_ngrokUrl/api';
+    }
+
+    // Fallback to local IP
     if (kIsWeb) {
       return 'http://localhost:$_backendPort/api';
     }
