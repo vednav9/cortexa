@@ -1,6 +1,7 @@
 // controllers/teacherController.js
 import Teacher from "../models/teacher.js";
 import Student from "../models/student.js";
+import Admin from "../models/admin.js";
 import Course from "../models/course.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
@@ -15,12 +16,19 @@ import { cookieOptions } from "../utils/cookieOptions.js";
 ========================= */
 export const registerTeacher = async (req, res) => {
     try {
-        const { fullName, email, password } = req.body;
+        const { fullName, email, password, username } = req.body;
 
         if (!fullName || !email || !password) {
             return res.status(400).json({
                 success: false,
                 message: "All fields are required",
+            });
+        }
+
+        if (!username || username.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                message: "Username is required",
             });
         }
 
@@ -32,10 +40,20 @@ export const registerTeacher = async (req, res) => {
             });
         }
 
+        // Check if username is already taken
+        const existingUsername = await Teacher.findOne({ username });
+        if (existingUsername) {
+            return res.status(400).json({
+                success: false,
+                message: "Username already exists",
+            });
+        }
+
         const teacher = await Teacher.create({
             fullName,
             email,
             password,
+            username,
             role: "teacher",
         });
 
@@ -78,11 +96,35 @@ export const loginTeacher = async (req, res) => {
             });
         }
 
-        const teacher = await Teacher.findOne({ email }).select("+password");
+        const teacher = await Teacher.findOne({ 
+            $or: [{ email }, { username: email }] 
+        }).select("+password");
+        
         if (!teacher) {
+            // Check if email/username exists in other roles
+            const student = await Student.findOne({ 
+                $or: [{ email }, { username: email }] 
+            });
+            if (student) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This account is registered as a Student. Please select Student role.",
+                });
+            }
+
+            const admin = await Admin.findOne({ 
+                $or: [{ email }, { username: email }] 
+            });
+            if (admin) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This account is registered as an Admin. Please select Admin role.",
+                });
+            }
+
             return res.status(404).json({
                 success: false,
-                message: "Teacher not found",
+                message: "Invalid email/username or password",
             });
         }
 
@@ -90,7 +132,7 @@ export const loginTeacher = async (req, res) => {
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
-                message: "Invalid credentials",
+                message: "Invalid email/username or password",
             });
         }
 

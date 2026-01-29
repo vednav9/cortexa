@@ -146,21 +146,21 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Email Input */}
+            {/* Email/Username Input */}
             <div>
               <label className="text-gray-300 text-sm font-medium mb-2 block">
-                Email Address
+                Email / Username
               </label>
               <div className="relative">
                 <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                 <input
-                  type="email"
+                  type="text"
                   required
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
-                  placeholder="you@example.com"
+                  placeholder="you@example.com or username"
                   className="w-full pl-12 pr-4 py-3.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
               </div>

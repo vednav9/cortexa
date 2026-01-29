@@ -49,6 +49,7 @@ export const registerAdmin = async (req, res) => {
       fullName,
       email,
       password,
+      username,
       jobTitle,
       phone,
       institutionName,
@@ -69,6 +70,7 @@ export const registerAdmin = async (req, res) => {
       !fullName ||
       !email ||
       !password ||
+      !username ||
       !jobTitle ||
       !phone ||
       !institutionName ||
@@ -84,12 +86,28 @@ export const registerAdmin = async (req, res) => {
       });
     }
 
+    if (!username || username.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: "Username is required",
+      });
+    }
+
     // 🔴 CHECK EXISTING ADMIN
     const exists = await Admin.findOne({ email });
     if (exists) {
       return res.status(400).json({
         success: false,
         message: "Admin already exists",
+      });
+    }
+
+    // Check if username is already taken
+    const existingUsername = await Admin.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({
+        success: false,
+        message: "Username already exists",
       });
     }
 
@@ -153,6 +171,7 @@ export const registerAdmin = async (req, res) => {
       fullName,
       email,
       password,
+      username,
       jobTitle,
       phone,
       institution: institution._id,
@@ -197,14 +216,37 @@ export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const admin = await Admin.findOne({ email })
+    const admin = await Admin.findOne({ 
+      $or: [{ email }, { username: email }] 
+    })
       .select("+password")
       .populate("institution", "name code");
 
     if (!admin) {
+      // Check if email/username exists in other roles
+      const student = await Student.findOne({ 
+        $or: [{ email }, { username: email }] 
+      });
+      if (student) {
+        return res.status(400).json({
+          success: false,
+          message: "This account is registered as a Student. Please select Student role.",
+        });
+      }
+
+      const teacher = await Teacher.findOne({ 
+        $or: [{ email }, { username: email }] 
+      });
+      if (teacher) {
+        return res.status(400).json({
+          success: false,
+          message: "This account is registered as a Teacher. Please select Teacher role.",
+        });
+      }
+
       return res.status(404).json({
         success: false,
-        message: "Admin not found",
+        message: "Invalid email/username or password",
       });
     }
 
@@ -212,7 +254,7 @@ export const loginAdmin = async (req, res) => {
     if (!match) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: "Invalid email/username or password",
       });
     }
 
