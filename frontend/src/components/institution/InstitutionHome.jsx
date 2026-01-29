@@ -141,7 +141,7 @@ export default function InstitutionHome() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7, duration: 0.6 }}
               >
-                <Link
+                {/* <Link
                   to={`/${institution.slug}/login`}
                   className="group inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-xl border-2 border-white/30 rounded-xl font-bold text-white hover:bg-white/20 hover:border-white/50 transition-all shadow-xl hover:shadow-2xl hover:scale-105"
                 >
@@ -152,7 +152,7 @@ export default function InstitutionHome() {
                   >
                     <FiTrendingUp className="w-4 h-4" />
                   </motion.div>
-                </Link>
+                </Link> */}
               </motion.div>
             </motion.div>
           </div>
