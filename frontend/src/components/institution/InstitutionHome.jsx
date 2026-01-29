@@ -63,7 +63,7 @@ export default function InstitutionHome() {
           >
             {/* Enhanced Gradient Overlay */}
             <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-black/50" />
-            
+
             {/* Animated Gradient Orbs */}
             <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-full blur-3xl animate-pulse" />
             <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-pink-500/20 to-orange-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
@@ -99,7 +99,7 @@ export default function InstitutionHome() {
               )}
 
               {/* Title with Stagger Animation */}
-              <motion.h1 
+              <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.6 }}
@@ -141,7 +141,7 @@ export default function InstitutionHome() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7, duration: 0.6 }}
               >
-                <Link
+                {/* <Link
                   to={`/${institution.slug}/login`}
                   className="group inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-xl border-2 border-white/30 rounded-xl font-bold text-white hover:bg-white/20 hover:border-white/50 transition-all shadow-xl hover:shadow-2xl hover:scale-105"
                 >
@@ -152,7 +152,7 @@ export default function InstitutionHome() {
                   >
                     <FiTrendingUp className="w-4 h-4" />
                   </motion.div>
-                </Link>
+                </Link> */}
               </motion.div>
             </motion.div>
           </div>
@@ -174,8 +174,8 @@ export default function InstitutionHome() {
               key={stat.label}
               initial={{ opacity: 0, y: 40, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ 
-                delay: 0.8 + index * 0.1, 
+              transition={{
+                delay: 0.8 + index * 0.1,
                 duration: 0.5,
                 type: "spring",
                 stiffness: 100
@@ -185,7 +185,7 @@ export default function InstitutionHome() {
             >
               {/* Gradient Background on Hover */}
               <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${stat.bgColor}`} />
-              
+
               {/* Content */}
               <div className="relative z-10">
                 <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br ${stat.color} flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-lg`}>
@@ -219,10 +219,10 @@ export default function InstitutionHome() {
           >
             {/* Background Decoration */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-100/50 to-purple-100/50 rounded-full blur-3xl -z-0 group-hover:scale-150 transition-transform duration-700" />
-            
+
             <div className="relative z-10">
               <div className="flex items-center gap-4 mb-6">
-                <div 
+                <div
                   className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
                   style={{ background: `linear-gradient(135deg, ${brandColor}, ${accentColor})` }}
                 >
@@ -236,9 +236,9 @@ export default function InstitutionHome() {
               <div className="space-y-5 text-gray-700">
                 <div className="flex items-center gap-3">
                   <span className="font-bold text-gray-900 text-sm">Type:</span>
-                  <span 
+                  <span
                     className="px-4 py-2 rounded-xl text-sm font-bold shadow-sm"
-                    style={{ 
+                    style={{
                       backgroundColor: `${brandColor}15`,
                       color: brandColor
                     }}
@@ -284,10 +284,10 @@ export default function InstitutionHome() {
           >
             {/* Background Decoration */}
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-green-100/50 to-blue-100/50 rounded-full blur-3xl -z-0 group-hover:scale-150 transition-transform duration-700" />
-            
+
             <div className="relative z-10">
               <div className="flex items-center gap-4 mb-6">
-                <div 
+                <div
                   className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
                   style={{ background: `linear-gradient(135deg, ${brandColor}, ${accentColor})` }}
                 >
@@ -374,7 +374,7 @@ export default function InstitutionHome() {
               <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-3">
                 Our Departments
               </h2>
-              <div 
+              <div
                 className="h-1.5 w-32 mx-auto rounded-full"
                 style={{ background: `linear-gradient(90deg, ${brandColor}, ${accentColor})` }}
               />
@@ -391,14 +391,14 @@ export default function InstitutionHome() {
                 transition={{ delay: index * 0.1, duration: 0.5 }}
                 whileHover={{ y: -8, scale: 1.02 }}
                 className="group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all p-6 cursor-pointer overflow-hidden border-2 border-transparent hover:border-opacity-30"
-                style={{ 
+                style={{
                   '--hover-border': `${brandColor}50`
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.borderColor = `${brandColor}50`}
                 onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}
               >
                 {/* Background Gradient */}
-                <div 
+                <div
                   className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300"
                   style={{ background: `linear-gradient(135deg, ${brandColor}, ${accentColor})` }}
                 />
@@ -433,7 +433,7 @@ export default function InstitutionHome() {
                 </div>
 
                 {/* Corner Decoration */}
-                <div 
+                <div
                   className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-500"
                   style={{ background: `linear-gradient(135deg, ${brandColor}, ${accentColor})` }}
                 />
