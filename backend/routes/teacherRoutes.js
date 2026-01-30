@@ -5,25 +5,60 @@ import {
   logoutTeacher,
   getMyInstitution,
   getAuthorizedCourses,
+  getStudentsInAuthorizedCourses,
+  uploadNotes,
+  getDocuments,
+  deleteDocument,
+  generateMCQs,
+  saveMCQSet,
+  addToMCQSet,
+  getMCQSets,
+  assignMCQSet,
+  getMCQResults,
 } from "../controllers/teacherController.js";
 import { authenticate } from "../middleware/auth.js";
+import multer from "multer";
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Auth
+// ===============================
+// AUTH ROUTES
+// ===============================
 router.post("/register", registerTeacher);
 router.post("/login", loginTeacher);
 router.post("/logout", logoutTeacher);
 
-// Institution (1 teacher → 1 institution)
+// ===============================
+// INSTITUTION ROUTES
+// ===============================
 router.get("/my-institution", authenticate, getMyInstitution);
-// router.delete("/leave-institution", authenticate, leaveInstitution);
 
-// Courses
+// ===============================
+// COURSES ROUTES
+// ===============================
 router.get("/authorized-courses", authenticate, getAuthorizedCourses);
 
-// Students
-// TODO: Implement getStudentsInAuthorizedCourses in teacherController.js
-// router.get("/students", authenticate, getStudentsInAuthorizedCourses);
+// ===============================
+// STUDENTS ROUTES
+// ===============================
+router.get("/students", authenticate, getStudentsInAuthorizedCourses);
+
+// ===============================
+// DOCUMENT/NOTES ROUTES
+// ===============================
+router.post("/notes/upload", authenticate, upload.single("file"), uploadNotes);
+router.get("/notes/:courseId", authenticate, getDocuments);
+router.delete("/notes/:documentId", authenticate, deleteDocument);
+
+// ===============================
+// MCQ ROUTES
+// ===============================
+router.post("/mcq/generate", authenticate, generateMCQs);
+router.post("/mcq/save", authenticate, saveMCQSet);
+router.post("/mcq/:mcqSetId/add", authenticate, addToMCQSet);
+router.get("/mcq/sets", authenticate, getMCQSets);
+router.post("/mcq/:mcqSetId/assign", authenticate, assignMCQSet);
+router.get("/mcq/:mcqSetId/results", authenticate, getMCQResults);
 
 export default router;
