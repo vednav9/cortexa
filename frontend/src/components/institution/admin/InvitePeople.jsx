@@ -21,7 +21,6 @@ const InvitePeople = () => {
   const { user } = useAuth();
   const { institution, hasAccess } = useOutletContext();
 
-  // Get institutionId from the institution object
   const institutionId = institution?._id;
 
   const [userType, setUserType] = useState('student');
@@ -30,7 +29,7 @@ const InvitePeople = () => {
   const [users, setUsers] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [manualForm, setManualForm] = useState({
-    emailOrUsername: '', // Changed from email
+    emailOrUsername: '',
     message: '',
   });
 
@@ -44,16 +43,13 @@ const InvitePeople = () => {
   const [filteredCourses, setFilteredCourses] = useState([]);
   const [loadingAcademic, setLoadingAcademic] = useState(false);
 
-  // ===============================
-  // INVITATION STATUS MODAL (ADMIN)
-  // ===============================
+  // Invitation status modal
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [inviteStatus, setInviteStatus] = useState('all');
   const [adminInvites, setAdminInvites] = useState([]);
   const [loadingInvites, setLoadingInvites] = useState(false);
-  const [filterRole, setFilterRole] = useState('all'); // all | Student | Teacher
+  const [filterRole, setFilterRole] = useState('all');
 
-  // Fetch academic data on mount
   useEffect(() => {
     if (institution?._id) {
       fetchAcademicData();
@@ -62,14 +58,24 @@ const InvitePeople = () => {
 
   // Filter courses when department or semester changes
   useEffect(() => {
+    console.log('🔍 Filtering courses...');
+    console.log('Selected Department:', selectedDepartment);
+    console.log('Selected Semester:', selectedSemester);
+    console.log('All Courses:', courses);
+
     if (selectedDepartment && selectedSemester) {
       const filtered = courses.filter(
-        course =>
-          course.department?._id === selectedDepartment &&
-          course.semesterAvailable?._id === selectedSemester
+        course => {
+          const deptMatch = course.department?._id === selectedDepartment;
+          const semMatch = course.semesterAvailable?._id === selectedSemester;
+          console.log(`Course ${course.name}: dept=${deptMatch}, sem=${semMatch}`);
+          return deptMatch && semMatch;
+        }
       );
+      console.log('✅ Filtered Courses:', filtered);
       setFilteredCourses(filtered);
     } else {
+      console.log('⚠️ No department or semester selected');
       setFilteredCourses([]);
     }
   }, [selectedDepartment, selectedSemester, courses]);
@@ -77,21 +83,34 @@ const InvitePeople = () => {
   const fetchAcademicData = async () => {
     try {
       setLoadingAcademic(true);
+      console.log('📚 Fetching academic data for institution:', institution._id);
+
       const [deptsRes, semsRes, coursesRes] = await Promise.all([
         academicAPI.getDepartments(institution._id),
         academicAPI.getSemesters(institution._id),
         academicAPI.getCourses(institution._id),
       ]);
 
-      const deptsData = deptsRes.data.data || deptsRes.data || [];
-      const semsData = semsRes.data.data || semsRes.data || [];
-      const coursesData = coursesRes.data.data || coursesRes.data || [];
+      console.log('📚 Departments response:', deptsRes.data);
+      console.log('📚 Semesters response:', semsRes.data);
+      console.log('📚 Courses response:', coursesRes.data);
+
+      // ✅ FIXED: Handle both response formats
+      const deptsData = deptsRes.data.departments || deptsRes.data.data || [];
+      const semsData = semsRes.data.semesters || semsRes.data.data || [];
+      const coursesData = coursesRes.data.courses || coursesRes.data.data || []; // ✅ KEY FIX
+
+      console.log('📚 Processed departments:', deptsData);
+      console.log('📚 Processed semesters:', semsData);
+      console.log('📚 Processed courses:', coursesData);
 
       setDepartments(Array.isArray(deptsData) ? deptsData : []);
       setSemesters(Array.isArray(semsData) ? semsData : []);
       setCourses(Array.isArray(coursesData) ? coursesData : []);
+
+      console.log('✅ Academic data loaded successfully');
     } catch (error) {
-      console.error('Error fetching academic data:', error);
+      console.error('❌ Error fetching academic data:', error);
       toast.error('Failed to load academic data');
     } finally {
       setLoadingAcademic(false);
@@ -128,7 +147,6 @@ const InvitePeople = () => {
         const lines = text.split('\n').filter(line => line.trim());
         const headers = lines[0].split(',').map(h => h.trim());
 
-        // Updated: Remove fullName, use emailOrUsername
         const allowedHeaders = ['emailOrUsername', 'message'];
 
         const isValid = headers.every(h => allowedHeaders.includes(h));
@@ -209,12 +227,14 @@ const InvitePeople = () => {
       const payload = {
         institutionId,
         recipientType: userType === 'student' ? 'Student' : 'Teacher',
-        emailOrUsername: manualForm.emailOrUsername, // Changed from email
+        emailOrUsername: manualForm.emailOrUsername,
         message: manualForm.message || 'You are invited to join the institution',
         department: selectedDepartment,
         semester: selectedSemester,
         courses: userType === 'teacher' ? selectedCourses : undefined,
       };
+
+      console.log('📤 Sending invitation:', payload);
 
       await invitationAPI.create(payload);
 
@@ -241,7 +261,6 @@ const InvitePeople = () => {
   };
 
   const downloadTemplate = () => {
-    // Updated CSV template
     const headers = 'emailOrUsername,message\n';
     const example = 'john@example.com,Welcome to our institution!\njohn_doe,Join our learning platform!\n';
     const blob = new Blob([headers + example], { type: 'text/csv' });
@@ -269,20 +288,16 @@ const InvitePeople = () => {
 
     if (!institutionId) {
       toast.error('Institution ID not found');
-      console.error('Institution object:', institution);
       return;
     }
-
-    console.log('Uploading users:', users);
-    console.log('Institution ID:', institutionId);
 
     setUploading(true);
     try {
       const payload = {
         institutionId,
-        recipientType: 'Student', // Only students can be bulk uploaded
+        recipientType: 'Student',
         users: users.map(u => ({
-          emailOrUsername: u.emailOrUsername, // Changed from email and fullName
+          emailOrUsername: u.emailOrUsername,
           message: u.message || 'You are invited to join the institution',
         })),
         department: selectedDepartment,
@@ -303,19 +318,28 @@ const InvitePeople = () => {
       setSelectedSemester('');
     } catch (error) {
       console.error('Full error object:', error);
-      console.error('Error response:', error.response);
-      console.error('Error data:', error.response?.data);
-
       const errorMessage = error.response?.data?.message || error.message || 'Failed to add users';
       toast.error(errorMessage);
-
-      // Log specific error details
-      if (error.response?.data?.errors) {
-        console.error('Specific errors:', error.response.data.errors);
-      }
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleCourseToggle = (courseId) => {
+    console.log('📝 Toggle course:', courseId);
+    console.log('Current selected courses:', selectedCourses);
+    
+    setSelectedCourses(prev => {
+      if (prev.includes(courseId)) {
+        const updated = prev.filter(id => id !== courseId);
+        console.log('✅ Removed course, new list:', updated);
+        return updated;
+      } else {
+        const updated = [...prev, courseId];
+        console.log('✅ Added course, new list:', updated);
+        return updated;
+      }
+    });
   };
 
   if (!hasAccess) {
@@ -336,11 +360,9 @@ const InvitePeople = () => {
     );
   }
 
-  const displayedUsers = users;
-
   return (
     <div className="max-w-7xl mx-auto space-y-6 p-6">
-      {/* Header with Stats */}
+      {/* Header */}
       <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24"></div>
@@ -361,7 +383,6 @@ const InvitePeople = () => {
               </div>
             </div>
 
-            {/* User Type Toggle */}
             {uploadMethod === 'manual' && (
               <div className="flex gap-2 p-1.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20">
                 <button
@@ -392,7 +413,7 @@ const InvitePeople = () => {
         </div>
       </div>
 
-      {/* Method Selector - Bento Style */}
+      {/* Method Selector */}
       <div className="grid grid-cols-2 gap-4">
         <motion.button
           whileHover={{ scale: 1.02, y: -2 }}
@@ -470,7 +491,6 @@ const InvitePeople = () => {
             transition={{ duration: 0.3 }}
             className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden"
           >
-            {/* Header with Action */}
             <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -494,9 +514,8 @@ const InvitePeople = () => {
               </div>
             </div>
 
-            {/* Upload Zone */}
             <div className="p-8 space-y-6">
-              {/* Department and Semester Selection for CSV */}
+              {/* Department and Semester Selection */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-gray-700">
@@ -579,7 +598,6 @@ const InvitePeople = () => {
                 </motion.div>
               </div>
 
-              {/* Info Box */}
               <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
                 <div className="flex gap-4">
                   <div className="flex-shrink-0">
@@ -594,9 +612,6 @@ const InvitePeople = () => {
                       <p><strong>Optional:</strong> message</p>
                       <p className="text-xs text-blue-700 mt-1">
                         <strong>Note:</strong> You can use either email addresses (john@example.com) or usernames (john_doe) in the emailOrUsername column.
-                      </p>
-                      <p className="text-xs text-blue-700">
-                        CSV bulk upload is only available for students. Teachers must be added manually with course selection.
                       </p>
                     </div>
                   </div>
@@ -613,7 +628,6 @@ const InvitePeople = () => {
             transition={{ duration: 0.3 }}
             className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden"
           >
-            {/* Header */}
             <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
@@ -626,7 +640,6 @@ const InvitePeople = () => {
               </div>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleManualSubmit} className="p-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2 md:col-span-2">
@@ -641,9 +654,6 @@ const InvitePeople = () => {
                     placeholder="john@example.com or john_doe"
                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all hover:border-gray-300"
                   />
-                  <p className="text-xs text-gray-500">
-                    Enter either an email address or a username
-                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -680,13 +690,19 @@ const InvitePeople = () => {
                   </select>
                 </div>
 
+                {/* ✅ FIXED: Authorized Courses Section */}
                 {userType === 'teacher' && (
                   <div className="space-y-2 md:col-span-2">
                     <label className="block text-sm font-semibold text-gray-700">
                       Authorized Courses <span className="text-red-500">*</span>
                     </label>
-                    <div className="border-2 border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto hover:border-gray-300 transition-all">
-                      {filteredCourses.length === 0 ? (
+                    <div className="border-2 border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto hover:border-gray-300 transition-all bg-white">
+                      {loadingAcademic ? (
+                        <div className="text-center py-4">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto"></div>
+                          <p className="text-sm text-gray-500 mt-2">Loading courses...</p>
+                        </div>
+                      ) : filteredCourses.length === 0 ? (
                         <p className="text-sm text-gray-500 text-center py-4">
                           {selectedDepartment && selectedSemester
                             ? 'No courses available for selected department and semester'
@@ -695,21 +711,20 @@ const InvitePeople = () => {
                       ) : (
                         <div className="space-y-2">
                           {filteredCourses.map(course => (
-                            <label key={course._id} className="flex items-center gap-3 p-2 hover:bg-emerald-50 rounded-lg cursor-pointer transition-colors">
+                            <label 
+                              key={course._id} 
+                              className="flex items-center gap-3 p-3 hover:bg-emerald-50 rounded-lg cursor-pointer transition-colors group"
+                            >
                               <input
                                 type="checkbox"
                                 checked={selectedCourses.includes(course._id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedCourses([...selectedCourses, course._id]);
-                                  } else {
-                                    setSelectedCourses(selectedCourses.filter(id => id !== course._id));
-                                  }
-                                }}
-                                className="w-5 h-5 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                                onChange={() => handleCourseToggle(course._id)}
+                                className="w-5 h-5 text-emerald-600 border-2 border-gray-300 rounded focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                               />
                               <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">{course.name}</p>
+                                <p className="text-sm font-medium text-gray-900 group-hover:text-emerald-700 transition-colors">
+                                  {course.name}
+                                </p>
                                 <p className="text-xs text-gray-500">{course.code}</p>
                               </div>
                             </label>
@@ -720,6 +735,11 @@ const InvitePeople = () => {
                     <p className="text-xs text-gray-500 mt-2">
                       Teacher will only have full access to selected courses for notes upload, MCQ generation, voice-to-text, and Q&A portal.
                     </p>
+                    {selectedCourses.length > 0 && (
+                      <p className="text-xs text-emerald-600 font-semibold">
+                        ✓ {selectedCourses.length} course{selectedCourses.length !== 1 ? 's' : ''} selected
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -781,14 +801,13 @@ const InvitePeople = () => {
 
       {/* Users Table */}
       <AnimatePresence>
-        {displayedUsers.length > 0 && (
+        {users.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden"
           >
-            {/* Table Header */}
             <div className="bg-gradient-to-r from-emerald-500 to-green-500 p-6 text-white">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -797,7 +816,7 @@ const InvitePeople = () => {
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold">
-                      {displayedUsers.length} {userType === 'student' ? 'Student' : 'Teacher'}{displayedUsers.length !== 1 ? 's' : ''} Ready
+                      {users.length} Student{users.length !== 1 ? 's' : ''} Ready
                     </h3>
                     <p className="text-emerald-100 text-sm mt-0.5">Review and upload to database</p>
                   </div>
@@ -825,7 +844,6 @@ const InvitePeople = () => {
               </div>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -837,7 +855,7 @@ const InvitePeople = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {displayedUsers.map((user, index) => (
+                  {users.map((user, index) => (
                     <motion.tr
                       key={user.id}
                       initial={{ opacity: 0, x: -20 }}
@@ -848,15 +866,12 @@ const InvitePeople = () => {
                       <td className="px-6 py-4 text-sm font-semibold text-gray-500">
                         {index + 1}
                       </td>
-
                       <td className="px-6 py-4 text-sm font-bold text-gray-900">
                         {user.emailOrUsername}
                       </td>
-
                       <td className="px-6 py-4 text-sm italic text-gray-500">
                         {user.message || '—'}
                       </td>
-
                       <td className="px-6 py-4 text-center">
                         <motion.button
                           whileHover={{ scale: 1.15, rotate: 5 }}
@@ -876,7 +891,7 @@ const InvitePeople = () => {
         )}
       </AnimatePresence>
 
-      {/* Status Modal */}
+      {/* Status Modal - kept from original */}
       <AnimatePresence>
         {showStatusModal && (
           <motion.div
@@ -893,7 +908,6 @@ const InvitePeople = () => {
               exit={{ scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Header */}
               <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-100">
                 <h2 className="text-2xl font-bold text-gray-900">Invitation Status</h2>
                 <button
@@ -904,7 +918,6 @@ const InvitePeople = () => {
                 </button>
               </div>
 
-              {/* Status Filter Tabs */}
               <div className="flex gap-3 mb-4 overflow-x-auto pb-2">
                 {['all', 'pending', 'accepted', 'rejected'].map(status => (
                   <button
@@ -924,7 +937,6 @@ const InvitePeople = () => {
                 ))}
               </div>
 
-              {/* Role Filter */}
               <div className="flex gap-3 mb-6">
                 {['all', 'Student', 'Teacher'].map(role => (
                   <button
@@ -944,7 +956,6 @@ const InvitePeople = () => {
                 ))}
               </div>
 
-              {/* Content */}
               {loadingInvites ? (
                 <div className="flex flex-col items-center justify-center py-16">
                   <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
