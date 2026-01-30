@@ -16,25 +16,11 @@ export const authenticate = (req, res, next) => {
 
     console.log("🔐 Decoded JWT token:", decoded);
 
-    // Ensure decoded token has necessary fields
-    const userId = decoded.userId || decoded._id || decoded.id;
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid token structure - missing user ID",
-      });
-    }
-
-    // Normalize the token data
+    // Ensure both _id and id are available for backward compatibility
     req.user = {
-      _id: userId,
-      id: userId,
-      userId: userId,
-      role: decoded.role,
-      name: decoded.name || decoded.fullName,
-      fullName: decoded.name || decoded.fullName,
-      email: decoded.email,
+      ...decoded,
+      _id: decoded._id || decoded.id,
+      id: decoded.id || decoded._id,
     };
 
     console.log("✅ Authenticated user:", req.user);

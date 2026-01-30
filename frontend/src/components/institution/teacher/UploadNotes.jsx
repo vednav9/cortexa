@@ -45,20 +45,29 @@ export default function UploadNotes() {
 
     const fetchCourses = async () => {
         try {
+            console.log('🔍 [FRONTEND] Fetching authorized courses...');
             const response = await api.get('/teacher/authorized-courses');
+            console.log('📦 [FRONTEND] Response:', response.data);
+            console.log('📚 [FRONTEND] Courses received:', response.data.courses);
+            console.log('🔢 [FRONTEND] Number of courses:', response.data.courses?.length || 0);
             setCourses(response.data.courses || []);
+            
+            if (!response.data.courses || response.data.courses.length === 0) {
+                toast.error("No courses assigned yet. Please contact your admin.", {
+                    duration: 5000
+                });
+            }
         } catch (error) {
-            console.error("Fetch courses error:", error);
-            toast.error("Failed to load courses");
+            console.error("❌ [FRONTEND] Fetch courses error:", error);
+            console.error("❌ [FRONTEND] Error response:", error.response?.data);
+            toast.error(error.response?.data?.message || "Failed to load courses");
         }
     };
 
     const fetchDocuments = async () => {
         try {
             setLoading(true);
-            const response = await api.get(
-                `/teacher-mcq/notes/${selectedCourse}?institutionId=${currentInstitution._id}`
-            );
+            const response = await api.get(`/teacher/notes/${selectedCourse}`);
             setDocuments(response.data.documents || []);
         } catch (error) {
             console.error("Fetch documents error:", error);
@@ -156,11 +165,10 @@ export default function UploadNotes() {
             setUploading(true);
             const formData = new FormData();
             formData.append("file", selectedFile);
-            formData.append("fileName", fileName.trim());
+            formData.append("title", fileName.trim());
             formData.append("courseId", selectedCourse);
-            formData.append("institutionId", currentInstitution._id);
 
-            await api.post("/teacher-mcq/notes/upload", formData, {
+            await api.post("/teacher/notes/upload", formData, {
                 headers: {
                     "Content-Type": "multipart/form-data"
                 }
@@ -187,7 +195,7 @@ export default function UploadNotes() {
         if (!confirm("Are you sure you want to delete this document?")) return;
 
         try {
-            await api.delete(`/teacher-mcq/notes/${documentId}`);
+            await api.delete(`/teacher/notes/${documentId}`);
             toast.success("Document deleted successfully");
             fetchDocuments();
         } catch (error) {

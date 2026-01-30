@@ -69,9 +69,7 @@ export default function GenerateMCQ() {
 
     const fetchSavedMCQSets = async () => {
         try {
-            const response = await api.get(
-                `/teacher-mcq/mcq/sets?institutionId=${currentInstitution._id}`
-            );
+            const response = await api.get('/teacher/mcq/sets');
             setSavedMCQSets(response.data.mcqSets || []);
         } catch (error) {
             console.error("Fetch MCQ sets error:", error);
@@ -81,9 +79,7 @@ export default function GenerateMCQ() {
     const fetchStudents = async (courseId) => {
         try {
             // Fetch students enrolled in the course
-            const response = await api.get(
-                `/teacher/students?institutionId=${currentInstitution._id}&courseId=${courseId}`
-            );
+            const response = await api.get(`/teacher/students?courseId=${courseId}`);
             setStudents(response.data.students || []);
         } catch (error) {
             console.error("Fetch students error:", error);
@@ -99,18 +95,18 @@ export default function GenerateMCQ() {
 
         try {
             setGenerating(true);
-            const response = await api.post("/teacher-mcq/mcq/generate", {
-                sourceType,
-                source: source.trim(),
-                numQuestions: parseInt(numQuestions),
+            const response = await api.post("/teacher/mcq/generate", {
+                courseId: selectedCourse,
+                topic: source.trim(),
+                count: parseInt(numQuestions),
                 difficulty
             });
 
             setGeneratedMCQs(response.data.mcqs || []);
-            toast.success(`Generated ${response.data.count} MCQs!`);
+            toast.success(`Generated ${response.data.mcqs?.length || 0} MCQs!`);
         } catch (error) {
             console.error("Generate MCQs error:", error);
-            toast.error(error.response?.data?.error || "Failed to generate MCQs");
+            toast.error(error.response?.data?.message || "Failed to generate MCQs");
         } finally {
             setGenerating(false);
         }
@@ -134,12 +130,11 @@ export default function GenerateMCQ() {
                     return;
                 }
 
-                await api.post("/teacher-mcq/mcq/save", {
+                await api.post("/teacher/mcq/save", {
                     title: mcqSetTitle.trim(),
                     description: mcqSetDescription.trim(),
                     courseId: selectedCourse,
-                    institutionId: currentInstitution._id,
-                    questions: generatedMCQs.map(mcq => ({
+                    mcqs: generatedMCQs.map(mcq => ({
                         question: mcq.question,
                         options: [mcq.option_a, mcq.option_b, mcq.option_c, mcq.option_d],
                         correctAnswer: mcq.correct_answer,
@@ -155,8 +150,8 @@ export default function GenerateMCQ() {
                     return;
                 }
 
-                await api.post(`/teacher-mcq/mcq/${selectedExistingSet}/add`, {
-                    questions: generatedMCQs.map(mcq => ({
+                await api.post(`/teacher/mcq/${selectedExistingSet}/add`, {
+                    mcqs: generatedMCQs.map(mcq => ({
                         question: mcq.question,
                         options: [mcq.option_a, mcq.option_b, mcq.option_c, mcq.option_d],
                         correctAnswer: mcq.correct_answer,
@@ -193,7 +188,7 @@ export default function GenerateMCQ() {
         }
 
         try {
-            await api.post(`/teacher-mcq/mcq/${assignMCQSet._id}/assign`, {
+            await api.post(`/teacher/mcq/${assignMCQSet._id}/assign`, {
                 studentIds: selectedStudents,
                 dueDate,
                 duration: parseInt(duration)

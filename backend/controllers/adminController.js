@@ -186,6 +186,8 @@ export const registerAdmin = async (req, res) => {
     const token = generateToken({
       id: admin._id,
       role: "admin",
+      name: admin.fullName,
+      email: admin.email
     });
 
     res.cookie("token", token, cookieOptions);
@@ -194,6 +196,7 @@ export const registerAdmin = async (req, res) => {
       success: true,
       user: {
         id: admin._id,
+        _id: admin._id,
         name: admin.fullName,
         email: admin.email,
         role: "admin",
@@ -262,6 +265,8 @@ export const loginAdmin = async (req, res) => {
     const token = generateToken({
       id: admin._id,
       role: "admin",
+      name: admin.fullName,
+      email: admin.email
     });
 
     res.cookie("token", token, cookieOptions);
@@ -270,6 +275,7 @@ export const loginAdmin = async (req, res) => {
       success: true,
       user: {
         id: admin._id,
+        _id: admin._id,
         name: admin.fullName,
         email: admin.email,
         role: "admin",
@@ -319,7 +325,6 @@ export const getMyInstitution = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch institution" });
   }
 };
-
 
 
 

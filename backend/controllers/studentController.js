@@ -56,6 +56,8 @@ export const registerStudent = async (req, res) => {
         const token = generateToken({
             id: newStudent._id,
             role: "student",
+            name: newStudent.fullName,
+            email: newStudent.email
         });
 
         res.cookie("token", token, cookieOptions);
@@ -136,6 +138,8 @@ export const loginStudent = async (req, res) => {
         const token = generateToken({
             id: student._id,
             role: "student",
+            name: student.fullName,
+            email: student.email
         });
 
         res.cookie("token", token, cookieOptions);
@@ -145,6 +149,7 @@ export const loginStudent = async (req, res) => {
             message: "Login successful",
             user: {
                 id: student._id,
+                _id: student._id,
                 name: student.fullName,
                 email: student.email,
                 role: "student",
