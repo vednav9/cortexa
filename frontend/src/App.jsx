@@ -34,8 +34,6 @@ import QASection from "./components/institution/student/QASection";
 // Shared Pages (All Roles)
 import Announcements from "./components/institution/shared/Announcements";
 import QueryDesk from "./components/institution/shared/QueryDesk";
-import QAPortal from "./components/institution/shared/QAPortal";
-import AIChatbot from "./components/institution/shared/AIChatbot";
 
 // Academic Structure Pages
 import AcademicStructure from "./components/institution/academic/AcademicStructure";
@@ -126,9 +124,7 @@ function App() {
                 <Route path="upload-notes" element={<UploadNotes />} />
                 <Route path="generate-mcq" element={<GenerateMCQ />} />
                 <Route path="voice-to-text" element={<VoiceToText />} />
-                <Route path="qa-portal" element={<QAPortal />} />
                 <Route path="assessment" element={<Assessment />} />
-                <Route path="ai-chatbot" element={<AIChatbot />} />
                 <Route path="rag-chatbot" element={<RAGChatbot />} />
                 <Route path="mcq-test" element={<MCQTest />} />
                 <Route path="qa-section" element={<QASection />} />

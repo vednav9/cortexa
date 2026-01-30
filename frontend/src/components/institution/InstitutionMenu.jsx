@@ -156,8 +156,8 @@ export default function InstitutionMenu({
             items: [],
           },
           {
-            id: "qa-portal",
-            label: "Q&A Portal",
+            id: "qa-section",
+            label: "Q&A Section",
             icon: FiMessageSquare,
             items: [],
           },
@@ -168,8 +168,8 @@ export default function InstitutionMenu({
             items: [],
           },
           {
-            id: "ai-chatbot",
-            label: "AI Chatbot Personal",
+            id: "rag-chatbot",
+            label: "RAG Chatbot",
             icon: HiSparkles,
             items: [],
           },

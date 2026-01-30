@@ -42,14 +42,18 @@ function Faculty() {
   };
 
   const filteredFaculty = Array.isArray(faculty) 
-    ? faculty.filter(member => {
-        const matchesSearch = 
-          member.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          member.email?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesDept = !filterDepartment || member.department?._id === filterDepartment;
-        return matchesSearch && matchesDept;
-      })
-    : [];
+  ? faculty.filter(member => {
+      const matchesSearch =
+        member.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        member.email?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesDept =
+        !filterDepartment || member.department?._id === filterDepartment;
+
+      return matchesSearch && matchesDept;
+    })
+  : [];
+
 
   if (loading) {
     return (
@@ -111,11 +115,16 @@ function Faculty() {
             className="bg-gradient-to-br from-white to-indigo-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border border-indigo-100/50"
           >
             <div className="flex flex-col items-center text-center mb-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-red-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg mb-3">
-                {member.name?.charAt(0).toUpperCase() || member.email?.charAt(0).toUpperCase()}
-              </div>
+            <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-red-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg mb-3">
+  {member.fullName?.charAt(0).toUpperCase() ||
+    member.email?.charAt(0).toUpperCase()}
+</div>
+
+<h3 className="text-lg font-bold text-gray-800 mb-1">
+  {member.fullName || 'N/A'}
+</h3>
               
-              <h3 className="text-lg font-bold text-gray-800 mb-1">{member.name || 'N/A'}</h3>
+              
               
               {member.department && (
                 <p className="text-sm text-indigo-600 font-semibold bg-indigo-50 px-3 py-1 rounded-md">
@@ -146,23 +155,32 @@ function Faculty() {
               )}
             </div>
 
-            {member.courses && member.courses.length > 0 && (
-              <div className="pt-4 border-t border-gray-200">
-                <p className="text-xs text-gray-600 font-semibold mb-2 uppercase">Teaching Courses</p>
-                <div className="flex flex-wrap gap-2">
-                  {member.courses.slice(0, 3).map((course, idx) => (
-                    <span key={idx} className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-md font-medium">
-                      {course.code || course.name}
-                    </span>
-                  ))}
-                  {member.courses.length > 3 && (
-                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">
-                      +{member.courses.length - 3} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+            {member.authorizedCourses && member.authorizedCourses.length > 0 && (
+  <div className="pt-4 border-t border-gray-200">
+    <p className="text-xs text-gray-600 font-semibold mb-2 uppercase">
+      Teaching Courses
+    </p>
+
+    <div className="flex flex-wrap gap-2">
+      {member.authorizedCourses.slice(0, 3).map((course, idx) => (
+        <span
+          key={course._id || idx}
+          className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-md font-medium"
+        >
+          {course.code ? `${course.code} – ${course.name}` : course.name}
+        </span>
+      ))}
+
+      {member.authorizedCourses.length > 3 && (
+        <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">
+          +{member.authorizedCourses.length - 3} more
+        </span>
+      )}
+    </div>
+  </div>
+)}
+
+
           </motion.div>
         ))}
       </div>
@@ -225,7 +243,8 @@ function Faculty() {
               </div>
               <p className="text-gray-600 text-sm mb-1">With Courses</p>
               <p className="text-2xl font-bold text-blue-600">
-                {faculty.filter(f => f.courses?.length > 0).length}
+                {faculty.filter(f => f.authorizedCourses?.length > 0).length
+                }
               </p>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import Admin from "../models/admin.js";
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
+import Course from "../models/course.js";
 import Institution from "../models/institution.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
@@ -296,10 +297,11 @@ export const getMyInstitution = async (req, res) => {
 
     const institutionId = admin.institution._id;
 
-    // 🔥 DYNAMIC COUNTS
-    const [studentsCount, teachersCount] = await Promise.all([
+    // 🔥 DYNAMIC COUNTS (NOW COMPLETE)
+    const [studentsCount, teachersCount, coursesCount] = await Promise.all([
       Student.countDocuments({ institution: institutionId }),
       Teacher.countDocuments({ institution: institutionId }),
+      Course.countDocuments({ institution: institutionId }),
     ]);
 
     res.json({
@@ -308,7 +310,7 @@ export const getMyInstitution = async (req, res) => {
         stats: {
           students: studentsCount,
           teachers: teachersCount,
-          courses: 0, // placeholder for future
+          courses: coursesCount, // ✅ FIXED
         },
       },
     });
@@ -342,7 +344,7 @@ export const getUsers = async (req, res) => {
     const { role = "all", status, department, search } = req.query;
 
     // 🔐 Verify admin
-    const admin = await Admin.findById(req.user.id);
+    const admin = await Admin.findById(req.user._id);
     if (!admin || admin.institution.toString() !== institutionId) {
       return res.status(403).json({ message: "Access denied" });
     }
@@ -368,15 +370,25 @@ export const getUsers = async (req, res) => {
     let students = [];
     let teachers = [];
 
-    // 👥 FETCH USERS
+    // 👥 FETCH STUDENTS
     if (role === "all" || role === "student") {
-      students = await Student.find(buildQuery()).lean();
+      students = await Student.find(buildQuery())
+        .populate("department", "name code")
+        .populate("semester", "name academicYear")
+        .lean();
+
       students = students.map(u => ({ ...u, role: "student" }));
     }
 
+    // 👥 FETCH TEACHERS
     if (role === "all" || role === "teacher") {
-      teachers = await Teacher.find(buildQuery()).lean();
-      teachers = teachers.map(u => ({ ...u, role: "teacher" }));
+      teachers = await Teacher.find(buildQuery())
+      .populate("department", "name")
+      .populate("authorizedCourses", "name code")
+      .lean();
+    
+    teachers = teachers.map(u => ({ ...u, role: "teacher" }));
+    
     }
 
     users = [...students, ...teachers];
@@ -401,6 +413,7 @@ export const getUsers = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch users" });
   }
 };
+
 
 
 

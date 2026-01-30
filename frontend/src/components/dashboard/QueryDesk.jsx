@@ -56,11 +56,15 @@ export default function QueryDesk({ institution }) {
   };
 
   useEffect(() => {
-    if (institution?._id) {
-      fetchQueries();
-      fetchStats();
+    if (!institution?._id) {
+      setLoading(false); // ⬅️ STOP infinite loader
+      return;
     }
+  
+    fetchQueries();
+    fetchStats();
   }, [institution?._id, filterStatus, searchTerm]);
+  
 
   const categories = [
     { value: 'general', label: 'General', color: 'blue' },
