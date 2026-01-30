@@ -1,66 +1,64 @@
 import express from "express";
-import { registerTeacher, loginTeacher, logoutTeacher, } from "../controllers/teacherController.js";
+import {
+  registerTeacher,
+  loginTeacher,
+  logoutTeacher,
+  getMyInstitution,
+  getAuthorizedCourses,
+  getStudentsInAuthorizedCourses,
+  uploadNotes,
+  getDocuments,
+  deleteDocument,
+  generateMCQs,
+  saveMCQSet,
+  addToMCQSet,
+  getMCQSets,
+  assignMCQSet,
+  getMCQResults,
+} from "../controllers/teacherController.js";
 import { authenticate } from "../middleware/auth.js";
-import Membership from "../models/membership.js";
-import Institution from "../models/institution.js";
+import multer from "multer";
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
+// ===============================
+// AUTH ROUTES
+// ===============================
 router.post("/register", registerTeacher);
 router.post("/login", loginTeacher);
 router.post("/logout", logoutTeacher);
-// router.get("/me", authenticate, getTeacherProfile);
 
-// Get teacher's institutions
-router.get("/institutions", authenticate, async (req, res) => {
-  try {
-    const memberships = await Membership.find({
-      user: req.user.userId,
-      userType: 'Teacher',
-      status: 'active'
-    }).populate('institution');
+// ===============================
+// INSTITUTION ROUTES
+// ===============================
+router.get("/my-institution", authenticate, getMyInstitution);
 
-    const institutions = memberships.map(m => ({
-      id: m.institution._id,
-      name: m.institution.name,
-      code: m.institution.code,
-      logo: m.institution.logo || m.institution.initials,
-      role: m.role,
-      status: m.status,
-      joinedAt: m.joinedAt
-    }));
+// ===============================
+// COURSES ROUTES
+// ===============================
+router.get("/authorized-courses", authenticate, getAuthorizedCourses);
 
-    res.json({ institutions });
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching institutions', error: error.message });
-  }
-});
+// ===============================
+// STUDENTS ROUTES
+// ===============================
+router.get("/students", authenticate, getStudentsInAuthorizedCourses);
 
-// Leave institution
-router.delete("/institutions/:id", authenticate, async (req, res) => {
-  try {
-    const membership = await Membership.findOneAndDelete({
-      user: req.user.userId,
-      institution: req.params.id,
-      userType: 'Teacher'
-    });
+// ===============================
+// DOCUMENT/NOTES ROUTES
+// ===============================
+router.post("/notes/upload", authenticate, upload.single("file"), uploadNotes);
+router.get("/notes/:courseId", authenticate, getDocuments);
+router.delete("/notes/:documentId", authenticate, deleteDocument);
 
-    if (!membership) {
-      return res.status(404).json({ message: 'Not a member of this institution' });
-    }
-
-    // Update institution stats
-    const institution = await Institution.findById(req.params.id);
-    if (institution) {
-      institution.teachers.pull(req.user.userId);
-      institution.stats.totalTeachers = Math.max(0, institution.stats.totalTeachers - 1);
-      await institution.save();
-    }
-
-    res.json({ message: 'Left institution successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Error leaving institution', error: error.message });
-  }
-});
+// ===============================
+// MCQ ROUTES
+// ===============================
+router.post("/mcq/generate", authenticate, generateMCQs);
+router.post("/mcq/save", authenticate, saveMCQSet);
+router.post("/mcq/:mcqSetId/add", authenticate, addToMCQSet);
+router.get("/mcq/sets", authenticate, getMCQSets);
+router.post("/mcq/:mcqSetId/assign", authenticate, assignMCQSet);
+router.get("/mcq/:mcqSetId/results", authenticate, getMCQResults);
 
 export default router;

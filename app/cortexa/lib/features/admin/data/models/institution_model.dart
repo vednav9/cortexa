@@ -23,6 +23,7 @@ class InstitutionModel extends Equatable {
   
   // Branding (Step 3)
   final String? logoPath;
+  final String? bannerImagePath;
   final String customUrlSlug;
   final String primaryBrandColor;
   
@@ -48,6 +49,7 @@ class InstitutionModel extends Equatable {
     
     // Branding
     this.logoPath,
+    this.bannerImagePath,
     required this.customUrlSlug,
     required this.primaryBrandColor,
   });
@@ -70,6 +72,7 @@ class InstitutionModel extends Equatable {
       postalCode: json['postal_code'] ?? '',
       shortDescription: json['short_description'] ?? '',
       logoPath: json['logo_path'],
+      bannerImagePath: json['banner_image_path'],
       customUrlSlug: json['custom_url_slug'] ?? '',
       primaryBrandColor: json['primary_brand_color'] ?? '#34d399',
     );
@@ -93,6 +96,7 @@ class InstitutionModel extends Equatable {
       'postal_code': postalCode,
       'short_description': shortDescription,
       'logo_path': logoPath,
+      'banner_image_path': bannerImagePath,
       'custom_url_slug': customUrlSlug,
       'primary_brand_color': primaryBrandColor,
     };
@@ -115,6 +119,7 @@ class InstitutionModel extends Equatable {
     String? postalCode,
     String? shortDescription,
     String? logoPath,
+    String? bannerImagePath,
     String? customUrlSlug,
     String? primaryBrandColor,
   }) {
@@ -135,6 +140,7 @@ class InstitutionModel extends Equatable {
       postalCode: postalCode ?? this.postalCode,
       shortDescription: shortDescription ?? this.shortDescription,
       logoPath: logoPath ?? this.logoPath,
+      bannerImagePath: bannerImagePath ?? this.bannerImagePath,
       customUrlSlug: customUrlSlug ?? this.customUrlSlug,
       primaryBrandColor: primaryBrandColor ?? this.primaryBrandColor,
     );
@@ -158,6 +164,7 @@ class InstitutionModel extends Equatable {
     postalCode,
     shortDescription,
     logoPath,
+    bannerImagePath,
     customUrlSlug,
     primaryBrandColor,
   ];

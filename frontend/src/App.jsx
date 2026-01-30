@@ -12,15 +12,47 @@ import InstitutionHome from "./components/institution/InstitutionHome";
 import CourseCatalog from "./components/institution/CourseCatalog";
 import CourseDetails from "./components/institution/CourseDetails";
 
+// Institution Pages - Organized by Role
+// Admin Pages
+import ManageUsers from "./components/institution/admin/ManageUsers";
+import InvitePeople from "./components/institution/admin/InvitePeople";
+import { NotificationProvider } from "./context/NotificationContext";
+
+
+// Teacher Pages
+import SeeStudents from "./components/institution/teacher/SeeStudents";
+import UploadNotes from "./components/institution/teacher/UploadNotes";
+import GenerateMCQ from "./components/institution/teacher/GenerateMCQ";
+import VoiceToText from "./components/institution/teacher/VoiceToText";
+import Assessment from "./components/institution/teacher/Assessment";
+
+// Student Pages
+import RAGChatbot from "./components/institution/student/RAGChatbot";
+import MCQTest from "./components/institution/student/MCQTest";
+import QASection from "./components/institution/student/QASection";
+
+// Shared Pages (All Roles)
+import Announcements from "./components/institution/shared/Announcements";
+import QueryDesk from "./components/institution/shared/QueryDesk";
+
+// Academic Structure Pages
+import AcademicStructure from "./components/institution/academic/AcademicStructure";
+import Departments from "./components/institution/academic/academic-structure/Departments";
+import AcademicCourses from "./components/institution/academic/academic-structure/Courses";
+import Semesters from "./components/institution/academic/academic-structure/Semesters";
+import Calendar from "./components/institution/academic/academic-structure/Calendar";
+import Faculty from "./components/institution/academic/academic-structure/Faculty";
+
 
 // Dashboard
 import CortexaDashboard from "./components/dashboard/CortexaDashboard";
-
+import CortexaAdminLogin from "./components/dashboard/cortexaAdminLogin";
+import InstitutionDashboard from "./components/institution/Dashboard";
 // Layout
 import Navbar from "./components/Navbar";
 
 // Auth
-import { AuthProvider, useAuth } from "./context/authcontext";
+import { useAuth } from "./context/authcontext";
 
 /* ===========================
    Protected Route (OLD STYLE)
@@ -48,7 +80,7 @@ const ProtectedRoute = ({ children }) => {
 =========================== */
 function App() {
   return (
-    <AuthProvider>
+    <NotificationProvider>
       <Router>
         <div className="min-h-screen flex flex-col">
           <Navbar />
@@ -58,6 +90,7 @@ function App() {
               {/* Public */}
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/cortexaAdminLogin" element={<CortexaAdminLogin />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/institute-signup" element={<InstituteSignUp />} />
 
@@ -74,6 +107,27 @@ function App() {
               {/* Institution Routes */}   {/* PUBLIC INSTITUTION ROUTES */}
               <Route path="/:slug" element={<InstitutionLayout />}>
                 <Route index element={<InstitutionHome />} />
+                <Route path="announcements" element={<Announcements />} />
+                <Route path="invite-people" element={<InvitePeople />} />
+                <Route path="manage-users" element={<ManageUsers />} />
+                <Route path="query-desk" element={<QueryDesk />} />
+                <Route path="academic-structure" element={<AcademicStructure />} />
+
+                {/* Academic Structure Nested Routes */}
+                <Route path="academic-structure/departments" element={<Departments />} />
+                <Route path="academic-structure/courses" element={<AcademicCourses />} />
+                <Route path="academic-structure/semesters" element={<Semesters />} />
+                <Route path="academic-structure/calendar" element={<Calendar />} />
+                <Route path="academic-structure/faculty" element={<Faculty />} />
+
+                <Route path="see-students" element={<SeeStudents />} />
+                <Route path="upload-notes" element={<UploadNotes />} />
+                <Route path="generate-mcq" element={<GenerateMCQ />} />
+                <Route path="voice-to-text" element={<VoiceToText />} />
+                <Route path="assessment" element={<Assessment />} />
+                <Route path="rag-chatbot" element={<RAGChatbot />} />
+                <Route path="mcq-test" element={<MCQTest />} />
+                <Route path="qa-section" element={<QASection />} />
                 <Route path="courses" element={<CourseCatalog />} />
                 <Route path="courses/:courseCode" element={<CourseDetails />} />
               </Route>
@@ -85,10 +139,10 @@ function App() {
           </main>
         </div>
       </Router>
+    </NotificationProvider>
 
 
 
-    </AuthProvider>
   );
 }
 

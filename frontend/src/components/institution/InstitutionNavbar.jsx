@@ -1,163 +1,223 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { FiHome, FiBook, FiUsers, FiMenu, FiX, FiLogIn, FiArrowLeft } from 'react-icons/fi';
+// InstitutionNavbar.jsx - Top navbar for institution pages
+import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  FiArrowLeft,
+  FiUser,
+  FiSettings,
+  FiLogOut,
+  FiChevronDown,
+} from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/authcontext";
+import axios from "axios";
 
-export default function InstitutionNavbar({ institution, institutionSlug, onMenuClick }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const location = useLocation();
-  const isActive = (path) => location.pathname === path;
+export default function InstitutionNavbar({
+  institution,
+  onBackToDashboard,
+  brandColor = "#10b981",
+}) {
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
+  const navigate = useNavigate();
+  const { user, setUser } = useAuth();
 
-  const brandColor = institution.branding.primaryColor || '#003D7A';
-  const accentColor = institution.branding.accentColor || brandColor;
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target)
+      ) {
+        setProfileMenuOpen(false);
+      }
+    };
 
-  const navLinks = [
-    { path: `/${institutionSlug}`, label: 'Home', icon: FiHome },
-    { path: `/${institutionSlug}/courses`, label: 'Courses', icon: FiBook },
-  ];
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await axios.post(
+        "http://localhost:5000/api/auth/logout",
+        {},
+        { withCredentials: true }
+      );
+    } catch (_) {}
+    setUser(null);
+    navigate("/login", { replace: true });
+  };
 
   return (
-    <>
-      {/* Brand Color Top Bar */}
-      <div
-        className="h-1 w-full"
-        style={{
-          background: `linear-gradient(to right, ${brandColor}, ${accentColor})`
-        }}
-      />
+    <nav
+      className="bg-white border-b-2 shadow-sm z-50"
+      style={{ borderBottomColor: `${brandColor}20` }}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* LEFT: Back Button + Institution Info */}
+          <div className="flex items-center space-x-4">
+            {/* Back Button */}
+            <motion.button
+              onClick={onBackToDashboard}
+              whileHover={{ scale: 1.05, x: -2 }}
+              whileTap={{ scale: 0.95 }}
+              className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-all group"
+              aria-label="Back to Dashboard"
+            >
+              <FiArrowLeft className="w-5 h-5 text-gray-600 group-hover:text-gray-900 transition-colors" />
+              <span className="hidden sm:inline text-sm font-medium text-gray-600 group-hover:text-gray-900">
+                Back
+              </span>
+            </motion.button>
 
-      <nav className="bg-white shadow-md sticky top-0 z-50 border-b-4" style={{ borderBottomColor: brandColor }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Left Side - Menu + Logo */}
-            <div className="flex items-center space-x-4">
-              {/* Mobile Menu Button (for sidebar) */}
-              <button
-                onClick={onMenuClick}
-                className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                style={{ color: brandColor }}
+            {/* Divider */}
+            <div className="h-8 w-px bg-gray-200"></div>
+
+            {/* Institution Logo + Name */}
+            <div className="flex items-center space-x-3">
+              {/* Logo */}
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0"
+                style={{
+                  background: `linear-gradient(135deg, ${brandColor}, ${brandColor}dd)`,
+                }}
               >
-                <FiMenu className="w-6 h-6" />
-              </button>
-
-              {/* Divider */}
-              {/* <div className="hidden md:block h-8 w-px bg-gray-300" /> */}
-
-              {/* Institution Logo & Name */}
-              <Link to={`/${institutionSlug}`} className="flex items-center space-x-3 group">
-                {institution.logo ? (
+                {institution?.branding?.logo ? (
                   <img
-                    src={institution.logo}
+                    src={institution.branding.logo}
                     alt={institution.name}
-                    className="h-12 w-12 rounded-lg object-cover shadow-md group-hover:shadow-lg transition-shadow"
+                    className="w-full h-full object-cover rounded-xl"
                   />
                 ) : (
-                  <div
-                    className="h-12 w-12 rounded-lg flex items-center justify-center font-bold text-white text-xl shadow-md"
-                    style={{ backgroundColor: brandColor }}
-                  >
-                    {institution.shortName?.charAt(0) || 'U'}
-                  </div>
+                  institution?.code ||
+                  institution?.name?.substring(0, 2).toUpperCase()
                 )}
-                <div>
-                  <h1
-                    className="text-xl font-bold group-hover:opacity-80 transition-opacity"
-                    style={{ color: brandColor }}
-                  >
-                    {institution.shortName || institution.name}
-                  </h1>
-                  <p className="text-xs text-gray-500 hidden lg:block">{institution.name}</p>
-                </div>
-              </Link>
+              </div>
+
+              {/* Institution Name + Type */}
+              <div className="hidden md:block">
+                <h1 className="text-lg font-bold text-gray-900 leading-tight">
+                  {institution?.name || "Institution"}
+                </h1>
+                <p className="text-xs text-gray-500 capitalize">
+                  {institution?.type || "Learning Platform"}
+                </p>
+              </div>
             </div>
+          </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center space-x-6">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${
-                    isActive(link.path)
-                      ? 'font-semibold shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                  style={isActive(link.path) ? { color: brandColor, backgroundColor: `${brandColor}15` } : {}}
-                >
-                  <link.icon className="w-4 h-4" />
-                  <span>{link.label}</span>
-                </Link>
-              ))}
-
-              {/* Login Button */}
-              <Link
-                to={`/${institutionSlug}/login`}
-                className="px-5 py-2 rounded-lg font-semibold text-white hover:opacity-90 transition-all shadow-md hover:shadow-lg"
-                style={{ backgroundColor: brandColor }}
-              >
-                Login
-              </Link>
-            </div>
-
-            {/* Mobile Menu Button (for navbar menu) */}
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              style={{ color: brandColor }}
+          {/* RIGHT: Profile Dropdown */}
+          <div className="relative" ref={profileMenuRef}>
+            <motion.button
+              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-gray-50 transition-all"
             >
-              {isOpen ? <FiX className="w-6 h-6" /> : <FiMenu className="w-6 h-6" />}
-            </button>
+              {/* User Avatar */}
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-semibold text-sm shadow-sm"
+                style={{
+                  background: `linear-gradient(135deg, ${brandColor}, ${brandColor}cc)`,
+                }}
+              >
+                {user?.name?.charAt(0).toUpperCase() || "U"}
+              </div>
+
+              {/* User Info (Hidden on mobile) */}
+              <div className="hidden lg:block text-left">
+                <p className="text-sm font-semibold text-gray-900 leading-tight">
+                  {user?.name || "User"}
+                </p>
+                <p className="text-xs text-gray-500 capitalize">
+                  {user?.role || "Member"}
+                </p>
+              </div>
+
+              {/* Dropdown Icon */}
+              <motion.div
+                animate={{ rotate: profileMenuOpen ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <FiChevronDown className="w-4 h-4 text-gray-600" />
+              </motion.div>
+            </motion.button>
+
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {profileMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border-2 border-gray-100 overflow-hidden z-[200]"
+                >
+                  {/* User Info Header */}
+                  <div
+                    className="px-4 py-3 border-b border-gray-100"
+                    style={{ backgroundColor: `${brandColor}08` }}
+                  >
+                    <p className="text-sm font-bold text-gray-900">
+                      {user?.name || "User"}
+                    </p>
+                    <p className="text-xs text-gray-600">{user?.email}</p>
+                    <p
+                      className="text-xs font-semibold mt-1 capitalize"
+                      style={{ color: brandColor }}
+                    >
+                      {user?.role || "Member"}
+                    </p>
+                  </div>
+
+                  {/* Menu Items */}
+                  <div className="py-2">
+                    {/* Profile */}
+                    <motion.button
+                      whileHover={{ x: 4, backgroundColor: `${brandColor}05` }}
+                      onClick={() => {
+                        setProfileMenuOpen(false);
+                        // Navigate to profile
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:text-gray-900 transition-all text-left"
+                    >
+                      <FiUser className="w-4 h-4" />
+                      <span className="text-sm font-medium">My Profile</span>
+                    </motion.button>
+
+                    {/* Settings */}
+                    <motion.button
+                      whileHover={{ x: 4, backgroundColor: `${brandColor}05` }}
+                      onClick={() => {
+                        setProfileMenuOpen(false);
+                        // Navigate to settings
+                      }}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:text-gray-900 transition-all text-left"
+                    >
+                      <FiSettings className="w-4 h-4" />
+                      <span className="text-sm font-medium">Settings</span>
+                    </motion.button>
+                  </div>
+
+                  {/* Logout (Highlighted at bottom) */}
+                  <div className="border-t border-gray-100">
+                    <motion.button
+                      whileHover={{ x: 4, backgroundColor: "#fef2f2" }}
+                      onClick={handleLogout}
+                      className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:text-red-700 transition-all text-left font-medium"
+                    >
+                      <FiLogOut className="w-4 h-4" />
+                      <span className="text-sm">Logout</span>
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
-
-        {/* Mobile Menu */}
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="md:hidden bg-gray-50 border-t border-gray-200"
-          >
-            <div className="px-4 py-4 space-y-2">
-              <Link
-                to="/"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center space-x-2 text-gray-600 hover:bg-gray-100 px-4 py-2 rounded-lg"
-              >
-                <FiArrowLeft className="w-4 h-4" />
-                <span>Back to Cortexa</span>
-              </Link>
-
-              <div className="h-px bg-gray-300 my-2" />
-
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors"
-                  style={
-                    isActive(link.path)
-                      ? { color: brandColor, backgroundColor: `${brandColor}15` }
-                      : { color: '#4B5563' }
-                  }
-                >
-                  <link.icon className="w-5 h-5" />
-                  <span className="font-medium">{link.label}</span>
-                </Link>
-              ))}
-
-              <Link
-                to={`/${institutionSlug}/login`}
-                onClick={() => setIsOpen(false)}
-                className="flex items-center justify-center w-full px-4 py-3 rounded-lg font-semibold text-white mt-3 shadow-md"
-                style={{ backgroundColor: brandColor }}
-              >
-                Login
-              </Link>
-            </div>
-          </motion.div>
-        )}
-      </nav>
-    </>
+      </div>
+    </nav>
   );
 }

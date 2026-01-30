@@ -8,7 +8,12 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/custom_button.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../admin/data/models/institution_model.dart';
+import '../../../dashboard/data/models/institution_display_model.dart';
+import '../../../dashboard/presentation/widgets/institution_card.dart';
+import '../../data/models/auth_models.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_state.dart';
 
@@ -27,6 +32,8 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
   Color _brandColor = const Color(0xFF34d399);
   String? _logoPath;
   File? _logoFile;
+  String? _bannerImagePath;
+  File? _bannerImageFile;
   
   @override
   void initState() {
@@ -41,6 +48,34 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
   void dispose() {
     _urlSlugController.dispose();
     super.dispose();
+  }
+
+  InstitutionDisplayModel _buildPreviewModel() {
+    final brandHex = (_brandColor.toARGB32() & 0x00FFFFFF)
+        .toRadixString(16)
+        .padLeft(6, '0');
+    return InstitutionDisplayModel(
+      id: 'preview',
+      name: widget.previousData.institutionName.isEmpty 
+          ? 'Your Institution' 
+          : widget.previousData.institutionName,
+      type: widget.previousData.institutionType,
+      logoUrl: _logoFile?.path,
+      bannerImageUrl: _bannerImageFile?.path,
+      city: widget.previousData.city,
+      country: widget.previousData.country,
+      description: widget.previousData.shortDescription.isEmpty
+          ? 'Your institution description will appear here'
+          : widget.previousData.shortDescription,
+      customUrlSlug: _urlSlugController.text.isEmpty 
+          ? 'your-institution' 
+          : _urlSlugController.text,
+      primaryBrandColor: '#$brandHex',
+      isOwnInstitution: true,
+      studentCount: 0,
+      teacherCount: 0,
+      createdAt: DateTime.now(),
+    );
   }
   
   Future<void> _pickColor() async {
@@ -97,9 +132,50 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       );
       
       if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final fileSize = await file.length();
+        
+        // Check file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+        if (fileSize > maxSize) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File is too large. Maximum size is 5MB.'),
+                backgroundColor: AppColors.error,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+        
+        // Validate image dimensions (recommended: square or close to square for logos)
+        try {
+          final bytes = await file.readAsBytes();
+          final image = await decodeImageFromList(bytes);
+          
+          // Warn if dimensions are too large (performance impact)
+          if (image.width > 2048 || image.height > 2048) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Image is very large (${image.width}x${image.height}). Consider using a smaller image for better performance.',
+                  ),
+                  backgroundColor: AppColors.warning,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          print('⚠️ Could not decode image: $e');
+        }
+        
         setState(() {
-          _logoPath = result.files.single.name;
-          _logoFile = File(result.files.single.path!);
+          _logoPath = result.files.single.path;
+          _logoFile = file;
         });
         
         if (mounted) {
@@ -123,49 +199,269 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
       }
     }
   }
-  
-  void _handleSubmit() {
-    if (_formKey.currentState!.validate()) {
-      final institutionData = widget.previousData.copyWith(
-        customUrlSlug: _urlSlugController.text.trim(),
-        primaryBrandColor: '#${_brandColor.value.toRadixString(16).substring(2)}',
-        logoPath: _logoPath,
+
+  Future<void> _pickBannerImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
       );
       
-      // Create the Admin account in the mock auth repository so they can log in
-      try {
-        final repo = context.read<AuthBloc>().authRepository;
-        repo.registerAdminUser(
-          username: institutionData.adminUsername,
-          email: institutionData.adminEmail,
-          password: institutionData.adminPassword,
-          fullName: institutionData.adminFullName,
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final fileSize = await file.length();
+        
+        // Check file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+        if (fileSize > maxSize) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File is too large. Maximum size is 5MB.'),
+                backgroundColor: AppColors.error,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+        
+        // Validate image dimensions (banners should be landscape)
+        try {
+          final bytes = await file.readAsBytes();
+          final image = await decodeImageFromList(bytes);
+          
+          // Warn if dimensions are too large
+          if (image.width > 2560 || image.height > 1440) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Image is very large (${image.width}x${image.height}). Consider using a smaller image for better performance.',
+                  ),
+                  backgroundColor: AppColors.warning,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+          
+          // Info message for very tall images (not ideal for banners)
+          if (image.height > image.width) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Tip: Landscape images work best for banners.'),
+                  backgroundColor: AppColors.info,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          print('⚠️ Could not decode image: $e');
+        }
+        
+        setState(() {
+          _bannerImagePath = result.files.single.path;
+          _bannerImageFile = file;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Banner image uploaded successfully!'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
-      } catch (e) {
-        // Non-fatal in demo; proceed to success message
-        // In production, handle and show proper error
-        // ignore: avoid_print
-        print('⚠️ Failed to pre-create admin user: $e');
       }
-
-      // TODO: Submit institution data to backend
-      // For now, just show success message
-      print('Institution Registration Data: ${institutionData.toJson()}');
-      if (_logoFile != null) {
-        print('Logo file path: ${_logoFile!.path}');
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Institution registration successful! You can now sign in as Admin.'),
-          backgroundColor: AppColors.success,
+    }
+  }
+  
+  void _handleSubmit() async {
+    if (_formKey.currentState!.validate()) {
+      // Show professional loading dialog
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => WillPopScope(
+          onWillPop: () async => false,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1F2937),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.3),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.2),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Animated loading indicator
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Title
+                  const Text(
+                    'Creating Your Institution',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Description
+                  const Text(
+                    'Uploading files and setting up your account...',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  
+                  // Sub text
+                  const Text(
+                    'This may take a moment',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       );
-      
-      // Navigate to login
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) context.go('/login');
-      });
+
+      final brandHex = (_brandColor.toARGB32() & 0x00FFFFFF)
+          .toRadixString(16)
+          .padLeft(6, '0');
+      final institutionData = widget.previousData.copyWith(
+        customUrlSlug: _urlSlugController.text.trim(),
+        primaryBrandColor: '#$brandHex',
+        logoPath: _logoPath,
+        bannerImagePath: _bannerImagePath,
+      );
+
+      try {
+        print('🏫 Starting admin registration...');
+        print('📧 Email: ${institutionData.adminEmail}');
+        print('🏢 Institution: ${institutionData.institutionName}');
+        
+        final authRepo = getIt<AuthRepository>();
+
+        final adminRequest = AdminRegisterRequest(
+          fullName: institutionData.adminFullName,
+          email: institutionData.adminEmail,
+          password: institutionData.adminPassword,
+          username: institutionData.adminUsername,
+          jobTitle: institutionData.adminJobTitle,
+          phone: institutionData.adminPhoneNumber,
+          institutionName: institutionData.institutionName,
+          institutionType: institutionData.institutionType,
+          website: institutionData.institutionWebsite.isEmpty ? null : institutionData.institutionWebsite,
+          address1: institutionData.addressLine1,
+          city: institutionData.city,
+          state: institutionData.stateProvince,
+          country: institutionData.country,
+          postalCode: institutionData.postalCode.isEmpty ? null : institutionData.postalCode,
+          description: institutionData.shortDescription.isEmpty ? null : institutionData.shortDescription,
+          customURL: institutionData.customUrlSlug.isEmpty ? null : institutionData.customUrlSlug,
+          brandColor: institutionData.primaryBrandColor,
+        );
+
+        print('📤 Sending registration request...');
+        final result = await authRepo.registerAdminWithInstitution(
+          adminRequest,
+          logoFile: _logoFile,
+          bannerFile: _bannerImageFile,
+          bannerImagePath: institutionData.bannerImagePath,
+        );
+
+        print('✅ Registration successful!');
+        print('👤 User: ${result['user']}');
+        print('🔑 Token received: ${result['token']?.isNotEmpty ?? false}');
+
+        // Close loading dialog
+        if (!mounted) return;
+        Navigator.of(context).pop();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Institution registered successfully!'),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Navigate to admin dashboard
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        context.go('/admin-dashboard');
+        
+      } catch (e) {
+        print('❌ Registration error: $e');
+        
+        // Close loading dialog safely
+        if (mounted && Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+          
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Registration failed: ${e.toString()}'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
     }
   }
   
@@ -193,6 +489,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
         },
         child: SafeArea(
           child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
             padding: EdgeInsets.all(screenWidth * 0.06),
             child: Form(
               key: _formKey,
@@ -284,7 +581,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _logoPath ?? 'No file chosen', 
+                                    _logoPath != null ? _logoPath!.split('\\').last.split('/').last : 'No file chosen', 
                                     style: const TextStyle(color: AppColors.textPrimary),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -299,6 +596,69 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                             ),
                             TextButton(
                               onPressed: _pickLogo,
+                              child: const Text('Choose File', style: TextStyle(color: AppColors.primary)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Banner Background Image
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Banner Background Image', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                image: _bannerImageFile != null
+                                    ? DecorationImage(
+                                        image: FileImage(_bannerImageFile!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: _bannerImageFile == null 
+                                  ? const Icon(Icons.panorama_outlined, color: AppColors.primary)
+                                  : null,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _bannerImagePath != null ? _bannerImagePath!.split('\\').last.split('/').last : 'No file chosen', 
+                                    style: const TextStyle(color: AppColors.textPrimary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Recommended: 1200x400px, PNG or JPG', 
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _pickBannerImage,
                               child: const Text('Choose File', style: TextStyle(color: AppColors.primary)),
                             ),
                           ],
@@ -361,7 +721,7 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '#${_brandColor.value.toRadixString(16).substring(2).toUpperCase()}',
+                                    '#${((_brandColor.toARGB32() & 0x00FFFFFF).toRadixString(16).padLeft(6, '0')).toUpperCase()}',
                                     style: const TextStyle(
                                       color: AppColors.textPrimary,
                                       fontFamily: 'monospace',
@@ -394,76 +754,36 @@ class _InstituteSignupStep3PageState extends State<InstituteSignupStep3Page> {
                   
                   const SizedBox(height: 24),
                   
-                  // Brand Preview
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Brand Preview', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: _brandColor,
-                                borderRadius: BorderRadius.circular(10),
-                                image: _logoFile != null
-                                    ? DecorationImage(
-                                        image: FileImage(_logoFile!),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                              ),
-                              child: _logoFile == null 
-                                  ? Center(
-                                      child: Text(
-                                        widget.previousData.institutionName.isNotEmpty 
-                                          ? widget.previousData.institutionName[0].toUpperCase()
-                                          : 'A',
-                                        style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                                      ),
-                                    )
-                                  : null,
+                  // Live Card Preview
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.preview, color: AppColors.primary, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Card Preview',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    widget.previousData.institutionName.isEmpty ? 'Your Institution' : widget.previousData.institutionName,
-                                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-                                  ),
-                                  if (widget.previousData.shortDescription.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 2),
-                                      child: Text(
-                                        widget.previousData.shortDescription,
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textPrimary),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'cortexa.com/${_urlSlugController.text.isEmpty ? "your-institution" : _urlSlugController.text}',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'This is how your institution will appear in the Browse Colleges list',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                      InstitutionCard(
+                        institution: _buildPreviewModel(),
+                        userRole: 'admin',
+                      ),
+                    ],
                   ),
                   
                   const SizedBox(height: 32),

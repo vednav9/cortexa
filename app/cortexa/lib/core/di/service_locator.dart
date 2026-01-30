@@ -1,10 +1,13 @@
 import 'package:get_it/get_it.dart';
 import 'package:dio/dio.dart';
+import 'package:http/http.dart' as http;
 import '../services/hive_storage_service.dart';
 import '../services/settings_service.dart';
 import '../services/email_service.dart';
 import '../providers/app_state_provider.dart';
+import '../network/api_client.dart';
 import '../../features/auth/data/repositories/mock_auth_repository.dart';
+import '../../features/auth/data/repositories/auth_repository.dart';
 
 final getIt = GetIt.instance;
 
@@ -20,7 +23,13 @@ Future<void> setupServiceLocator() async {
   
   // ===== Core Services =====
   
-  // Dio (HTTP Client)
+  // HTTP Client
+  print('🌐 Creating HTTP Client...');
+  final httpClient = http.Client();
+  getIt.registerSingleton<http.Client>(httpClient);
+  print('✅ HTTP Client registered');
+  
+  // Dio (HTTP Client - legacy)
   print('🌐 Creating Dio instance...');
   final dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 30),
@@ -44,6 +53,16 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<SettingsService>(settingsService);
   print('✅ SettingsService registered');
   
+  
+  // API Client
+  print('🔌 Creating ApiClient...');
+  getIt.registerSingleton<ApiClient>(
+    ApiClient(
+      client: getIt<http.Client>(),
+      storage: getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ ApiClient registered');
   // Email Service
   print('📧 Creating EmailService...');
   getIt.registerSingleton<EmailService>(
@@ -51,7 +70,17 @@ Future<void> setupServiceLocator() async {
   );
   print('✅ EmailService registered');
   
-  // ===== Providers =====
+  // Real Auth Repository (with backend API)
+  print('🔐 Creating AuthRepository...');
+  getIt.registerSingleton<AuthRepository>(
+    AuthRepository(
+      getIt<HiveStorageService>(),
+      getIt<ApiClient>(),
+    ),
+  );
+  print('✅ AuthRepository registered');
+  
+  // Mock Auth Repository (for fallback/testing) =====
   
   // App State Provider
   print('🌐 Creating AppStateProvider...');

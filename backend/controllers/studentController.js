@@ -1,20 +1,30 @@
 import Student from "../models/student.js";
+import Teacher from "../models/teacher.js";
+import Admin from "../models/admin.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
+import Institution from "../models/institution.js";
 
 /* ===============================
    REGISTER STUDENT
 ================================ */
 export const registerStudent = async (req, res) => {
     try {
-        const { fullName, email, password } = req.body;
+        const { fullName, email, password, username } = req.body;
 
         if (!fullName || !email || !password) {
             return res.status(400).json({
                 success: false,
                 message: "All fields are required",
+            });
+        }
+
+        if (!username || username.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                message: "Username is required",
             });
         }
 
@@ -26,16 +36,28 @@ export const registerStudent = async (req, res) => {
             });
         }
 
+        // Check if username is already taken
+        const existingUsername = await Student.findOne({ username });
+        if (existingUsername) {
+            return res.status(400).json({
+                success: false,
+                message: "Username already exists",
+            });
+        }
+
         const newStudent = await Student.create({
             fullName,
             email,
             password,
+            username,
             role: "student",
         });
 
         const token = generateToken({
             id: newStudent._id,
             role: "student",
+            name: newStudent.fullName,
+            email: newStudent.email
         });
 
         res.cookie("token", token, cookieOptions);
@@ -73,11 +95,35 @@ export const loginStudent = async (req, res) => {
             });
         }
 
-        const student = await Student.findOne({ email }).select("+password");
+        const student = await Student.findOne({ 
+            $or: [{ email }, { username: email }] 
+        }).select("+password");
+        
         if (!student) {
+            // Check if email/username exists in other roles
+            const teacher = await Teacher.findOne({ 
+                $or: [{ email }, { username: email }] 
+            });
+            if (teacher) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This account is registered as a Teacher. Please select Teacher role.",
+                });
+            }
+
+            const admin = await Admin.findOne({ 
+                $or: [{ email }, { username: email }] 
+            });
+            if (admin) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This account is registered as an Admin. Please select Admin role.",
+                });
+            }
+
             return res.status(404).json({
                 success: false,
-                message: "Student not found",
+                message: "Invalid email/username or password",
             });
         }
 
@@ -85,13 +131,15 @@ export const loginStudent = async (req, res) => {
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
-                message: "Invalid credentials",
+                message: "Invalid email/username or password",
             });
         }
 
         const token = generateToken({
             id: student._id,
             role: "student",
+            name: student.fullName,
+            email: student.email
         });
 
         res.cookie("token", token, cookieOptions);
@@ -101,6 +149,7 @@ export const loginStudent = async (req, res) => {
             message: "Login successful",
             user: {
                 id: student._id,
+                _id: student._id,
                 name: student.fullName,
                 email: student.email,
                 role: "student",
@@ -187,3 +236,82 @@ export const logoutStudent = (req, res) => {
         });
     }
 };
+
+/* ===============================
+   GET MY INSTITUTION (STUDENT)
+================================ */
+export const getMyInstitution = async (req, res) => {
+    try {
+        const student = await Student.findById(req.user.id).populate("institution");
+
+        if (!student || !student.institution) {
+            return res.json({ institution: null });
+        }
+
+        const institutionId = student.institution._id;
+
+        const [studentsCount, teachersCount] = await Promise.all([
+            Student.countDocuments({ institution: institutionId }),
+            Teacher.countDocuments({ institution: institutionId }),
+        ]);
+
+        res.json({
+            institution: {
+                ...student.institution.toObject(),
+                role: "student",
+                stats: {
+                    students: studentsCount,
+                    teachers: teachersCount,
+                    courses: 0,
+                },
+            },
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Failed to fetch institution" });
+    }
+};
+
+
+
+/* ===============================
+   LEAVE INSTITUTION (STUDENT)
+================================ */
+export const leaveInstitution = async (req, res) => {
+    try {
+        const student = await Student.findById(req.user.id);
+
+        if (!student || !student.institution) {
+            return res.status(400).json({
+                message: "You are not part of any institution",
+            });
+        }
+
+        const institutionId = student.institution;
+
+        // Remove student from institution stats
+        const institution = await Institution.findById(institutionId);
+        if (institution) {
+            institution.students.pull(req.user.id);
+            institution.stats.totalStudents = Math.max(
+                0,
+                institution.stats.totalStudents - 1
+            );
+            await institution.save();
+        }
+
+        // Clear student institution
+        student.institution = null;
+        await student.save();
+
+        res.json({
+            message: "Left institution successfully",
+        });
+    } catch (error) {
+        console.error("Leave Institution Error:", error);
+        res.status(500).json({
+            message: "Failed to leave institution",
+        });
+    }
+};
+

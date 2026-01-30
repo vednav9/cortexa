@@ -51,11 +51,10 @@ export const authAPI = {
 // ============================================
 export const studentAPI = {
   getProfile: () => api.get('/student/me'),
-  getInstitutions: () => api.get('/student/institutions'),
-  leaveInstitution: (institutionId) => api.delete(`/student/institutions/${institutionId}`),
-  joinInstitution: (institutionId) => api.post('/student/join-institution', { institutionId }),
+  getMyInstitution: () => api.get('/student/my-institution'),
+  leaveInstitution: () => api.delete('/student/leave-institution'),
   getInvitations: () => api.get('/student/invitations'),
-  respondToInvitation: (invitationId, response) => 
+  respondToInvitation: (invitationId, response) =>
     api.post(`/student/invitation/${invitationId}/respond`, { response }),
 };
 
@@ -64,7 +63,7 @@ export const studentAPI = {
 // ============================================
 export const teacherAPI = {
   getProfile: () => api.get('/teacher/me'),
-  getInstitutions: () => api.get('/teacher/institutions'),
+  getMyInstitution: () => api.get('/teacher/my-institution'),
   leaveInstitution: (institutionId) => api.delete(`/teacher/institutions/${institutionId}`),
   getStudents: (institutionId) => api.get(`/teacher/students/${institutionId}`),
   getCourses: (institutionId) => api.get(`/teacher/courses/${institutionId}`),
@@ -76,9 +75,11 @@ export const teacherAPI = {
 // ============================================
 export const adminAPI = {
   getProfile: () => api.get('/admin/me'),
-  getUsers: (params) => api.get('/admin/users', { params }),
-  getStudents: () => api.get('/admin/students'),
-  getTeachers: () => api.get('/admin/teachers'),
+  getUsers: (institutionId, params) =>
+    api.get(`/admin/institutions/${institutionId}/users`, { params }),
+
+  getStudents: (institutionId) => api.get(`/admin/institutions/${institutionId}/students`),
+  getTeachers: (institutionId) => api.get(`/admin/institutions/${institutionId}/teachers`),
   getPendingRequests: () => api.get('/admin/pending-requests'),
   deleteStudent: (studentId) => api.delete(`/admin/students/${studentId}`),
   deleteTeacher: (teacherId) => api.delete(`/admin/teachers/${teacherId}`),
@@ -86,12 +87,13 @@ export const adminAPI = {
   bulkUpload: (formData) => api.post('/admin/bulk-upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
+  bulkAddUsers: (institutionId, usersData) => api.post(`/admin/institutions/${institutionId}/users/bulk`, usersData),
   deleteUser: (userId) => api.delete(`/admin/user/${userId}`),
   updateUser: (userId, userData) => api.put(`/admin/user/${userId}`, userData),
-  
+
   // Institution Management
   getInstitution: () => api.get('/admin/institution'),
-  
+
   // Admin Management APIs
   addAdmin: (adminData) => api.post('/admin/add-admin', adminData),
   getAllAdmins: () => api.get('/admin/admins'),
@@ -121,13 +123,37 @@ export const institutionAPI = {
 // ============================================
 // INVITATION APIs
 // ============================================
+// ============================================
+// INVITATION APIs
+// ============================================
 export const invitationAPI = {
   getAll: (status) => api.get('/invitations', { params: { status } }),
   create: (data) => api.post('/invitations', data),
   accept: (id) => api.post(`/invitations/${id}/accept`),
   reject: (id) => api.post(`/invitations/${id}/reject`),
   delete: (id) => api.delete(`/invitations/${id}`),
+  bulkInviteUsers: (data) => api.post('/invitations/bulk', data),
 };
+
+
+// ============================================
+// ADMIN INVITATION APIs
+// ============================================
+export const adminInvitationAPI = {
+  getAll: (status) =>
+    api.get('/invitations/admin', {
+      params: status ? { status } : {},
+    }),
+
+  getPending: () =>
+    api.get('/invitations/admin', {
+      params: { status: 'pending' },
+    }),
+
+  cancel: (invitationId) =>
+    api.delete(`/invitations/${invitationId}`),
+};
+
 
 // ============================================
 // NOTIFICATION APIs (Legacy - uses invitations)
@@ -137,6 +163,118 @@ export const notificationAPI = {
   accept: (id) => invitationAPI.accept(id),
   reject: (id) => invitationAPI.reject(id),
   delete: (id) => invitationAPI.delete(id),
+};
+
+// ============================================
+// ANNOUNCEMENT APIs
+// ============================================
+export const announcementAPI = {
+  getAll: (institutionId, params) => api.get(`/announcements/${institutionId}`, { params }),
+  create: (data) => api.post('/announcements', data),
+  update: (id, data) => api.put(`/announcements/${id}`, data),
+  delete: (id) => api.delete(`/announcements/${id}`),
+  markAsViewed: (id) => api.post(`/announcements/${id}/view`),
+};
+
+// ============================================
+// USER MANAGEMENT APIs
+// ============================================
+export const userManagementAPI = {
+  getAll: (institutionId, params) => api.get(`/admin/institutions/${institutionId}/users`, { params }),
+  add: (institutionId, data) => api.post(`/admin/institutions/${institutionId}/users`, data),
+  update: (userId, data) => api.put(`/admin/users/${userId}`, data),
+  removeFromInstitution: (userId, role) =>
+    api.patch(`/admin/users/${userId}/${role}/remove`),
+
+  deletePermanently: (userId, role) =>
+    api.delete(`/admin/users/${userId}/${role}`),
+
+  toggleStatus: (userId, role) => api.patch(`/admin/users/${userId}/${role}/status`),
+};
+
+// ============================================
+// ACADEMIC STRUCTURE APIs
+// ============================================
+export const academicAPI = {
+  // Departments
+  getDepartments: (institutionId) => api.get(`/academic/institutions/${institutionId}/departments`),
+  createDepartment: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/departments`, data),
+  updateDepartment: (departmentId, data) => api.put(`/academic/departments/${departmentId}`, data),
+  deleteDepartment: (departmentId) => api.delete(`/academic/departments/${departmentId}`),
+
+  // Courses - UPDATED
+  getCourses: (institutionId, params = {}) => api.get(`/academic/institutions/${institutionId}/courses`, { params }),
+  getAllCourses: (institutionId) => api.get(`/academic/institutions/${institutionId}/courses`), // NEW: Get all courses without filters
+  createCourse: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/courses`, data),
+  updateCourse: (courseId, data) => api.put(`/academic/courses/${courseId}`, data),
+  deleteCourse: (courseId) => api.delete(`/academic/courses/${courseId}`),
+
+  // Semesters
+  getSemesters: (institutionId) => api.get(`/academic/institutions/${institutionId}/semesters`),
+  createSemester: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/semesters`, data),
+  updateSemester: (semesterId, data) => api.put(`/academic/semesters/${semesterId}`, data),
+  deleteSemester: (semesterId) => api.delete(`/academic/semesters/${semesterId}`),
+
+  // Academic Calendar
+  getCalendarEvents: (institutionId, params) => api.get(`/academic/institutions/${institutionId}/calendar`, { params }),
+  createCalendarEvent: (institutionId, data) => api.post(`/academic/institutions/${institutionId}/calendar`, data),
+  updateCalendarEvent: (eventId, data) => api.put(`/academic/calendar/${eventId}`, data),
+  deleteCalendarEvent: (eventId) => api.delete(`/academic/calendar/${eventId}`),
+
+  // Faculty
+  getFaculty: (institutionId, params) => api.get(`/academic/institutions/${institutionId}/faculty`, { params }),
+};
+
+
+// ============================================
+// QUERY DESK APIs
+// ============================================
+export const queryAPI = {
+  getAll: (institutionId, params) => api.get(`/queries/institution/${institutionId}`, { params }),
+  getStats: (institutionId) => api.get(`/queries/institution/${institutionId}/stats`),
+  create: (institutionId, data) => api.post(`/queries/institution/${institutionId}`, data),
+  getById: (queryId) => api.get(`/queries/${queryId}`),
+  addReply: (queryId, data) => api.post(`/queries/${queryId}/reply`, data),
+  updateStatus: (queryId, status) => api.patch(`/queries/${queryId}/status`, { status }),
+  delete: (queryId) => api.delete(`/queries/${queryId}`),
+};
+
+// Q&A API
+export const qaAPI = {
+  // Get Q&As by course
+  getByCourse: (courseId, params) => api.get(`/qa/course/${courseId}`, { params }),
+  
+  // Get Q&As by institution
+  getByInstitution: (institutionId, params) => api.get(`/qa/institution/${institutionId}`, { params }),
+  
+  // Get stats
+  getStatsByCourse: (courseId) => api.get(`/qa/course/${courseId}/stats`),
+  getStatsByInstitution: (institutionId) => api.get(`/qa/institution/${institutionId}/stats`),
+  
+  // Get single Q&A
+  getById: (qaId) => api.get(`/qa/${qaId}`),
+  
+  // Get user's Q&As
+  getMyQuestions: (params) => api.get('/qa/my-questions', { params }),
+  
+  // Create Q&A
+  create: (courseId, data) => api.post(`/qa/course/${courseId}`, data),
+  
+  // Add answer
+  addAnswer: (qaId, data) => api.post(`/qa/${qaId}/answer`, data),
+  
+  // Accept answer
+  acceptAnswer: (qaId, answerId) => api.patch(`/qa/${qaId}/answer/${answerId}/accept`),
+  
+  // Upvote
+  upvoteQA: (qaId) => api.post(`/qa/${qaId}/upvote`),
+  upvoteAnswer: (qaId, answerId) => api.post(`/qa/${qaId}/answer/${answerId}/upvote`),
+  
+  // Update status
+  updateStatus: (qaId, status) => api.patch(`/qa/${qaId}/status`, { status }),
+  
+  // Delete
+  delete: (qaId) => api.delete(`/qa/${qaId}`)
 };
 
 export default api;

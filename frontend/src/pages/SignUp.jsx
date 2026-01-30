@@ -20,6 +20,7 @@ const SignUp = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -70,6 +71,7 @@ const SignUp = () => {
         apiUrl,
         {
           fullName: formData.fullName,
+          username: formData.username,
           email: formData.email,
           password: formData.password,
           confirmPassword: formData.confirmPassword,
@@ -171,7 +173,29 @@ const SignUp = () => {
                 />
               </div>
             </div>
-
+            {/* Username Input */}
+            <div>
+              <label className="text-gray-300 text-sm font-medium mb-2 block">
+                Username
+              </label>
+              <div className="relative">
+                <FiUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
+                <input
+                  type="text"
+                  name="username"
+                  placeholder="Choose a unique username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  required
+                  pattern="[a-zA-Z0-9_]{3,20}"
+                  title="Username must be 3-20 characters (letters, numbers, underscore only)"
+                  className="w-full pl-12 pr-4 py-3.5 bg-gray-800/50 border border-gray-700/50 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1.5">
+                3-20 characters (letters, numbers, underscore)
+              </p>
+            </div>
             {/* Email Input */}
             <div>
               <label className="text-gray-300 text-sm font-medium mb-2 block">

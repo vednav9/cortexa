@@ -1,51 +1,81 @@
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
 import Admin from "../models/admin.js";
+import CortexaAdmin from "../models/cortexaAdmin.js";
 
 export const getMe = async (req, res) => {
-    try {
-        const { id, role } = req.user;
-        let user = null;
+  try {
+    // Get user ID from different possible field names
+    const userId = req.user.id || req.user._id || req.user.userId;
+    const { role } = req.user;
 
-        if (role === "student") {
-            user = await Student.findById(id).select("fullName email role");
-        } else if (role === "teacher") {
-            user = await Teacher.findById(id).select("fullName email role");
-        } else if (role === "admin") {
-            user = await Admin.findById(id)
-                .populate("institution")
-                .select("fullName email role institution");
-        }
-        else {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid role",
-            });
-        }
+    console.log("🔍 getMe request:", { userId, role });
 
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            user: {
-                id: user._id,
-                name: user.fullName,
-                email: user.email,
-                role: user.role,
-                institution: role === "admin" ? user.institution : null,
-            },
-        });
-
-    } catch (err) {
-        console.error("GET /me error:", err);
-        res.status(500).json({
-            success: false,
-            message: "Server error",
-        });
+    if (!userId) {
+      console.log("❌ No user ID in token");
+      return res.status(401).json({
+        success: false,
+        message: "Invalid authentication token",
+      });
     }
+
+    let user = null;
+
+    if (role === "student") {
+      user = await Student.findById(userId)
+        .populate("institution")
+        .select("fullName name email role institution");
+    } else if (role === "teacher") {
+      user = await Teacher.findById(userId)
+        .populate("institution")
+        .select("fullName name email role institution");
+    } else if (role === "admin") {
+      user = await Admin.findById(userId)
+        .populate("institution")
+        .select("fullName name email role institution");
+    } else if (role === "cortexa_admin") {
+      user = await CortexaAdmin.findById(userId).select(
+        "fullName name email role"
+      );
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role",
+      });
+    }
+
+    if (!user) {
+      console.log("❌ User not found in database");
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    console.log("✅ User found:", {
+      id: user._id,
+      name: user.fullName || user.name,
+      email: user.email,
+    });
+
+    res.status(200).json({
+      success: true,
+      user: {
+        _id: user._id,
+        id: user._id,
+        name: user.fullName || user.name,
+        fullName: user.fullName || user.name,
+        email: user.email,
+        role: user.role || role,
+        institution: user.institution || null,
+      },
+    });
+  } catch (err) {
+    console.error("❌ GET /me error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
+  }
 };

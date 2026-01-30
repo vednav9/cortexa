@@ -16,58 +16,96 @@ import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../context/authcontext";
 import Sidebar from "./Sidebar";
 import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
-import MyInstitutions from "./MyInstitutions";
+import MyInstitutionsTab from "./MyInstitutionsTab";
 import Notifications from "./Notifications";
-import AdminDashboard from "./AdminDashboard";
-import StudentDashboard from "./StudentDashboard";
-import TeacherDashboard from "./TeacherDashboard";
+import QueryDesk from "./QueryDesk";
+import { socket } from "../../socket";
+import { useNotification } from "../../context/NotificationContext";
+
+
 import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
 const CortexaDashboard = () => {
-    const { user, loading } = useAuth();
+    const { user, loading, refreshUser } = useAuth();
+
     console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("dashboard");
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const [myInstitutions, setMyInstitutions] = useState([]);
     const [institutionsLoading, setInstitutionsLoading] = useState(true);
-    const [selectedInstitution, setSelectedInstitution] = useState(null);
+    const [browseCount, setBrowseCount] = useState(0);
+
+    // const [globalNotifications, setGlobalNotifications] = useState([]);
+    // const [unreadCount, setUnreadCount] = useState(0);
+    const { notificationCount, clearNotifications } = useNotification();
+
+
     const profileMenuRef = useRef(null);
 
     // Fetch institutions based on user role
+    // 🔁 Re-fetch institutions (used by dashboard + events)
+    const fetchInstitutions = async () => {
+        if (!user || !user.role) return;
+      
+        try {
+          setInstitutionsLoading(true);
+          const role = user.role.toLowerCase();
+      
+          if (role === "student") {
+            const { data } = await studentAPI.getMyInstitution();
+            setMyInstitutions(
+              data.institution
+                ? [{ ...data.institution, role: "student" }]
+                : []
+            );
+          }
+          else if (role === "teacher") {
+            const { data } = await teacherAPI.getMyInstitution();
+            setMyInstitutions(
+              data.institution
+                ? [{ ...data.institution, role: "teacher" }]
+                : []
+            );
+          }
+          else if (role === "admin") {
+            const { data } = await adminAPI.getInstitution();
+            setMyInstitutions(
+              data.institution
+                ? [{ ...data.institution, role: "admin" }]
+                : []
+            );
+          }
+          else {
+            setMyInstitutions([]);
+          }
+        } catch (err) {
+          console.error("Failed to fetch institutions:", err);
+          setMyInstitutions([]);
+        } finally {
+          setInstitutionsLoading(false);
+        }
+      };
+      
+
     useEffect(() => {
-        const fetchInstitutions = async () => {
-            if (!user || !user.role) return;
-            
-            try {
-                setInstitutionsLoading(true);
-                const role = user.role.toLowerCase();
-                
-                if (role === 'student') {
-                    const { data } = await studentAPI.getInstitutions();
-                    setMyInstitutions(data.institutions || []);
-                } else if (role === 'teacher') {
-                    const { data } = await teacherAPI.getInstitutions();
-                    setMyInstitutions(data.institutions || []);
-                } else if (role === 'admin') {
-                    // Fetch admin's institution
-                    const { data } = await adminAPI.getInstitution();
-                    setMyInstitutions(data.institution ? [data.institution] : []);
-                } else {
-                    setMyInstitutions([]);
-                }
-            } catch (err) {
-                console.error('Failed to fetch institutions:', err);
-                toast.error('Failed to load institutions');
-                setMyInstitutions([]);
-            } finally {
-                setInstitutionsLoading(false);
-            }
-        };
-        
+        if (!user) return;
+
         fetchInstitutions();
+
+        // 👂 listen for accept-invite refresh
+        const handleRefresh = () => {
+            fetchInstitutions();
+        };
+
+        window.addEventListener("institution-updated", handleRefresh);
+
+        return () => {
+            window.removeEventListener("institution-updated", handleRefresh);
+        };
     }, [user]);
+
 
     // Close profile menu when clicking outside
     useEffect(() => {
@@ -86,46 +124,83 @@ const CortexaDashboard = () => {
         };
     }, [profileMenuOpen]);
 
-    // Handle institution click - route to specific dashboard based on role
-    const handleInstitutionClick = (institution) => {
-        setSelectedInstitution(institution);
-    };
+    // useEffect(() => {
+    //     if (!user?.id) return;
 
-    // Handle logout from role-specific dashboard
-    const handleLogout = () => {
-        // Logout logic handled by Sidebar
-    };
+    //     if (!socket.connected) {
+    //         socket.connect();
+    //         console.log("🔌 SOCKET CONNECT CALLED");
+    //     }
 
-    // If institution is selected, show role-specific dashboard
-    if (selectedInstitution) {
-        const role = user?.role?.toLowerCase();
-        
-        if (role === 'admin') {
-            return (
-                <AdminDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        } else if (role === 'teacher') {
-            return (
-                <TeacherDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        } else if (role === 'student') {
-            return (
-                <StudentDashboard 
-                    institution={selectedInstitution}
-                    onLogout={handleLogout}
-                    onBack={() => setSelectedInstitution(null)}
-                />
-            );
-        }
-    }
+    //     socket.on("connect", () => {
+    //         console.log("🟢 SOCKET CONNECTED:", socket.id);
+    //         socket.emit("join:user", user.id);
+    //     });
+
+    //     socket.on("invitation:new", (data) => {
+    //         console.log("📩 INVITATION RECEIVED:", data);
+    //         setUnreadCount(prev => prev + 1);
+    //     });
+
+    //     return () => {
+    //         socket.off("connect");
+    //         socket.off("invitation:new");
+    //     };
+    // }, [user?.id]);
+
+
+
+
+    // useEffect(() => {
+    //     if (!user?.id) return;
+
+    //     const handleInvitation = (invitation) => {
+    //         console.log("📩 INVITATION RECEIVED:", invitation);
+
+    //         setGlobalNotifications(prev => [invitation, ...prev]);
+    //         setUnreadCount(prev => prev + 1);
+
+    //         toast.success("📩 New invitation received");
+    //     };
+
+    //     socket.on("invitation:new", handleInvitation);
+
+    //     return () => {
+    //         socket.off("invitation:new", handleInvitation);
+    //     };
+    // }, [user?.id]);
+
+    // useEffect(() => {
+    //     if (!user?._id) return;
+
+    //     // connect socket only once
+    //     if (!socket.connected) {
+    //         socket.connect();
+    //     }
+
+    //     // join personal room
+    //     socket.emit("join:user", user._id);
+    //     console.log("👤 Joined socket room:", user._id);
+
+    //     const handleInvitation = (invitation) => {
+    //         console.log("📩 INVITATION RECEIVED:", invitation);
+
+    //         setGlobalNotifications(prev => [invitation, ...prev]);
+    //         setUnreadCount(prev => prev + 1);
+
+    //         toast.success("📩 New invitation received");
+    //     };
+
+    //     socket.on("invitation:new", handleInvitation);
+
+    //     return () => {
+    //         socket.off("invitation:new", handleInvitation);
+    //     };
+    // }, [user?._id]);
+
+
+
+
 
     if (loading) {
         return (
@@ -140,9 +215,29 @@ const CortexaDashboard = () => {
         );
     }
 
-    if (!user) return null;
+    useEffect(() => {
+        if (!user?._id) return;
 
-    const browseCount = 5;
+        socket.on("auth:refresh", async () => {
+            console.log("🔄 AUTH REFRESH RECEIVED");
+
+            // force reload auth user from backend
+            await refreshUser(); // 👈 explained below
+        });
+
+        return () => {
+            socket.off("auth:refresh");
+        };
+    }, [user?._id]);
+
+
+
+
+
+
+
+
+
 
     return (
         <div className="flex w-full h-screen bg-gray-50 lg:pl-80">
@@ -152,7 +247,9 @@ const CortexaDashboard = () => {
                 onClose={() => setSidebarOpen(false)}
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
+                unreadCount={notificationCount}
             />
+
 
             {/* MAIN CONTENT */}
             <div className="flex-1 flex flex-col">
@@ -257,18 +354,28 @@ const CortexaDashboard = () => {
                     {activeTab === "dashboard" && (
                         <div className="max-w-7xl mx-auto space-y-6">
                             {/* Hero Header with Stats */}
-                            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-xl">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
-                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24"></div>
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5 }}
+                                className="relative overflow-hidden bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-600 rounded-2xl p-8 text-white shadow-2xl"
+                            >
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -ml-24 -mb-24"></div>
+                                <div className="absolute top-1/2 left-1/2 w-32 h-32 bg-white/5 rounded-full blur-2xl transform -translate-x-1/2 -translate-y-1/2"></div>
 
                                 <div className="relative z-10">
                                     <div className="flex items-center gap-3 mb-6">
-                                        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                                            <HiSparkles className="w-6 h-6" />
-                                        </div>
+                                        <motion.div
+                                            animate={{ rotate: [0, 10, -10, 0] }}
+                                            transition={{ duration: 2, repeat: Infinity }}
+                                            className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg"
+                                        >
+                                            <HiSparkles className="w-7 h-7" />
+                                        </motion.div>
                                         <div>
                                             <h1 className="text-3xl font-bold">Welcome to Cortexa</h1>
-                                            <p className="text-emerald-100 text-sm mt-1">
+                                            <p className="text-emerald-50 text-sm mt-1">
                                                 A unified platform to discover institutions and manage your academic access
                                             </p>
                                         </div>
@@ -276,32 +383,57 @@ const CortexaDashboard = () => {
 
                                     {/* Stats */}
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">My Institutions</p>
-                                            <p className="text-3xl font-bold mt-1">{myInstitutions.length}</p>
-                                        </div>
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">Available</p>
-                                            <p className="text-3xl font-bold mt-1">{browseCount}</p>
-                                        </div>
-                                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                                            <p className="text-emerald-100 text-xs font-medium uppercase">Notifications</p>
-                                            <p className="text-3xl font-bold mt-1">0</p>
-                                        </div>
+                                        <motion.div
+                                            whileHover={{ scale: 1.03, y: -2 }}
+                                            className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                        >
+                                            <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">My Institutions</p>
+                                            <p className="text-4xl font-bold mt-2">{myInstitutions.length}</p>
+                                            <p className="text-emerald-100 text-xs mt-1">Active memberships</p>
+                                        </motion.div>
+                                        <motion.div
+                                            whileHover={{ scale: 1.03, y: -2 }}
+                                            className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                        >
+                                            <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Available</p>
+                                            <p className="text-4xl font-bold mt-2">{browseCount}</p>
+                                            <p className="text-emerald-100 text-xs mt-1">Discover more</p>
+                                        </motion.div>
+                                        <motion.div
+                                            whileHover={{ scale: 1.03, y: -2 }}
+                                            className="bg-white/15 backdrop-blur-md rounded-xl p-5 border border-white/30 shadow-lg cursor-pointer"
+                                        >
+                                            <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Notifications</p>
+                                            <p className="text-4xl font-bold mt-2">{notificationCount}</p>
+
+                                            <p className="text-emerald-100 text-xs mt-1">
+                                                {notificationCount > 0 ? "New notifications" : "All caught up!"}
+                                            </p>
+
+                                        </motion.div>
                                     </div>
                                 </div>
-                            </div>
+                            </motion.div>
 
                             {/* MY INSTITUTIONS */}
-                            <section className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
+                            <motion.section
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, delay: 0.1 }}
+                                className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg hover:shadow-xl transition-shadow overflow-hidden"
+                            >
+                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-emerald-50 to-green-50">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                            <FiBook className="w-6 h-6 text-emerald-600" />
-                                        </div>
+                                        <motion.div
+                                            whileHover={{ rotate: [0, -10, 10, 0] }}
+                                            transition={{ duration: 0.5 }}
+                                            className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg"
+                                        >
+                                            <FiBook className="w-7 h-7 text-white" />
+                                        </motion.div>
                                         <div>
-                                            <h2 className="text-xl font-bold text-gray-900">My Institutions</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
+                                            <h2 className="text-2xl font-bold text-gray-900">My Institutions</h2>
+                                            <p className="text-sm text-gray-600 mt-1">
                                                 Institutions you are currently associated with
                                             </p>
                                         </div>
@@ -309,23 +441,31 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <MyInstitutions 
-                                        institutions={myInstitutions} 
-                                        onSelectInstitution={handleInstitutionClick}
+                                    <MyInstitutionsTab
+                                        institutions={myInstitutions}
                                     />
                                 </div>
-                            </section>
+                            </motion.section>
 
                             {/* BROWSE INSTITUTIONS */}
-                            <section className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden">
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
+                            <motion.section
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5, delay: 0.2 }}
+                                className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg hover:shadow-xl transition-shadow overflow-hidden"
+                            >
+                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                                            <FiGrid className="w-6 h-6 text-blue-600" />
-                                        </div>
+                                        <motion.div
+                                            whileHover={{ rotate: [0, -10, 10, 0] }}
+                                            transition={{ duration: 0.5 }}
+                                            className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg"
+                                        >
+                                            <FiGrid className="w-7 h-7 text-white" />
+                                        </motion.div>
                                         <div>
-                                            <h2 className="text-xl font-bold text-gray-900">Browse Institutions</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
+                                            <h2 className="text-2xl font-bold text-gray-900">Browse Institutions</h2>
+                                            <p className="text-sm text-gray-600 mt-1">
                                                 Discover universities, colleges, and learning platforms
                                             </p>
                                         </div>
@@ -333,55 +473,29 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                    <BrowseInstitutionsTab
-                                        excludeInstitutionId={user?.institution?._id}
-                                    />
+                                <BrowseInstitutionsTab
+  excludeInstitutionId={user?.institution?._id}
+  onCountChange={setBrowseCount}
+/>
 
                                 </div>
-                            </section>
+                            </motion.section>
                         </div>
                     )}
 
                     {/* NOTIFICATIONS TAB */}
-                    {activeTab === "notifications" && <Notifications />}
+                    {activeTab === "notifications" && (
+                        <Notifications
+                            clearUnread={clearNotifications}
+                        />
+                    )}
+
 
                     {/* QUERY DESK */}
                     {activeTab === "querydesk" && (
-                        <div className="max-w-4xl mx-auto">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="bg-white rounded-2xl border-2 border-gray-100 shadow-lg overflow-hidden"
-                            >
-                                <div className="border-b border-gray-100 p-6 bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                                            <FiHelpCircle className="w-6 h-6 text-purple-600" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-gray-900">Query Desk</h2>
-                                            <p className="text-sm text-gray-600 mt-0.5">
-                                                Get help and support for your queries
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+  <QueryDesk institution={myInstitutions[0]} />
+)}
 
-                                <div className="p-12 text-center">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-purple-100 to-purple-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                        <FiHelpCircle className="w-10 h-10 text-purple-600" />
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                                        Coming Soon
-                                    </h3>
-                                    <p className="text-gray-500 max-w-md mx-auto">
-                                        Raise questions, support requests, or academic queries here.
-                                        This feature will be available soon.
-                                    </p>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
                 </main>
             </div>
         </div>

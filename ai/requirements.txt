@@ -16,16 +16,22 @@ python-docx>=0.8.11
 pdfplumber>=0.10.0
 
 # Utilities
-numpy>=1.24.0
+numpy<2
 pandas>=2.0.0
 tqdm>=4.65.0
 python-dotenv>=1.0.0
 
 # Optional but recommended
 accelerate>=0.20.0
-bitsandbytes>=0.41.0  # For 8-bit quantization
+ # bitsandbytes>=0.41.0  # For 8-bit quantization
 
 # For AI Assistant
 duckduckgo-search>=4.0.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
+
+# For Voice-to-Text
+openai-whisper>=20231117
+
+# Using chocolatey
+# choco install ffmpeg

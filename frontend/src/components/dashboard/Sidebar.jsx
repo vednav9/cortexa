@@ -1,19 +1,27 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiHome, FiBell, FiHelpCircle, FiLogOut, FiX } from "react-icons/fi";
+import {
+  FiHome, FiBell, FiHelpCircle, FiLogOut, FiX
+} from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/authcontext";
 
-export default function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
+export default function Sidebar({
+  isOpen,
+  onClose,
+  activeTab,
+  setActiveTab,
+  unreadCount = 0 // ✅ ADD THIS
+}) {
+
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
 
   if (!user) return null;
 
-  const brandColor = "#10b981"; // Emerald-500
-
+  // Universal menu items for all users (Cortexa Dashboard)
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: FiHome },
     { id: "notifications", label: "Notifications", icon: FiBell },
@@ -54,21 +62,18 @@ export default function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
           ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
         style={{
-          borderRightColor: `${brandColor}20`,
+          borderRightColor: "#10b98120",
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center space-x-3">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
-              style={{
-                background: `linear-gradient(135deg, ${brandColor}, ${brandColor}cc)`,
-              }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-emerald-500 to-green-600"
             >
               <HiSparkles className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="font-bold text-lg text-emerald-600">Cortexa</p>
               <p className="text-xs text-gray-500 capitalize">{user?.role || "User"}</p>
             </div>
@@ -96,58 +101,36 @@ export default function Sidebar({ isOpen, onClose, activeTab, setActiveTab }) {
                   setActiveTab(item.id);
                   onClose?.();
                 }}
-                whileHover={{ x: 4 }}
-                whileTap={{ scale: 0.98 }}
-                className={`
-                  w-full relative flex items-center space-x-3 px-4 py-3 rounded-xl 
-                  transition-all duration-200
-                  ${active
-                    ? "bg-emerald-50 text-emerald-600 font-semibold shadow-sm"
-                    : "text-gray-700 hover:bg-gray-50"
-                  }
-                `}
-                style={
-                  active
-                    ? { backgroundColor: `${brandColor}10`, color: brandColor }
-                    : {}
-                }
+                className={`relative w-full flex items-center px-4 py-3 rounded-xl ${active ? "bg-emerald-50 text-emerald-600" : ""
+                  }`}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                <div className="flex-1 text-left">
-                  <p className="font-medium text-sm">{item.label}</p>
-                </div>
+                <Icon className="w-5 h-5" />
+                <span className="ml-3">{item.label}</span>
 
-                {/* Active Indicator */}
-                {active && (
-                  <motion.div
-                    layoutId="activeSidebarItem"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full"
-                    style={{ backgroundColor: brandColor }}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  />
+                {/* 🔔 NOTIFICATION BADGE */}
+                {item.id === "notifications" && unreadCount > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
                 )}
               </motion.button>
             );
           })}
+
+
         </nav>
 
-        {/* Footer - User Info & Logout */}
-        <div className="border-t border-gray-100">
-
-
-
-          {/* Logout Button */}
-          <div className="p-4">
-            <motion.button
-              onClick={handleLogout}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all font-semibold text-sm shadow-sm hover:shadow-md"
-            >
-              <FiLogOut className="w-4 h-4" />
-              <span>Logout</span>
-            </motion.button>
-          </div>
+        {/* Footer - Logout */}
+        <div className="border-t border-gray-100 p-4">
+          <motion.button
+            onClick={handleLogout}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all font-semibold text-sm shadow-sm hover:shadow-md"
+          >
+            <FiLogOut className="w-4 h-4" />
+            <span>Logout</span>
+          </motion.button>
         </div>
       </aside>
     </>

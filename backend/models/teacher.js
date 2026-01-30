@@ -3,25 +3,28 @@ import bcrypt from "bcryptjs";
 
 const teacherSchema = new mongoose.Schema(
     {
-        fullName: {
-            type: String,
-            required: [true, "Full name is required"],
-            trim: true,
-        },
+        fullName: { type: String, trim: true },
 
         email: {
             type: String,
-            required: [true, "Email is required"],
             unique: true,
             lowercase: true,
+            trim: true,
         },
 
         password: {
             type: String,
-            required: [true, "Password is required"],
-            minlength: [8, "Password must be at least 8 characters long"],
-            select: false, // hidden by default
+            select: false,
         },
+
+        username: {
+            type: String,
+            unique: true,
+            sparse: true,
+            trim: true,
+        },
+
+        phone: { type: String },
 
         role: {
             type: String,
@@ -29,29 +32,59 @@ const teacherSchema = new mongoose.Schema(
         },
 
         department: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Department",
+            default: null,
+        },
+
+        semester: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Semester",
+            default: null,
+        },
+
+        authorizedCourses: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Course",
+            },
+        ],
+
+        institution: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Institution",
+            default: null, // ✅ REQUIRED
+        },
+
+        jobTitle: {
             type: String,
-            trim: true,
+            default: null,
+        },
+
+        qualifications: {
+            type: String,
+            default: null,
         },
 
         specialization: {
             type: String,
-            trim: true,
+            default: null,
+        },
+
+        status: {
+            type: String,
+            enum: ["active", "inactive"],
+            default: "inactive",
         },
     },
     { timestamps: true }
 );
 
-// 🔒 Hash password before saving
+// 🔒 Password hashing
 teacherSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
     this.password = await bcrypt.hash(this.password, 10);
     next();
 });
 
-// 🔑 Compare password method
-teacherSchema.methods.comparePassword = async function (enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
-};
-
-const Teacher = mongoose.model("Teacher", teacherSchema);
-export default Teacher;
+export default mongoose.model("Teacher", teacherSchema);

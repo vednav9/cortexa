@@ -88,6 +88,7 @@ class _InstituteSignupStep2PageState extends State<InstituteSignupStep2Page> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
@@ -165,7 +166,7 @@ class _InstituteSignupStep2PageState extends State<InstituteSignupStep2Page> {
                         border: Border.all(color: AppColors.borderDark.withValues(alpha: 0.3)),
                       ),
                       child: DropdownButtonFormField<InstitutionType>(
-                        value: _selectedType,
+                        initialValue: _selectedType,
                         decoration: const InputDecoration(
                           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                           border: InputBorder.none,
@@ -193,7 +194,7 @@ class _InstituteSignupStep2PageState extends State<InstituteSignupStep2Page> {
                   controller: _websiteController,
                   keyboardType: TextInputType.url,
                   prefixIcon: const Icon(Icons.language_outlined, color: AppColors.primary),
-                  validator: (value) => Validators.validateRequired(value, 'Website'),
+                  validator: (value) => Validators.validateURL(value, required: true),
                 ),
                 
                 const SizedBox(height: 16),

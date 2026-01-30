@@ -19,7 +19,6 @@ class AppTheme {
         onSecondary: Colors.white,
         onSurface: AppColors.textPrimary,
         onError: Colors.white,
-        background: AppColors.background,
       ),
       
       // AppBar Theme - Black like your nav bar

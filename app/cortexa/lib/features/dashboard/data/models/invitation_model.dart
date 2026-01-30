@@ -9,6 +9,7 @@ class InvitationModel extends Equatable {
   final String institutionType;
   final String invitedByName; // Name of the admin who sent the invite
   final String invitedByEmail;
+  final String role; // 'student' or 'teacher'
   final DateTime invitedAt;
   final InvitationStatus status;
   final String? message; // Optional welcome message from admin
@@ -21,6 +22,7 @@ class InvitationModel extends Equatable {
     required this.institutionType,
     required this.invitedByName,
     required this.invitedByEmail,
+    required this.role,
     required this.invitedAt,
     required this.status,
     this.message,
@@ -35,6 +37,7 @@ class InvitationModel extends Equatable {
       institutionType: json['institution_type'] ?? 'Institute',
       invitedByName: json['invited_by_name'] ?? '',
       invitedByEmail: json['invited_by_email'] ?? '',
+      role: json['role'] ?? 'student',
       invitedAt: json['invited_at'] != null
           ? DateTime.parse(json['invited_at'])
           : DateTime.now(),
@@ -52,6 +55,7 @@ class InvitationModel extends Equatable {
       'institution_type': institutionType,
       'invited_by_name': invitedByName,
       'invited_by_email': invitedByEmail,
+      'role': role,
       'invited_at': invitedAt.toIso8601String(),
       'status': status.value,
       'message': message,
@@ -66,6 +70,7 @@ class InvitationModel extends Equatable {
     String? institutionType,
     String? invitedByName,
     String? invitedByEmail,
+    String? role,
     DateTime? invitedAt,
     InvitationStatus? status,
     String? message,
@@ -78,6 +83,7 @@ class InvitationModel extends Equatable {
       institutionType: institutionType ?? this.institutionType,
       invitedByName: invitedByName ?? this.invitedByName,
       invitedByEmail: invitedByEmail ?? this.invitedByEmail,
+      role: role ?? this.role,
       invitedAt: invitedAt ?? this.invitedAt,
       status: status ?? this.status,
       message: message ?? this.message,
@@ -93,6 +99,7 @@ class InvitationModel extends Equatable {
         institutionType,
         invitedByName,
         invitedByEmail,
+        role,
         invitedAt,
         status,
         message,

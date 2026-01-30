@@ -1,9 +1,13 @@
 import '../models/institution_display_model.dart';
 import '../models/invitation_model.dart';
+import '../../../../core/services/hive_storage_service.dart';
+import '../../../../core/di/service_locator.dart';
 
 /// Mock repository for dashboard data
 /// Replace with real API calls later
 class MockDashboardRepository {
+  final HiveStorageService _storageService = getIt<HiveStorageService>();
+  
   // Simulate network delay
   Future<void> _delay() => Future.delayed(const Duration(milliseconds: 500));
 
@@ -47,27 +51,108 @@ class MockDashboardRepository {
   }) async {
     await _delay();
 
-    final allInvitations = _getMockInvitations();
-
-    if (statusFilter != null) {
-      return allInvitations.where((inv) => inv.status == statusFilter).toList();
+    // Get current user
+    final currentUser = _storageService.getCurrentUser();
+    if (currentUser == null) {
+      return [];
     }
 
-    return allInvitations;
+    // Get invitations from Hive storage for current user
+    final invitationDataList = _storageService.getInvitationsForUser(currentUser.id);
+
+    // Convert to InvitationModel objects
+    final invitations = invitationDataList.map((data) {
+      return InvitationModel.fromJson(data);
+    }).toList();
+
+    // Apply status filter if provided
+    if (statusFilter != null) {
+      return invitations.where((inv) => inv.status == statusFilter).toList();
+    }
+
+    return invitations;
   }
 
   /// Accept an invitation
   Future<void> acceptInvitation(String invitationId) async {
     await _delay();
+    
+    // Get current user
+    final currentUser = _storageService.getCurrentUser();
+    if (currentUser == null) {
+      throw Exception('No user logged in');
+    }
+
+    // Check if user already has an institution
+    if (currentUser.institutionId != null && currentUser.institutionId!.isNotEmpty) {
+      throw Exception('You are already part of an institution. Please leave your current institution first.');
+    }
+
+    // Get all invitations for current user
+    final allInvitations = _storageService.getInvitationsForUser(currentUser.id);
+    final invitationData = allInvitations.firstWhere(
+      (inv) => inv['id'] == invitationId,
+      orElse: () => throw Exception('Invitation not found'),
+    );
+
+    final institutionId = invitationData['institution_id'] as String;
+    
+    // CRITICAL: Ensure institution exists in storage
+    // This handles the case where the institution was created by admin but not yet in user's local storage
+    final existingInstitution = _storageService.findInstitutionById(institutionId);
+    if (existingInstitution == null) {
+      print('⚠️ Institution not found in storage, saving from invitation data...');
+      // Save institution data from invitation to ensure it persists
+      final institutionDataToSave = {
+        'id': institutionId,
+        'institution_name': invitationData['institution_name'],
+        'institution_type': invitationData['institution_type'],
+        'logo_path': invitationData['institution_logo_url'],
+        'short_description': 'Member institution',
+        'city': 'Unknown',
+        'country': 'Unknown',
+        'custom_url_slug': institutionId.toLowerCase(),
+        'primary_brand_color': '#34d399',
+        'admin_username': invitationData['invited_by_name'],
+        'admin_email': invitationData['invited_by_email'],
+      };
+      await _storageService.saveInstitution(institutionDataToSave);
+      print('✅ Institution saved to storage: ${invitationData['institution_name']}');
+    }
+
+    // Update invitation status to accepted
+    await _storageService.updateInvitationStatus(invitationId, 'accepted');
+
+    // Update user's institution information
+    final updatedUser = currentUser.copyWith(
+      institutionId: institutionId,
+      institutionRole: invitationData['role'] as String,
+      institutionJoinedAt: DateTime.now(),
+    );
+    
+    // CRITICAL: Save to both userBox AND registeredUsersBox
+    // userBox = current session data
+    // registeredUsersBox = persistent user data that survives logout/login
+    await _storageService.saveUser(updatedUser);
+    
+    // Update the registered user record with institution data
+    await _storageService.updateRegisteredUserInstitution(
+      userId: currentUser.id,
+      institutionId: institutionId,
+      institutionRole: invitationData['role'] as String,
+      joinedAt: DateTime.now(),
+    );
+    
     print('✅ Accepted invitation: $invitationId');
-    // In real app, make API call to accept invitation
+    print('✅ User joined ${invitationData['institution_name']} as ${invitationData['role']}');
+    print('✅ Institution data saved to both session and persistent storage');
   }
 
   /// Reject an invitation
   Future<void> rejectInvitation(String invitationId) async {
     await _delay();
+    await _storageService.updateInvitationStatus(invitationId, 'rejected');
     print('❌ Rejected invitation: $invitationId');
-    // In real app, make API call to reject invitation
   }
 
   /// Get list of Indian states for filter dropdown
@@ -132,6 +217,94 @@ class MockDashboardRepository {
       'Large (5001-20000)',
       'Very Large (20000+)',
     ];
+  }
+
+  /// Validate users by username - checks if usernames exist in Cortexa
+  /// Returns a map: username -> UserData (or null if not found)
+  Future<Map<String, Map<String, dynamic>?>> validateUsersByUsername(
+    List<String> usernames,
+  ) async {
+    await _delay();
+
+    // Get all registered users from Hive storage
+    final registeredUsers = _storageService.getAllRegisteredUsers();
+
+    final result = <String, Map<String, dynamic>?>{}; 
+
+    for (final username in usernames) {
+      // Find user by username (case-insensitive)
+      final user = registeredUsers.cast<Map<String, dynamic>?>().firstWhere(
+        (u) => u?['username']?.toString().toLowerCase() == username.toLowerCase(),
+        orElse: () => null,
+      );
+
+      result[username] = user;
+    }
+
+    return result;
+  }
+
+  /// Send invitations to validated users
+  /// Returns the number of successfully sent invitations
+  Future<int> sendInvitations({
+    required String institutionId,
+    required String role, // 'student' or 'teacher'
+    required List<Map<String, String>> users,
+  }) async {
+    await _delay();
+
+    // Get current user (admin) who is sending invitations
+    final currentUser = _storageService.getCurrentUser();
+    final adminName = currentUser?.fullName ?? 'Admin';
+    final adminEmail = currentUser?.email ?? 'admin@cortexa.com';
+
+    // Get institution details from storage
+    final institutionData = _storageService.findInstitutionById(institutionId);
+    
+    // Extract institution details with proper key mapping
+    final institutionName = institutionData?['institution_name'] ?? 'Unknown Institution';
+    final institutionType = institutionData?['institution_type'] ?? 'Institute';
+    final institutionLogo = institutionData?['logo_path'] ?? '';
+
+    // Create and save invitations for each user
+    int sentCount = 0;
+    for (final user in users) {
+      // Find the registered user to get their ID
+      final registeredUser = _storageService.findRegisteredUser(
+        username: user['username'],
+      );
+
+      if (registeredUser != null) {
+        // Create invitation data
+        final invitationId = 'inv_${DateTime.now().millisecondsSinceEpoch}_$sentCount';
+        final invitationData = {
+          'id': invitationId,
+          'institution_id': institutionId,
+          'institution_name': institutionName,
+          'institution_logo_url': institutionLogo,
+          'institution_type': institutionType,
+          'invited_by_name': adminName,
+          'invited_by_email': adminEmail,
+          'invited_user_id': registeredUser['id'],
+          'invited_user_username': user['username'],
+          'invited_user_email': user['email'],
+          'invited_user_full_name': user['fullName'] ?? user['username'],
+          'role': role,
+          'invited_at': DateTime.now().toIso8601String(),
+          'status': 'pending',
+          'message': '${user['fullName'] ?? user['username']} has been invited to join $institutionName as a $role.',
+        };
+
+        // Save invitation to Hive storage
+        await _storageService.saveInvitation(invitationData);
+        
+        print('📧 Invitation sent to ${user['username']} for $institutionName');
+        sentCount++;
+      }
+    }
+
+    print('✅ Successfully sent $sentCount invitations');
+    return sentCount;
   }
 
   // ===== Mock Data =====
@@ -333,49 +506,6 @@ class MockDashboardRepository {
         studentCount: 6800,
         teacherCount: 380,
         createdAt: DateTime.now().subtract(const Duration(days: 310)),
-      ),
-    ];
-  }
-
-  List<InvitationModel> _getMockInvitations() {
-    return [
-      InvitationModel(
-        id: 'inv_1',
-        institutionId: '2',
-        institutionName: 'Stanford University',
-        institutionLogoUrl: '',
-        institutionType: 'College',
-        invitedByName: 'Dr. Sarah Johnson',
-        invitedByEmail: 'sarah.johnson@stanford.edu',
-        invitedAt: DateTime.now().subtract(const Duration(days: 5)),
-        status: InvitationStatus.pending,
-        message:
-            'Welcome to Stanford! We are excited to have you join our Computer Science department.',
-      ),
-      InvitationModel(
-        id: 'inv_2',
-        institutionId: '4',
-        institutionName: 'Indian Institute of Technology Bombay',
-        institutionLogoUrl: '',
-        institutionType: 'Institute',
-        invitedByName: 'Prof. Rajesh Kumar',
-        invitedByEmail: 'rajesh@iitb.ac.in',
-        invitedAt: DateTime.now().subtract(const Duration(days: 12)),
-        status: InvitationStatus.pending,
-        message:
-            'Join our Electrical Engineering department for the upcoming semester.',
-      ),
-      InvitationModel(
-        id: 'inv_3',
-        institutionId: '3',
-        institutionName: 'University of Oxford',
-        institutionLogoUrl: '',
-        institutionType: 'College',
-        invitedByName: 'Dr. Emily Watson',
-        invitedByEmail: 'emily.watson@ox.ac.uk',
-        invitedAt: DateTime.now().subtract(const Duration(days: 30)),
-        status: InvitationStatus.accepted,
-        message: 'We look forward to your contributions to the Mathematics faculty.',
       ),
     ];
   }

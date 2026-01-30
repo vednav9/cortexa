@@ -65,7 +65,11 @@ class _LoginPageState extends State<LoginPage> {
             final userRole = state.user.role.toLowerCase();
             if (userRole == 'admin') {
               context.go('/admin-dashboard');
+            } else if (userRole == 'student' || userRole == 'teacher') {
+              context.go('/user-dashboard');
             } else {
+              // Unknown role - default to user dashboard
+              print('⚠️ Unknown role: $userRole, defaulting to user dashboard');
               context.go('/user-dashboard');
             }
           }
@@ -76,6 +80,7 @@ class _LoginPageState extends State<LoginPage> {
           return SafeArea(
             child: Center(
               child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.symmetric(
                   horizontal: screenWidth * 0.06,
                 ),
@@ -184,7 +189,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                               ),
                               child: DropdownButtonFormField<UserRole>(
-                                value: _selectedRole,
+                                initialValue: _selectedRole,
                                 decoration: const InputDecoration(
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: 16,
@@ -259,7 +264,7 @@ class _LoginPageState extends State<LoginPage> {
                             });
                           },
                         ),
-                        validator: Validators.validatePassword,
+                        validator: (value) => Validators.validatePassword(value, requireStrong: false),
                       ),
                       SizedBox(height: screenHeight * 0.008),
                       Align(
@@ -287,7 +292,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         child: CustomButton(
                           text: 'Sign In',
-                          onPressed: _handleLogin,
+                          onPressed: isLoading ? null : _handleLogin,
                           isLoading: isLoading,
                         ),
                       ),

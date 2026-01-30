@@ -1,0 +1,743 @@
+import Department from "../models/department.js";
+import Course from "../models/course.js";
+import Semester from "../models/semester.js";
+import AcademicCalendar from "../models/academicCalendar.js";
+import Teacher from "../models/teacher.js";
+import Student from "../models/student.js";
+
+/* ====================================
+   DEPARTMENTS CRUD
+==================================== */
+
+// Get all departments for institution
+export const getDepartments = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+
+    const departments = await Department.find({ institution: institutionId })
+      .populate("headOfDepartment", "fullName email jobTitle")
+      .sort({ name: 1 })
+      .lean(); // IMPORTANT for spreading
+
+    const departmentsWithCounts = await Promise.all(
+      departments.map(async (dept) => {
+        const facultyCount = await Teacher.countDocuments({
+          department: dept._id,
+          institution: institutionId,
+          status: "active",
+        });
+
+        const studentCount = await Student.countDocuments({
+          department: dept._id,
+          institution: institutionId,
+          status: "active",
+        });
+
+        return {
+          ...dept,
+          facultyCount,
+          studentCount,
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      count: departmentsWithCounts.length,
+      data: departmentsWithCounts,
+    });
+  } catch (error) {
+    console.error("Get departments error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch departments",
+      error: error.message,
+    });
+  }
+};
+
+// Create new department
+export const createDepartment = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const { name, code, description, headOfDepartment } = req.body;
+
+    if (!name || !code) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and code are required",
+      });
+    }
+
+    const department = await Department.create({
+      institution: institutionId,
+      name,
+      code: code.toUpperCase(),
+      description,
+      headOfDepartment: headOfDepartment || null,
+    });
+
+    await department.populate("headOfDepartment", "fullName email jobTitle");
+
+    res.status(201).json({
+      success: true,
+      message: "Department created successfully",
+      department,
+    });
+  } catch (error) {
+    console.error("Create department error:", error);
+    
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Department code already exists",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create department",
+      error: error.message,
+    });
+  }
+};
+
+// Update department
+export const updateDepartment = async (req, res) => {
+  try {
+    const { departmentId } = req.params;
+    const { name, code, description, headOfDepartment, isActive } = req.body;
+
+    const department = await Department.findByIdAndUpdate(
+      departmentId,
+      {
+        ...(name && { name }),
+        ...(code && { code: code.toUpperCase() }),
+        ...(description !== undefined && { description }),
+        ...(headOfDepartment !== undefined && { headOfDepartment }),
+        ...(isActive !== undefined && { isActive }),
+      },
+      { new: true, runValidators: true }
+    ).populate("headOfDepartment", "fullName email jobTitle");
+
+    if (!department) {
+      return res.status(404).json({
+        success: false,
+        message: "Department not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Department updated successfully",
+      department,
+    });
+  } catch (error) {
+    console.error("Update department error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update department",
+      error: error.message,
+    });
+  }
+};
+
+// Delete department
+export const deleteDepartment = async (req, res) => {
+  try {
+    const { departmentId } = req.params;
+
+    // Check if department has courses
+    const coursesCount = await Course.countDocuments({ department: departmentId });
+    if (coursesCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete department. It has ${coursesCount} course(s). Please remove courses first.`,
+      });
+    }
+
+    const department = await Department.findByIdAndDelete(departmentId);
+
+    if (!department) {
+      return res.status(404).json({
+        success: false,
+        message: "Department not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Department deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete department error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete department",
+      error: error.message,
+    });
+  }
+};
+
+/* ====================================
+   COURSES CRUD
+==================================== */
+
+// Get all courses for institution
+export const getCourses = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const { departmentId, semester, isActive } = req.query;
+
+    console.log('=== GET COURSES ===');
+    console.log('Institution ID:', institutionId);
+    console.log('Query params:', { departmentId, semester, isActive });
+
+    const filter = { institution: institutionId };
+    if (departmentId) filter.department = departmentId;
+    if (semester) filter.semester = parseInt(semester);
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
+
+    console.log('MongoDB filter:', filter);
+
+    const courses = await Course.find(filter)
+      .populate("department", "name code")
+      .populate("instructor", "fullName email jobTitle")
+      .populate("semesterAvailable", "name academicYear")
+      .populate("facultyAvailable", "fullName email jobTitle")
+      .sort({ code: 1 });
+
+    console.log('Found courses:', courses.length);
+    console.log('Courses data:', courses.map(c => ({ 
+      id: c._id, 
+      code: c.code, 
+      name: c.name,
+      department: c.department?.name 
+    })));
+
+    res.status(200).json({
+      success: true,
+      count: courses.length,
+      courses, // Changed from 'data' to 'courses' for frontend consistency
+    });
+  } catch (error) {
+    console.error("Get courses error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch courses",
+      error: error.message,
+    });
+  }
+};
+
+// Create new course
+export const createCourse = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const {
+      department,
+      code,
+      name,
+      description,
+      credits,
+      semester,
+      semesterAvailable,
+      instructor,
+      facultyAvailable,
+      maxCapacity,
+      syllabus,
+    } = req.body;
+
+    console.log('=== CREATE COURSE ===');
+    console.log('Institution ID:', institutionId);
+    console.log('Request body:', req.body);
+
+    if (!department || !code || !name || !credits) {
+      return res.status(400).json({
+        success: false,
+        message: "Department, code, name, and credits are required",
+      });
+    }
+
+    // Check if course code already exists for this institution
+    const existingCourse = await Course.findOne({
+      institution: institutionId,
+      code: code.toUpperCase(),
+    });
+
+    if (existingCourse) {
+      return res.status(400).json({
+        success: false,
+        message: `Course with code ${code.toUpperCase()} already exists`,
+      });
+    }
+
+    const course = await Course.create({
+      institution: institutionId,
+      department,
+      code: code.toUpperCase(),
+      name,
+      description,
+      credits,
+      semester: semester || null,
+      semesterAvailable: semesterAvailable || null,
+      instructor: instructor || null,
+      facultyAvailable: facultyAvailable || null,
+      maxCapacity: maxCapacity || 60,
+      syllabus,
+      isActive: true,
+    });
+
+    await course.populate([
+      { path: "department", select: "name code" },
+      { path: "instructor", select: "fullName email jobTitle" },
+      { path: "semesterAvailable", select: "name academicYear" },
+      { path: "facultyAvailable", select: "fullName email jobTitle" },
+    ]);
+
+    console.log('Course created:', course);
+
+    res.status(201).json({
+      success: true,
+      message: "Course created successfully",
+      course,
+    });
+  } catch (error) {
+    console.error("Create course error:", error);
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Course code already exists in this institution",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to create course",
+      error: error.message,
+    });
+  }
+};
+
+// Update course
+export const updateCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const updateData = req.body;
+
+    console.log('=== UPDATE COURSE ===');
+    console.log('Course ID:', courseId);
+    console.log('Update data:', updateData);
+
+    if (updateData.code) {
+      updateData.code = updateData.code.toUpperCase();
+    }
+
+    const course = await Course.findByIdAndUpdate(
+      courseId,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate([
+      { path: "department", select: "name code" },
+      { path: "instructor", select: "fullName email jobTitle" },
+      { path: "semesterAvailable", select: "name academicYear" },
+      { path: "facultyAvailable", select: "fullName email jobTitle" },
+    ]);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+
+    console.log('Course updated:', course);
+
+    res.status(200).json({
+      success: true,
+      message: "Course updated successfully",
+      course,
+    });
+  } catch (error) {
+    console.error("Update course error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update course",
+      error: error.message,
+    });
+  }
+};
+
+// Delete course
+export const deleteCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    console.log('=== DELETE COURSE ===');
+    console.log('Course ID:', courseId);
+
+    const course = await Course.findByIdAndDelete(courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+
+    console.log('Course deleted:', course.code);
+
+    res.status(200).json({
+      success: true,
+      message: "Course deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete course error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete course",
+      error: error.message,
+    });
+  }
+};
+
+/* ====================================
+   SEMESTERS CRUD
+==================================== */
+
+// Get all semesters
+export const getSemesters = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    console.log('=== GET SEMESTERS ===');
+    console.log('Institution ID:', institutionId);
+
+    const semesters = await Semester.find({ institution: institutionId })
+      .sort({ startDate: -1 })
+      .lean(); // ✅ needed so we can attach new field
+
+    // ✅ ADD coursesCount per semester (KEY FIX)
+    const semestersWithCourseCount = await Promise.all(
+      semesters.map(async (sem) => {
+        const count = await Course.countDocuments({
+          semesterAvailable: sem._id,
+          institution: institutionId,
+          isActive: true,
+        });
+
+        return {
+          ...sem,
+          coursesCount: count,
+        };
+      })
+    );
+
+    console.log('Found semesters:', semestersWithCourseCount.length);
+    console.log('Semesters data:', JSON.stringify(semestersWithCourseCount, null, 2));
+
+    res.status(200).json({
+      success: true,
+      count: semestersWithCourseCount.length,
+      data: semestersWithCourseCount,
+    });
+  } catch (error) {
+    console.error("Get semesters error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch semesters",
+      error: error.message,
+    });
+  }
+};
+
+
+// Create semester
+export const createSemester = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const { name, academicYear, startDate, endDate, isActive } = req.body;
+
+    if (!name || !academicYear || !startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, academic year, start date, and end date are required",
+      });
+    }
+
+    const semester = await Semester.create({
+      institution: institutionId,
+      name,
+      academicYear,
+      startDate,
+      endDate,
+      isActive: isActive || false,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Semester created successfully",
+      semester,
+    });
+  } catch (error) {
+    console.error("Create semester error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create semester",
+      error: error.message,
+    });
+  }
+};
+
+// Update semester
+export const updateSemester = async (req, res) => {
+  try {
+    const { semesterId } = req.params;
+
+    const semester = await Semester.findByIdAndUpdate(
+      semesterId,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    if (!semester) {
+      return res.status(404).json({
+        success: false,
+        message: "Semester not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Semester updated successfully",
+      semester,
+    });
+  } catch (error) {
+    console.error("Update semester error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update semester",
+      error: error.message,
+    });
+  }
+};
+
+// Delete semester
+export const deleteSemester = async (req, res) => {
+  try {
+    const { semesterId } = req.params;
+
+    const semester = await Semester.findByIdAndDelete(semesterId);
+
+    if (!semester) {
+      return res.status(404).json({
+        success: false,
+        message: "Semester not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Semester deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete semester error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete semester",
+      error: error.message,
+    });
+  }
+};
+
+/* ====================================
+   ACADEMIC CALENDAR CRUD
+==================================== */
+
+// Get all calendar events
+export const getCalendarEvents = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    const filter = { institution: institutionId };
+    
+    if (startDate || endDate) {
+      filter.startDate = {};
+      if (startDate) filter.startDate.$gte = new Date(startDate);
+      if (endDate) filter.startDate.$lte = new Date(endDate);
+    }
+
+    const events = await AcademicCalendar.find(filter).sort({ startDate: 1 });
+
+    res.status(200).json({
+      success: true,
+      count: events.length,
+      events, // Changed from 'data' to 'events'
+    });
+  } catch (error) {
+    console.error("Get calendar events error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch calendar events",
+      error: error.message,
+    });
+  }
+};
+
+// Create calendar event
+export const createCalendarEvent = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const {
+      title,
+      description,
+      eventType,
+      startDate,
+      endDate,
+      allDay,
+      location,
+      targetAudience,
+    } = req.body;
+
+    if (!title || !startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, start date, and end date are required",
+      });
+    }
+
+    const event = await AcademicCalendar.create({
+      institution: institutionId,
+      title,
+      description,
+      eventType,
+      startDate,
+      endDate,
+      allDay,
+      location,
+      targetAudience,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Calendar event created successfully",
+      event,
+    });
+  } catch (error) {
+    console.error("Create calendar event error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create calendar event",
+      error: error.message,
+    });
+  }
+};
+
+// Update calendar event
+export const updateCalendarEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const event = await AcademicCalendar.findByIdAndUpdate(
+      eventId,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Calendar event not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Calendar event updated successfully",
+      event,
+    });
+  } catch (error) {
+    console.error("Update calendar event error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update calendar event",
+      error: error.message,
+    });
+  }
+};
+
+// Delete calendar event
+export const deleteCalendarEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const event = await AcademicCalendar.findByIdAndDelete(eventId);
+
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: "Calendar event not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Calendar event deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete calendar event error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete calendar event",
+      error: error.message,
+    });
+  }
+};
+
+/* ====================================
+   FACULTY MANAGEMENT
+==================================== */
+
+// Get all faculty (teachers)
+export const getFaculty = async (req, res) => {
+  try {
+    const { institutionId } = req.params;
+    const { departmentId } = req.query;
+
+    const filter = { institution: institutionId };
+
+    const faculty = await Teacher.find(filter)
+      .select(
+        "fullName email phone jobTitle department qualifications specialization authorizedCourses"
+      )
+      .populate("department", "name code")
+      .populate({
+        path: "authorizedCourses",
+        select: "code name semesterAvailable",
+      })
+      .sort({ fullName: 1 });
+
+    // Optional department filter
+    let result = faculty;
+    if (departmentId) {
+      result = faculty.filter(
+        (f) => f.department && f.department._id.toString() === departmentId
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      count: result.length,
+      faculty: result, // Changed from 'data' to 'faculty'
+    });
+  } catch (error) {
+    console.error("Get faculty error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch faculty",
+      error: error.message,
+    });
+  }
+};
+
