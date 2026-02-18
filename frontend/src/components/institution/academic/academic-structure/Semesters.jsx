@@ -218,7 +218,10 @@ function Semesters() {
               </div>
               <div className="mt-4 p-3 bg-gradient-to-r from-pink-50 to-pink-50 rounded-xl border border-pink-100">
                 <p className="text-xs text-pink-600 font-semibold mb-1">COURSES</p>
-                <p className="text-lg font-bold text-gray-800">{sem.courses?.length || 0}</p>
+                <p className="text-lg font-bold text-gray-800">
+  {sem.coursesCount ?? 0}
+</p>
+
               </div>
             </div>
           </motion.div>

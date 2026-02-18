@@ -194,7 +194,7 @@ class _InstituteSignupStep2PageState extends State<InstituteSignupStep2Page> {
                   controller: _websiteController,
                   keyboardType: TextInputType.url,
                   prefixIcon: const Icon(Icons.language_outlined, color: AppColors.primary),
-                  validator: (value) => Validators.validateRequired(value, 'Website'),
+                  validator: (value) => Validators.validateURL(value, required: true),
                 ),
                 
                 const SizedBox(height: 16),

@@ -8,7 +8,7 @@ import 'core/providers/app_state_provider.dart';
 import 'core/bloc/terminology/terminology_bloc.dart';
 import 'core/bloc/terminology/terminology_event.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
-import 'features/auth/data/repositories/mock_auth_repository.dart';
+import 'features/auth/data/repositories/auth_repository.dart';
 import 'core/services/hive_storage_service.dart';
 import 'core/services/settings_service.dart';
 import 'routes/app_router.dart';
@@ -16,7 +16,7 @@ import 'routes/app_router.dart';
 // ✅ Global instances that persist across app lifecycle
 late AppStateProvider globalAppState;
 late HiveStorageService globalHiveStorage;
-late MockAuthRepository globalAuthRepository;
+late AuthRepository globalAuthRepository;
 
 void main() async {
   // Ensure Flutter binding is initialized
@@ -40,12 +40,12 @@ void main() async {
     print('  HiveStorageService: ${getIt.isRegistered<HiveStorageService>()}');
     print('  SettingsService: ${getIt.isRegistered<SettingsService>()}');
     print('  AppStateProvider: ${getIt.isRegistered<AppStateProvider>()}');
-    print('  MockAuthRepository: ${getIt.isRegistered<MockAuthRepository>()}');
+    print('  AuthRepository: ${getIt.isRegistered<AuthRepository>()}');
     
     // ✅ Create global instances ONCE - after setupServiceLocator completes
     globalAppState = getIt<AppStateProvider>();
     globalHiveStorage = getIt<HiveStorageService>();
-    globalAuthRepository = getIt<MockAuthRepository>();
+    globalAuthRepository = getIt<AuthRepository>();
     
     print('✅ All dependencies initialized');
     print('  globalAppState: ${globalAppState.runtimeType}');

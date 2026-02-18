@@ -5,11 +5,14 @@ import {
   FiAlertCircle, FiMessageSquare, FiSend, FiX, FiChevronDown 
 } from 'react-icons/fi';
 import { useAuth } from '../../context/authcontext';
+import api from '../../services/api';
 import toast from 'react-hot-toast';
 
 export default function QueryDesk({ institution }) {
   const { user } = useAuth();
   const [queries, setQueries] = useState([]);
+  const [stats, setStats] = useState({ total: 0, open: 0, inProgress: 0, resolved: 0 });
+  const [loading, setLoading] = useState(true);
   const [showNewQuery, setShowNewQuery] = useState(false);
   const [selectedQuery, setSelectedQuery] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,41 +27,44 @@ export default function QueryDesk({ institution }) {
 
   const brandColor = institution?.branding?.primaryColor || '#10b981';
 
-  // Mock data - replace with API call
+  // Fetch queries
+  const fetchQueries = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        status: filterStatus,
+        search: searchTerm
+      };
+      const response = await api.get(`/queries/institution/${institution._id}`, { params });
+      setQueries(response.data.queries || []);
+    } catch (error) {
+      console.error('Error fetching queries:', error);
+      toast.error('Failed to load queries');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch stats
+  const fetchStats = async () => {
+    try {
+      const response = await api.get(`/queries/institution/${institution._id}/stats`);
+      setStats(response.data.stats || { total: 0, open: 0, inProgress: 0, resolved: 0 });
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+    }
+  };
+
   useEffect(() => {
-    const mockQueries = [
-      {
-        id: 1,
-        title: 'How to access course materials?',
-        description: 'I cannot find the link to download lecture notes.',
-        category: 'technical',
-        priority: 'normal',
-        status: 'open',
-        createdBy: user?.role === 'student' ? 'You' : 'John Doe',
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        replies: [
-          {
-            id: 1,
-            text: 'Please check the "Upload Notes" section in your dashboard.',
-            repliedBy: 'Admin',
-            repliedAt: new Date(Date.now() - 1 * 60 * 60 * 1000)
-          }
-        ]
-      },
-      {
-        id: 2,
-        title: 'Assignment submission deadline',
-        description: 'Can the deadline for CS101 assignment be extended?',
-        category: 'academic',
-        priority: 'high',
-        status: 'in-progress',
-        createdBy: user?.role === 'student' ? 'You' : 'Jane Smith',
-        createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
-        replies: []
-      }
-    ];
-    setQueries(mockQueries);
-  }, [user]);
+    if (!institution?._id) {
+      setLoading(false); // ⬅️ STOP infinite loader
+      return;
+    }
+  
+    fetchQueries();
+    fetchStats();
+  }, [institution?._id, filterStatus, searchTerm]);
+  
 
   const categories = [
     { value: 'general', label: 'General', color: 'blue' },
@@ -81,54 +87,79 @@ export default function QueryDesk({ institution }) {
     { value: 'resolved', label: 'Resolved', icon: FiCheck }
   ];
 
-  const handleSubmitQuery = () => {
+  const handleSubmitQuery = async () => {
+    if (!institution?._id) {
+      toast.error("Institution not loaded yet. Please wait.");
+      return;
+    }
+  
     if (!newQuery.title.trim() || !newQuery.description.trim()) {
       toast.error('Please fill in all required fields');
       return;
     }
-
-    const query = {
-      id: Date.now(),
-      ...newQuery,
-      status: 'open',
-      createdBy: 'You',
-      createdAt: new Date(),
-      replies: []
-    };
-
-    setQueries([query, ...queries]);
-    setNewQuery({ title: '', description: '', category: 'general', priority: 'normal' });
-    setShowNewQuery(false);
-    toast.success('Query submitted successfully!');
+  
+    try {
+      const response = await api.post(
+        `/queries/institution/${institution._id}`,
+        newQuery
+      );
+  
+      setQueries([response.data.query, ...queries]);
+      setNewQuery({ title: '', description: '', category: 'general', priority: 'normal' });
+      setShowNewQuery(false);
+      toast.success('Query submitted successfully!');
+      fetchStats();
+    } catch (error) {
+      console.error('Error submitting query:', error);
+      toast.error(error.response?.data?.message || 'Failed to submit query');
+    }
   };
+  
 
-  const handleReply = () => {
+  const handleReply = async () => {
     if (!replyText.trim()) {
       toast.error('Please enter a reply');
       return;
     }
 
-    const updatedQueries = queries.map(q => {
-      if (q.id === selectedQuery.id) {
-        return {
-          ...q,
-          replies: [
-            ...q.replies,
-            {
-              id: Date.now(),
-              text: replyText,
-              repliedBy: user?.role === 'admin' ? 'Admin' : 'You',
-              repliedAt: new Date()
-            }
-          ]
-        };
-      }
-      return q;
-    });
+    try {
+      const response = await api.post(`/queries/${selectedQuery._id}/reply`, { text: replyText });
+      
+      // Update queries list
+      setQueries(queries.map(q => 
+        q._id === selectedQuery._id ? response.data.query : q
+      ));
+      
+      // Update selected query
+      setSelectedQuery(response.data.query);
+      setReplyText('');
+      toast.success('Reply sent!');
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      toast.error(error.response?.data?.message || 'Failed to send reply');
+    }
+  };
 
-    setQueries(updatedQueries);
-    setReplyText('');
-    toast.success('Reply sent!');
+  const handleStatusChange = async (queryId, newStatus) => {
+    try {
+      const response = await api.patch(`/queries/${queryId}/status`, { status: newStatus });
+      
+      // Update queries list
+      setQueries(queries.map(q => 
+        q._id === queryId ? response.data.query : q
+      ));
+      
+      // Update selected query if open
+      if (selectedQuery?._id === queryId) {
+        setSelectedQuery(response.data.query);
+      }
+      
+      toast.success('Status updated!');
+      fetchStats();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error(error.response?.data?.message || 'Failed to update status');
+    }
   };
 
   const getStatusColor = (status) => {
@@ -150,18 +181,20 @@ export default function QueryDesk({ institution }) {
     }
   };
 
-  const filteredQueries = queries.filter(q => {
-    const matchesSearch = q.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         q.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || q.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  const formatDate = (date) => {
+    return new Date(date).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
-  const stats = [
-    { label: 'Total Queries', value: queries.length, icon: FiMessageSquare, color: 'blue' },
-    { label: 'Open', value: queries.filter(q => q.status === 'open').length, icon: FiAlertCircle, color: 'orange' },
-    { label: 'In Progress', value: queries.filter(q => q.status === 'in-progress').length, icon: FiClock, color: 'blue' },
-    { label: 'Resolved', value: queries.filter(q => q.status === 'resolved').length, icon: FiCheck, color: 'green' }
+  const displayStats = [
+    { label: 'Total Queries', value: stats.total, icon: FiMessageSquare, color: 'blue' },
+    { label: 'Open', value: stats.open, icon: FiAlertCircle, color: 'orange' },
+    { label: 'In Progress', value: stats.inProgress, icon: FiClock, color: 'blue' },
+    { label: 'Resolved', value: stats.resolved, icon: FiCheck, color: 'green' }
   ];
 
   return (
@@ -195,7 +228,7 @@ export default function QueryDesk({ institution }) {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {stats.map((stat, index) => {
+        {displayStats.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <motion.div
@@ -230,7 +263,8 @@ export default function QueryDesk({ institution }) {
               placeholder="Search queries..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+              style={{ focusRingColor: brandColor }}
             />
           </div>
         </div>
@@ -245,9 +279,10 @@ export default function QueryDesk({ institution }) {
                 onClick={() => setFilterStatus(status.value)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
                   filterStatus === status.value
-                    ? 'bg-emerald-500 text-white'
+                    ? 'text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
+                style={filterStatus === status.value ? { backgroundColor: brandColor } : {}}
               >
                 <Icon className="w-4 h-4" />
                 {status.label}
@@ -258,68 +293,75 @@ export default function QueryDesk({ institution }) {
       </div>
 
       {/* Queries List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AnimatePresence mode="popLayout">
-          {filteredQueries.map((query, index) => (
-            <motion.div
-              key={query.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ delay: index * 0.05 }}
-              onClick={() => setSelectedQuery(query)}
-              className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all cursor-pointer"
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">{query.title}</h3>
-                  <p className="text-sm text-gray-600 line-clamp-2">{query.description}</p>
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin w-8 h-8 border-4 border-gray-200 rounded-full mx-auto" style={{ borderTopColor: brandColor }} />
+          <p className="text-gray-500 mt-4">Loading queries...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <AnimatePresence mode="popLayout">
+            {queries.map((query, index) => (
+              <motion.div
+                key={query._id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ delay: index * 0.05 }}
+                onClick={() => setSelectedQuery(query)}
+                className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all cursor-pointer"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{query.title}</h3>
+                    <p className="text-sm text-gray-600 line-clamp-2">{query.description}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(query.status)}`}>
+                    {query.status}
+                  </span>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(query.status)}`}>
-                  {query.status}
-                </span>
-              </div>
 
-              {/* Meta */}
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <span className={`px-2 py-1 rounded ${getPriorityColor(query.priority)}`}>
-                  {query.priority}
-                </span>
-                <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">
-                  {query.category}
-                </span>
-                <span className="flex items-center gap-1">
-                  <FiClock className="w-4 h-4" />
-                  {new Date(query.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-                <span className="flex items-center gap-1">
-                  <FiMessageSquare className="w-4 h-4" />
-                  {query.replies.length}
-                </span>
-              </div>
+                {/* Meta */}
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span className={`px-2 py-1 rounded ${getPriorityColor(query.priority)}`}>
+                    {query.priority}
+                  </span>
+                  <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">
+                    {query.category}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <FiClock className="w-4 h-4" />
+                    {formatDate(query.createdAt)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <FiMessageSquare className="w-4 h-4" />
+                    {query.replies?.length || 0}
+                  </span>
+                </div>
 
-              {/* Footer */}
-              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-sm text-gray-600">By {query.createdBy}</span>
-                <button
-                  className="text-sm font-medium hover:underline"
-                  style={{ color: brandColor }}
-                >
-                  View Details →
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                {/* Footer */}
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-sm text-gray-600">By {query.createdBy.name}</span>
+                  <button
+                    className="text-sm font-medium hover:underline"
+                    style={{ color: brandColor }}
+                  >
+                    View Details →
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
 
-        {filteredQueries.length === 0 && (
-          <div className="col-span-2 text-center py-12">
-            <FiHelpCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No queries found</p>
-          </div>
-        )}
-      </div>
+          {queries.length === 0 && (
+            <div className="col-span-2 text-center py-12">
+              <FiHelpCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No queries found</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* New Query Modal */}
       <AnimatePresence>
@@ -349,6 +391,7 @@ export default function QueryDesk({ institution }) {
               </div>
 
               <div className="space-y-4">
+                {/* ...existing form fields... */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Title <span className="text-red-500">*</span>
@@ -358,7 +401,8 @@ export default function QueryDesk({ institution }) {
                     value={newQuery.title}
                     onChange={(e) => setNewQuery({ ...newQuery, title: e.target.value })}
                     placeholder="Brief title of your query"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+                    style={{ focusRingColor: brandColor }}
                   />
                 </div>
 
@@ -371,7 +415,8 @@ export default function QueryDesk({ institution }) {
                     onChange={(e) => setNewQuery({ ...newQuery, description: e.target.value })}
                     placeholder="Describe your query in detail..."
                     rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+                    style={{ focusRingColor: brandColor }}
                   />
                 </div>
 
@@ -381,7 +426,8 @@ export default function QueryDesk({ institution }) {
                     <select
                       value={newQuery.category}
                       onChange={(e) => setNewQuery({ ...newQuery, category: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+                      style={{ focusRingColor: brandColor }}
                     >
                       {categories.map(cat => (
                         <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -394,7 +440,8 @@ export default function QueryDesk({ institution }) {
                     <select
                       value={newQuery.priority}
                       onChange={(e) => setNewQuery({ ...newQuery, priority: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+                      style={{ focusRingColor: brandColor }}
                     >
                       {priorities.map(pri => (
                         <option key={pri.value} value={pri.value}>{pri.label}</option>
@@ -452,6 +499,18 @@ export default function QueryDesk({ institution }) {
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${getPriorityColor(selectedQuery.priority)}`}>
                         {selectedQuery.priority}
                       </span>
+                      {(user?.role === 'admin' || user?.role === 'teacher') && (
+                        <select
+                          value={selectedQuery.status}
+                          onChange={(e) => handleStatusChange(selectedQuery._id, e.target.value)}
+                          className="text-xs px-2 py-1 border border-gray-300 rounded"
+                        >
+                          <option value="open">Open</option>
+                          <option value="in-progress">In Progress</option>
+                          <option value="resolved">Resolved</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                      )}
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900">{selectedQuery.title}</h2>
                     <p className="text-sm text-gray-600 mt-2">{selectedQuery.description}</p>
@@ -467,26 +526,29 @@ export default function QueryDesk({ institution }) {
 
               {/* Replies */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {selectedQuery.replies.map((reply) => (
-                  <div key={reply.id} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-semibold">
-                        {reply.repliedBy[0]}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-gray-900">{reply.repliedBy}</span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(reply.repliedAt).toLocaleString()}
-                          </span>
+                {selectedQuery.replies && selectedQuery.replies.length > 0 ? (
+                  selectedQuery.replies.map((reply) => (
+                    <div key={reply._id} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <div 
+                          className="w-8 h-8 rounded-full text-white flex items-center justify-center font-semibold"
+                          style={{ backgroundColor: brandColor }}
+                        >
+                          {reply.repliedBy.name[0]}
                         </div>
-                        <p className="text-gray-700">{reply.text}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-gray-900">{reply.repliedBy.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {formatDate(reply.repliedAt)}
+                            </span>
+                          </div>
+                          <p className="text-gray-700">{reply.text}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-
-                {selectedQuery.replies.length === 0 && (
+                  ))
+                ) : (
                   <div className="text-center py-8">
                     <FiMessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-gray-500">No replies yet</p>
@@ -495,7 +557,7 @@ export default function QueryDesk({ institution }) {
               </div>
 
               {/* Reply Input */}
-              {(user?.role === 'admin' || user?.role === 'teacher') && (
+              {(user?.role === 'admin' || user?.role === 'teacher' || selectedQuery.createdBy.userId === user?._id) && (
                 <div className="p-6 border-t border-gray-200">
                   <div className="flex gap-3">
                     <input
@@ -503,7 +565,8 @@ export default function QueryDesk({ institution }) {
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       placeholder="Type your reply..."
-                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+                      style={{ focusRingColor: brandColor }}
                       onKeyPress={(e) => e.key === 'Enter' && handleReply()}
                     />
                     <button

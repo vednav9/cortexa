@@ -21,7 +21,8 @@ export default function InstitutionLayout() {
     useEffect(() => {
         const fetchInstitution = async () => {
             try {
-                const res = await api.get(`/institutions/${slug}`);
+                // FIX: Use the correct endpoint with /slug/ prefix
+                const res = await api.get(`/institutions/slug/${slug}`);
                 setInstitution(res.data.institution);
                 
                 // Check if user has access to this institution
@@ -71,7 +72,9 @@ export default function InstitutionLayout() {
             }
         };
 
-        fetchInstitution();
+        if (slug) {
+            fetchInstitution();
+        }
     }, [slug, user]);
 
     // Handle scroll to show/hide scroll-to-top button
@@ -154,22 +157,25 @@ export default function InstitutionLayout() {
     return (
         <InstitutionContext.Provider value={{ institution }}>
             <div className="min-h-screen bg-gray-50">
-                {/* Institution Navbar */}
-                <InstitutionNavbar 
-                    institution={institution}
-                    onBackToDashboard={handleBackToDashboard}
-                    brandColor={brandColor}
-                />
+                {/* Fixed Header Container */}
+                <div className="fixed top-0 left-0 right-0 z-50 bg-white">
+                    {/* Institution Navbar */}
+                    <InstitutionNavbar 
+                        institution={institution}
+                        onBackToDashboard={handleBackToDashboard}
+                        brandColor={brandColor}
+                    />
+                    
+                    {/* Institution Menu - Role-based horizontal menu */}
+                    <InstitutionMenu
+                        userRole={user?.role}
+                        hasAccess={hasAccess}
+                        brandColor={brandColor}
+                    />
+                </div>
                 
-                {/* Institution Menu - Role-based horizontal menu */}
-                <InstitutionMenu
-                    userRole={user?.role}
-                    hasAccess={hasAccess}
-                    brandColor={brandColor}
-                />
-                
-                {/* Page Content */}
-                <div className="relative z-0">
+                {/* Page Content - Add top padding to account for fixed header */}
+                <div className="relative pt-[112px]">
                     <Outlet context={{ hasAccess, institution }} />
                 </div>
 

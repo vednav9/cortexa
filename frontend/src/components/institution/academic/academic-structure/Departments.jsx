@@ -191,13 +191,13 @@ function Departments() {
                 <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
                   <FiUsers className="w-4 h-4 text-orange-600" />
                 </div>
-                <span className="font-medium">{dept.faculty?.length || 0} Faculty</span>
+                <span className="font-medium">{dept.facultyCount ?? 0} Faculty</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                   <FiUsers className="w-4 h-4 text-green-600" />
                 </div>
-                <span className="font-medium">{dept.students?.length || 0} Students</span>
+                <span className="font-medium">{dept.studentCount ?? 0} Students</span>
               </div>
             </div>
 

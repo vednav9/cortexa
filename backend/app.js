@@ -13,11 +13,10 @@ import invitationRoutes from "./routes/invitationRoutes.js";
 import announcementRoutes from "./routes/announcementRoutes.js";
 import academicRoutes from "./routes/academicRoutes.js";
 import cortexaAdminRoutes from "./routes/cortexaAdminRoutes.js";
-import teacherMCQRoutes from "./routes/teacherMCQRoutes.js";
-import studentMCQRoutes from "./routes/studentMCQRoutes.js";
 import teacherQARoutes from "./routes/teacherQARoutes.js";
 import studentQARoutes from "./routes/studentQARoutes.js";
-
+import queryRoutes from "./routes/queryRoutes.js";
+import qaRoutes from './routes/qaRoutes.js';
 
 dotenv.config();
 
@@ -51,10 +50,11 @@ app.use("/api/invitations", invitationRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/academic", academicRoutes);
 app.use("/api/cortexa-admin", cortexaAdminRoutes);
-app.use("/api/teacher-mcq", teacherMCQRoutes);
-app.use("/api/student-mcq", studentMCQRoutes);
 app.use("/api/teacher-qa", teacherQARoutes);
 app.use("/api/student-qa", studentQARoutes);
+app.use("/api/queries", queryRoutes);
+app.use('/api/qa', qaRoutes);
 
+console.log("✅ All routes registered successfully");
 
 export default app;

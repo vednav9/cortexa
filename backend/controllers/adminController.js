@@ -1,6 +1,7 @@
 import Admin from "../models/admin.js";
 import Student from "../models/student.js";
 import Teacher from "../models/teacher.js";
+import Course from "../models/course.js";
 import Institution from "../models/institution.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
@@ -49,6 +50,7 @@ export const registerAdmin = async (req, res) => {
       fullName,
       email,
       password,
+      username,
       jobTitle,
       phone,
       institutionName,
@@ -69,6 +71,7 @@ export const registerAdmin = async (req, res) => {
       !fullName ||
       !email ||
       !password ||
+      !username ||
       !jobTitle ||
       !phone ||
       !institutionName ||
@@ -84,12 +87,28 @@ export const registerAdmin = async (req, res) => {
       });
     }
 
+    if (!username || username.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: "Username is required",
+      });
+    }
+
     // 🔴 CHECK EXISTING ADMIN
     const exists = await Admin.findOne({ email });
     if (exists) {
       return res.status(400).json({
         success: false,
         message: "Admin already exists",
+      });
+    }
+
+    // Check if username is already taken
+    const existingUsername = await Admin.findOne({ username });
+    if (existingUsername) {
+      return res.status(400).json({
+        success: false,
+        message: "Username already exists",
       });
     }
 
@@ -153,6 +172,7 @@ export const registerAdmin = async (req, res) => {
       fullName,
       email,
       password,
+      username,
       jobTitle,
       phone,
       institution: institution._id,
@@ -166,6 +186,8 @@ export const registerAdmin = async (req, res) => {
     const token = generateToken({
       id: admin._id,
       role: "admin",
+      name: admin.fullName,
+      email: admin.email
     });
 
     res.cookie("token", token, cookieOptions);
@@ -174,6 +196,7 @@ export const registerAdmin = async (req, res) => {
       success: true,
       user: {
         id: admin._id,
+        _id: admin._id,
         name: admin.fullName,
         email: admin.email,
         role: "admin",
@@ -197,14 +220,37 @@ export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const admin = await Admin.findOne({ email })
+    const admin = await Admin.findOne({ 
+      $or: [{ email }, { username: email }] 
+    })
       .select("+password")
       .populate("institution", "name code");
 
     if (!admin) {
+      // Check if email/username exists in other roles
+      const student = await Student.findOne({ 
+        $or: [{ email }, { username: email }] 
+      });
+      if (student) {
+        return res.status(400).json({
+          success: false,
+          message: "This account is registered as a Student. Please select Student role.",
+        });
+      }
+
+      const teacher = await Teacher.findOne({ 
+        $or: [{ email }, { username: email }] 
+      });
+      if (teacher) {
+        return res.status(400).json({
+          success: false,
+          message: "This account is registered as a Teacher. Please select Teacher role.",
+        });
+      }
+
       return res.status(404).json({
         success: false,
-        message: "Admin not found",
+        message: "Invalid email/username or password",
       });
     }
 
@@ -212,13 +258,15 @@ export const loginAdmin = async (req, res) => {
     if (!match) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials",
+        message: "Invalid email/username or password",
       });
     }
 
     const token = generateToken({
       id: admin._id,
       role: "admin",
+      name: admin.fullName,
+      email: admin.email
     });
 
     res.cookie("token", token, cookieOptions);
@@ -227,6 +275,7 @@ export const loginAdmin = async (req, res) => {
       success: true,
       user: {
         id: admin._id,
+        _id: admin._id,
         name: admin.fullName,
         email: admin.email,
         role: "admin",
@@ -254,10 +303,11 @@ export const getMyInstitution = async (req, res) => {
 
     const institutionId = admin.institution._id;
 
-    // 🔥 DYNAMIC COUNTS
-    const [studentsCount, teachersCount] = await Promise.all([
+    // 🔥 DYNAMIC COUNTS (NOW COMPLETE)
+    const [studentsCount, teachersCount, coursesCount] = await Promise.all([
       Student.countDocuments({ institution: institutionId }),
       Teacher.countDocuments({ institution: institutionId }),
+      Course.countDocuments({ institution: institutionId }),
     ]);
 
     res.json({
@@ -266,7 +316,7 @@ export const getMyInstitution = async (req, res) => {
         stats: {
           students: studentsCount,
           teachers: teachersCount,
-          courses: 0, // placeholder for future
+          courses: coursesCount, // ✅ FIXED
         },
       },
     });
@@ -275,7 +325,6 @@ export const getMyInstitution = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch institution" });
   }
 };
-
 
 
 
@@ -300,7 +349,7 @@ export const getUsers = async (req, res) => {
     const { role = "all", status, department, search } = req.query;
 
     // 🔐 Verify admin
-    const admin = await Admin.findById(req.user.id);
+    const admin = await Admin.findById(req.user._id);
     if (!admin || admin.institution.toString() !== institutionId) {
       return res.status(403).json({ message: "Access denied" });
     }
@@ -326,15 +375,25 @@ export const getUsers = async (req, res) => {
     let students = [];
     let teachers = [];
 
-    // 👥 FETCH USERS
+    // 👥 FETCH STUDENTS
     if (role === "all" || role === "student") {
-      students = await Student.find(buildQuery()).lean();
+      students = await Student.find(buildQuery())
+        .populate("department", "name code")
+        .populate("semester", "name academicYear")
+        .lean();
+
       students = students.map(u => ({ ...u, role: "student" }));
     }
 
+    // 👥 FETCH TEACHERS
     if (role === "all" || role === "teacher") {
-      teachers = await Teacher.find(buildQuery()).lean();
-      teachers = teachers.map(u => ({ ...u, role: "teacher" }));
+      teachers = await Teacher.find(buildQuery())
+      .populate("department", "name")
+      .populate("authorizedCourses", "name code")
+      .lean();
+    
+    teachers = teachers.map(u => ({ ...u, role: "teacher" }));
+    
     }
 
     users = [...students, ...teachers];
@@ -359,6 +418,7 @@ export const getUsers = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch users" });
   }
 };
+
 
 
 

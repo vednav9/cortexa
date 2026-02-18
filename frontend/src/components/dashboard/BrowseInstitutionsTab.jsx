@@ -5,7 +5,11 @@ import { FiSearch, FiMapPin, FiUsers, FiBook, FiExternalLink, FiChevronDown, FiL
 import { institutionAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
-export default function BrowseInstitutionsTab({ excludeInstitutionId }) {
+export default function BrowseInstitutionsTab({
+  excludeInstitutionId,
+  onCountChange
+}) {
+
   const [filters, setFilters] = useState({
     type: 'all',
     sortBy: 'name'
@@ -98,6 +102,13 @@ export default function BrowseInstitutionsTab({ excludeInstitutionId }) {
 
     return results;
   }, [institutions, filters, searchQuery, excludeInstitutionId]);
+
+  useEffect(() => {
+    if (typeof onCountChange === "function") {
+      onCountChange(filteredInstitutions.length);
+    }
+  }, [filteredInstitutions, onCountChange]);
+  
 
   const typeOptions = [
     { value: 'all', label: 'All Types' },
