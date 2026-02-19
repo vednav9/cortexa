@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/authcontext";
 import axios from "axios";
+import { API_BASE_URL } from "../../config/api";
 
 export default function InstitutionNavbar({
   institution,
@@ -40,7 +41,7 @@ export default function InstitutionNavbar({
   const handleLogout = async () => {
     try {
       await axios.post(
-        "http://localhost:5000/api/auth/logout",
+        `${API_BASE_URL}/auth/logout`,
         {},
         { withCredentials: true }
       );

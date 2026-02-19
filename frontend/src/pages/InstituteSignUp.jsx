@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
+import { API_BASE_URL } from "../config/api";
 import {
   FiMail,
   FiLock,
@@ -249,7 +250,7 @@ const InstituteSignUp = () => {
 
       // 🔹 API call (IMPORTANT: store response)
       const response = await axios.post(
-        "http://localhost:5000/api/admin/register",
+        `${API_BASE_URL}/admin/register`,
         formPayload,
         {
           withCredentials: true,

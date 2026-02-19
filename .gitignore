@@ -1,5 +1,9 @@
 # .gitignore
 node_modules
 .env
+<<<<<<< HEAD
 .venv
 ai/data
+=======
+.env.example
+>>>>>>> 768cafc776c562bcce31faccb93a3643973f4d91
