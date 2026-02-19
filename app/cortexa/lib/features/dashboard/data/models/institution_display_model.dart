@@ -16,6 +16,12 @@ class InstitutionDisplayModel extends Equatable {
   final bool isOwnInstitution; // True if current user is admin of this institution
   final int studentCount;
   final int teacherCount;
+  final int departmentCount;
+  final int courseCount;
+  final int semesterCount;
+  final String? contactEmail;
+  final String? contactPhone;
+  final String? contactWebsite;
   final DateTime createdAt;
 
   const InstitutionDisplayModel({
@@ -32,6 +38,12 @@ class InstitutionDisplayModel extends Equatable {
     this.isOwnInstitution = false,
     this.studentCount = 0,
     this.teacherCount = 0,
+    this.departmentCount = 0,
+    this.courseCount = 0,
+    this.semesterCount = 0,
+    this.contactEmail,
+    this.contactPhone,
+    this.contactWebsite,
     required this.createdAt,
   });
 
@@ -50,6 +62,12 @@ class InstitutionDisplayModel extends Equatable {
       isOwnInstitution: json['is_own_institution'] ?? false,
       studentCount: json['student_count'] ?? 0,
       teacherCount: json['teacher_count'] ?? 0,
+      departmentCount: json['department_count'] ?? 0,
+      courseCount: json['course_count'] ?? 0,
+      semesterCount: json['semester_count'] ?? 0,
+      contactEmail: json['contact_email'],
+      contactPhone: json['contact_phone'],
+      contactWebsite: json['contact_website'],
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
@@ -71,6 +89,12 @@ class InstitutionDisplayModel extends Equatable {
       'is_own_institution': isOwnInstitution,
       'student_count': studentCount,
       'teacher_count': teacherCount,
+      'department_count': departmentCount,
+      'course_count': courseCount,
+      'semester_count': semesterCount,
+      'contact_email': contactEmail,
+      'contact_phone': contactPhone,
+      'contact_website': contactWebsite,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -89,6 +113,12 @@ class InstitutionDisplayModel extends Equatable {
     bool? isOwnInstitution,
     int? studentCount,
     int? teacherCount,
+    int? departmentCount,
+    int? courseCount,
+    int? semesterCount,
+    String? contactEmail,
+    String? contactPhone,
+    String? contactWebsite,
     DateTime? createdAt,
   }) {
     return InstitutionDisplayModel(
@@ -105,6 +135,12 @@ class InstitutionDisplayModel extends Equatable {
       isOwnInstitution: isOwnInstitution ?? this.isOwnInstitution,
       studentCount: studentCount ?? this.studentCount,
       teacherCount: teacherCount ?? this.teacherCount,
+      departmentCount: departmentCount ?? this.departmentCount,
+      courseCount: courseCount ?? this.courseCount,
+      semesterCount: semesterCount ?? this.semesterCount,
+      contactEmail: contactEmail ?? this.contactEmail,
+      contactPhone: contactPhone ?? this.contactPhone,
+      contactWebsite: contactWebsite ?? this.contactWebsite,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -126,6 +162,12 @@ class InstitutionDisplayModel extends Equatable {
         isOwnInstitution,
         studentCount,
         teacherCount,
+        departmentCount,
+        courseCount,
+        semesterCount,
+        contactEmail,
+        contactPhone,
+        contactWebsite,
         createdAt,
       ];
 }

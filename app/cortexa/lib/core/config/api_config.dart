@@ -4,7 +4,7 @@ class ApiConfig {
   // NGROK SETUP: When ngrok is running, paste your ngrok URL here (without /api)
   // Example: 'https://abc123-def456.ngrok-free.app'
   // To run ngrok: ngrok http 5000
-  static const String _ngrokUrl = 'https://526ae04954ff.ngrok-free.app';
+  static const String _ngrokUrl = 'https://b7d2-223-181-63-240.ngrok-free.app';
   
   // Fallback local IP for when NOT using ngrok
   static const String _physicalDeviceIP = '192.168.11.213';
@@ -15,7 +15,7 @@ class ApiConfig {
     if (overridden.isNotEmpty) return overridden;
 
     // If ngrok URL is set, use it (works on any network!)
-    if (_ngrokUrl != 'PASTE_YOUR_NGROK_URL_HERE') {
+    if (_ngrokUrl != '') {
       return '$_ngrokUrl/api';
     }
 
@@ -55,9 +55,10 @@ class ApiConfig {
   static const String getProfile = '/auth/me';
   
   // Timeouts
-  static const Duration connectionTimeout = Duration(seconds: 30);
-  static const Duration receiveTimeout = Duration(seconds: 30);
+  // Increased for AI operations which can take longer (especially through ngrok)
+  static const Duration connectionTimeout = Duration(seconds: 360); // 6 minutes
+  static const Duration receiveTimeout = Duration(seconds: 360); // 6 minutes
 
   // Multipart uploads (logo/banner) can take longer on slow networks.
-  static const Duration multipartTimeout = Duration(seconds: 120);
+  static const Duration multipartTimeout = Duration(seconds: 600); // 10 minutes
 }

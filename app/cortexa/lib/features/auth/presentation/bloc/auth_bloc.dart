@@ -31,10 +31,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     CheckAuthStatus event,
     Emitter<AuthState> emit,
   ) async {
+    print('============================================');
     print('🔍 [AuthBloc] Checking auth status...');
-    print(
-      '🔍 [AuthBloc] AppState initialized: ${appStateProvider.isInitialized}',
-    );
+    print('============================================');
+    print('🔍 [AuthBloc] AppState initialized: ${appStateProvider.isInitialized}');
 
     if (!appStateProvider.isInitialized) {
       emit(const AuthLoading());
@@ -48,8 +48,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final user = authRepository.getCurrentUser();
       final token = authRepository.getToken();
 
+      print('🔍 [AuthBloc] Auth Check Results:');
+      print('  - isLoggedIn: $isLoggedIn');
+      print('  - user exists: ${user != null}');
+      print('  - user: ${user?.username ?? "null"}');
+      print('  - token exists: ${token != null && token.isNotEmpty}');
+
       if (isLoggedIn && user != null && token != null) {
-        print('✅ [AuthBloc] User authenticated: ${user.username}');
+        print('✅ [AuthBloc] User authenticated: ${user.username} (${user.role})');
 
         appStateProvider.setUser(user, token);
         appStateProvider.setInitialized(true);
@@ -62,7 +68,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ),
         );
       } else {
-        print('❌ [AuthBloc] No user found');
+        print('❌ [AuthBloc] No user found - redirecting to login');
 
         appStateProvider.clearUser();
         appStateProvider.setInitialized(true);
@@ -71,7 +77,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(const AuthUnauthenticated());
       }
     } catch (e, stackTrace) {
-      print('⚠️ [AuthBloc] Error: $e');
+      print('⚠️ [AuthBloc] Error checking auth status: $e');
       print('⚠️ [AuthBloc] StackTrace: $stackTrace');
 
       appStateProvider.clearUser();
@@ -80,6 +86,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       emit(const AuthUnauthenticated());
     }
+    print('============================================');
   }
 
   /// Handle login request

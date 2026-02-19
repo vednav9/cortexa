@@ -325,8 +325,12 @@ class ApiClient {
 
     if (requiresAuth) {
       final token = _storage.getToken();
+      print('🔑 [ApiClient] Auth required - Token exists: ${token != null && token.isNotEmpty}');
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
+        print('✅ [ApiClient] Authorization header added (${token.substring(0, 20)}...)');
+      } else {
+        print('⚠️ [ApiClient] No token available for authenticated request!');
       }
     }
 
@@ -374,15 +378,115 @@ class ApiClient {
         technicalMessage,
       );
       
-      // Clear auth data on 401
-      if (statusCode == 401) {
-        _storage.clearAuthData();
+      print('❌ [ApiClient] Error Response:');
+      print('   Status Code: $statusCode');
+      print('   Technical Message: $technicalMessage');
+      print('   User Message: $userFriendlyMessage');
+      
+      // Only clear auth data on 401 if it's actually an authentication error
+      // Don't clear on "token missing" errors that might be temporary
+      if (statusCode == 401 && technicalMessage != null) {
+        final shouldClearAuth = technicalMessage.toLowerCase().contains('invalid') ||
+                               technicalMessage.toLowerCase().contains('expired') ||
+                               technicalMessage.toLowerCase().contains('unauthorized');
+        
+        if (shouldClearAuth) {
+          print('⚠️ [ApiClient] Clearing auth data due to invalid/expired token');
+          _storage.clearAuthData();
+        } else {
+          print('⚠️ [ApiClient] 401 error but not clearing auth - may be temporary issue');
+        }
       }
       
       throw ApiException(
         userFriendlyMessage,
         statusCode: statusCode,
         technicalMessage: technicalMessage,
+      );
+    }
+  }
+
+  /// Upload file to backend
+  Future<Map<String, dynamic>> uploadFile(
+    String endpoint, {
+    required String filePath,
+    required String fieldName,
+    Map<String, String>? additionalFields,
+    bool requiresAuth = true,
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final headers = await _buildHeaders(requiresAuth);
+    
+    // Remove Content-Type from headers as multipart will set it
+    headers.remove('Content-Type');
+
+    print('📤 Upload File Request: $url');
+    print('📁 File: $filePath');
+
+    try {
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(headers);
+
+      // Add file
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw ApiException('File not found: $filePath');
+      }
+
+      final fileStream = http.ByteStream(file.openRead());
+      final fileLength = await file.length();
+      final fileName = filePath.split('/').last;
+
+      // Determine content type based on file extension
+      String mimeType = 'application/octet-stream';
+      if (fileName.endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+      } else if (fileName.endsWith('.docx')) {
+        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      } else if (fileName.endsWith('.doc')) {
+        mimeType = 'application/msword';
+      } else if (fileName.endsWith('.txt')) {
+        mimeType = 'text/plain';
+      } else if (fileName.endsWith('.wav')) {
+        mimeType = 'audio/wav';
+      } else if (fileName.endsWith('.mp3')) {
+        mimeType = 'audio/mpeg';
+      }
+
+      final multipartFile = http.MultipartFile(
+        fieldName,
+        fileStream,
+        fileLength,
+        filename: fileName,
+        contentType: http_parser.MediaType.parse(mimeType),
+      );
+
+      request.files.add(multipartFile);
+
+      // Add additional fields
+      if (additionalFields != null) {
+        request.fields.addAll(additionalFields);
+      }
+
+      print('🚀 Uploading ${fileName} (${fileLength} bytes)...');
+      final streamedResponse = await request.send().timeout(timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('📡 Upload Response Status: ${response.statusCode}');
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'Upload timed out. Please try again.',
+        statusCode: 408,
+        technicalMessage: 'File upload timed out after ${timeout.inSeconds}s',
+      );
+    } catch (e) {
+      print('❌ Error uploading file: $e');
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Failed to upload file. Please try again.',
+        technicalMessage: 'Upload error: $e',
       );
     }
   }

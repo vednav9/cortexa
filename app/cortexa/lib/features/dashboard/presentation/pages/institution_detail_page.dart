@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../data/models/institution_display_model.dart';
+import '../../data/repositories/dashboard_repository.dart';
 
-class InstitutionDetailPage extends StatelessWidget {
+class InstitutionDetailPage extends StatefulWidget {
   final InstitutionDisplayModel institution;
 
   const InstitutionDetailPage({
@@ -11,389 +14,680 @@ class InstitutionDetailPage extends StatelessWidget {
   });
 
   @override
+  State<InstitutionDetailPage> createState() => _InstitutionDetailPageState();
+}
+
+class _InstitutionDetailPageState extends State<InstitutionDetailPage> {
+  final _repository = getIt<DashboardRepository>();
+  bool _isLoading = false;
+  InstitutionDisplayModel? _institutionData;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInstitutionData();
+  }
+
+  Future<void> _loadInstitutionData() async {
+    // Start with passed data (from browse API)
+    setState(() {
+      _institutionData = widget.institution;
+      _isLoading = false;
+    });
+
+    // Fetch fresh data using slug (like web frontend does)
+    // This ensures we get the latest stats and contact info
+    if (widget.institution.customUrlSlug.isNotEmpty) {
+      _fetchFreshData();
+    }
+  }
+
+  Future<void> _fetchFreshData() async {
+    try {
+      print('🔄 Fetching fresh institution data...');
+      
+      // Use slug-based API (public endpoint, like web frontend)
+      final freshData = await _repository.getInstitutionBySlug(
+        widget.institution.customUrlSlug,
+        forceRefresh: true,
+      );
+
+      if (freshData != null && mounted) {
+        print('✅ Updated with fresh data:');
+        print('   Name: ${freshData.name}');
+        print('   Students: ${freshData.studentCount}');
+        print('   Teachers: ${freshData.teacherCount}');
+        print('   Contact: ${freshData.contactEmail ?? "N/A"}');
+        
+        setState(() {
+          _institutionData = freshData;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Could not fetch fresh data: $e');
+      // Continue with existing data from browse API
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final institution = _institutionData ?? widget.institution;
     final brandColor = _parseColor(institution.primaryBrandColor);
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // App bar with institution header
-          SliverAppBar(
-            expandedHeight: 200,
-            pinned: true,
-            backgroundColor: brandColor,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(
-                institution.name,
-                style: const TextStyle(
-                  color: AppColors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      brandColor,
-                      brandColor.withValues(alpha: 0.8),
-                    ],
+      backgroundColor: AppColors.background,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : CustomScrollView(
+              slivers: [
+                // Banner with Logo and Name Overlay
+                SliverAppBar(
+                  expandedHeight: 250,
+                  pinned: true,
+                  backgroundColor: brandColor,
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                ),
-                child: Center(
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.3),
-                        width: 2,
-                      ),
-                    ),
-                    child: institution.logoUrl != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: Image.network(
-                              institution.logoUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  _buildLogoPlaceholder(),
-                            ),
-                          )
-                        : _buildLogoPlaceholder(),
-                  ),
-                ),
-              ),
-            ),
-          ),
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Banner Image Background
+                        if (institution.bannerImageUrl != null &&
+                            institution.bannerImageUrl!.isNotEmpty)
+                          institution.bannerImageUrl!.startsWith('http')
+                              ? Image.network(
+                                  institution.bannerImageUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      _buildBannerPlaceholder(brandColor),
+                                )
+                              : Image.file(
+                                  File(institution.bannerImageUrl!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      _buildBannerPlaceholder(brandColor),
+                                )
+                        else
+                          _buildBannerPlaceholder(brandColor),
 
-          // Content
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Quick info section
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
-                    border: Border(
-                      bottom: BorderSide(
-                        color: AppColors.borderDark.withValues(alpha: 0.2),
-                      ),
+                        // Gradient Overlay
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.3),
+                                Colors.black.withValues(alpha: 0.7),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Logo and Name Overlay
+                        Positioned(
+                          bottom: 20,
+                          left: 20,
+                          right: 20,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              // Institution Logo
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.3),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: institution.logoUrl != null &&
+                                        institution.logoUrl!.isNotEmpty
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: institution.logoUrl!
+                                                .startsWith('http')
+                                            ? Image.network(
+                                                institution.logoUrl!,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error,
+                                                        stackTrace) =>
+                                                    _buildLogoPlaceholder(
+                                                        brandColor),
+                                              )
+                                            : Image.file(
+                                                File(institution.logoUrl!),
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error,
+                                                        stackTrace) =>
+                                                    _buildLogoPlaceholder(
+                                                        brandColor),
+                                              ),
+                                      )
+                                    : _buildLogoPlaceholder(brandColor),
+                              ),
+                              const SizedBox(width: 16),
+                              // Institution Name and Location
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      institution.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.bold,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black54,
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.location_on,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            '${institution.city}, ${institution.country}',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              shadows: [
+                                                Shadow(
+                                                  color: Colors.black54,
+                                                  blurRadius: 3,
+                                                ),
+                                              ],
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
+
+                // Content
+                SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Type badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: brandColor.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          institution.type,
-                          style: TextStyle(
-                            color: brandColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Location
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.location_on,
-                            color: brandColor,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              institution.fullLocation,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Stats
-                      Row(
-                        children: [
-                          _buildStatChip(
-                            context,
-                            Icons.school,
-                            '${institution.studentCount}',
-                            'Students',
-                            brandColor,
-                          ),
-                          const SizedBox(width: 12),
-                          _buildStatChip(
-                            context,
-                            Icons.person,
-                            '${institution.teacherCount}',
-                            'Teachers',
-                            brandColor,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // About section
-                _buildSection(
-                  context,
-                  'About',
-                  Icons.info_outline,
-                  brandColor,
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        institution.description,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      // Institution Description
+                      if (institution.description.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                          child: Text(
+                            institution.description,
+                            style: const TextStyle(
+                              fontSize: 15,
                               color: AppColors.textSecondary,
                               height: 1.6,
+                              letterSpacing: 0.2,
                             ),
+                            textAlign: TextAlign.justify,
+                          ),
+                        ),
+
+                      const SizedBox(height: 32),
+
+                      // Stats Section
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Overview',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildStatCard(
+                                    icon: Icons.people_outline,
+                                    iconColor: Colors.blue,
+                                    count: institution.studentCount.toString(),
+                                    label: 'Students',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    icon: Icons.person_outline,
+                                    iconColor: Colors.green,
+                                    count: institution.teacherCount.toString(),
+                                    label: 'Teachers',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildStatCard(
+                                    icon: Icons.business_outlined,
+                                    iconColor: Colors.purple,
+                                    count: institution.departmentCount.toString(),
+                                    label: 'Departments',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    icon: Icons.calendar_today_outlined,
+                                    iconColor: Colors.orange,
+                                    count: institution.semesterCount.toString(),
+                                    label: 'Semesters',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildStatCard(
+                                    icon: Icons.book_outlined,
+                                    iconColor: Colors.teal,
+                                    count: institution.courseCount.toString(),
+                                    label: 'Courses',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(child: Container()),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
+
+                      const SizedBox(height: 24),
+
+                        // About Us Section
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: brandColor.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.info_outline,
+                                        color: brandColor,
+                                        size: 26,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'About Us',
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildInfoCard(
+                                        icon: Icons.account_balance,
+                                        iconColor: Colors.blue,
+                                        label: 'Type',
+                                        value: institution.type,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildInfoCard(
+                                        icon: Icons.location_on,
+                                        iconColor: Colors.red,
+                                        label: 'Location',
+                                        value: '${institution.city}, ${institution.country}',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Contact Information Section
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: brandColor.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.contact_mail_outlined,
+                                        color: brandColor,
+                                        size: 26,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      'Contact Information',
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                _buildContactItem(
+                                  icon: Icons.email,
+                                  iconColor: Colors.pink,
+                                  label: 'Email',
+                                  value: institution.contactEmail ?? 'contact@${institution.customUrlSlug}.edu',
+                                ),
+                                const SizedBox(height: 12),
+                                _buildContactItem(
+                                  icon: Icons.phone,
+                                  iconColor: Colors.green,
+                                  label: 'Phone',
+                                  value: institution.contactPhone ?? 'Contact institution for details',
+                                ),
+                                const SizedBox(height: 12),
+                                _buildContactItem(
+                                  icon: Icons.language,
+                                  iconColor: Colors.blue,
+                                  label: 'Website',
+                                  value: institution.contactWebsite ?? 'www.${institution.customUrlSlug}.edu',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
-
-                // Details section
-                _buildSection(
-                  context,
-                  'Details',
-                  Icons.list_alt,
-                  brandColor,
-                  Column(
-                    children: [
-                      _buildDetailRow(
-                        context,
-                        'Institution ID',
-                        institution.id,
-                      ),
-                      _buildDetailRow(
-                        context,
-                        'URL Slug',
-                        institution.customUrlSlug,
-                      ),
-                      _buildDetailRow(
-                        context,
-                        'City',
-                        institution.city,
-                      ),
-                      _buildDetailRow(
-                        context,
-                        'Country',
-                        institution.country,
-                      ),
-                      _buildDetailRow(
-                        context,
-                        'Established',
-                        _formatDate(institution.createdAt),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Contact section (placeholder)
-                _buildSection(
-                  context,
-                  'Contact Information',
-                  Icons.contact_mail,
-                  brandColor,
-                  Column(
-                    children: [
-                      _buildDetailRow(
-                        context,
-                        'Website',
-                        'www.${institution.customUrlSlug}.edu',
-                      ),
-                      _buildDetailRow(
-                        context,
-                        'Email',
-                        'info@${institution.customUrlSlug}.edu',
-                      ),
-                      _buildDetailRow(
-                        context,
-                        'Phone',
-                        '+1 (555) 000-0000',
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildLogoPlaceholder() {
-    return const Center(
-      child: Icon(
-        Icons.school_rounded,
-        color: Colors.white,
-        size: 50,
-      ),
-    );
-  }
-
-  Widget _buildStatChip(
-    BuildContext context,
-    IconData icon,
-    String value,
-    String label,
-    Color color,
-  ) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: color.withValues(alpha: 0.3),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    value,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                  ),
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                        ),
-                  ),
-                ],
-              ),
-            ),
+  Widget _buildBannerPlaceholder(Color brandColor) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            brandColor.withValues(alpha: 0.8),
+            brandColor.withValues(alpha: 0.5),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSection(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color accentColor,
-    Widget content,
-  ) {
+  Widget _buildLogoPlaceholder(Color brandColor) {
+    return Center(
+      child: Icon(
+        Icons.school_rounded,
+        color: brandColor,
+        size: 40,
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required Color iconColor,
+    required String count,
+    required String label,
+  }) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.borderDark.withValues(alpha: 0.2),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 24,
+                color: iconColor,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: iconColor,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            count,
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: iconColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.borderDark.withValues(alpha: 0.2),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Row(
-              children: [
-                Icon(icon, color: accentColor, size: 22),
-                const SizedBox(width: 10),
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: content,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(
-    BuildContext context,
-    String label,
-    String value,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textPrimary,
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: iconColor,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary.withValues(alpha: 0.7),
                   ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  Widget _buildContactItem({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            size: 22,
+            color: iconColor,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary.withValues(alpha: 0.8),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Color _parseColor(String hexColor) {

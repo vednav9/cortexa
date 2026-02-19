@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 
 /// Main splash page that handles routing after animation
@@ -19,8 +18,8 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
-    // Check authentication status when splash page loads
-    context.read<AuthBloc>().add(const CheckAuthStatus());
+    // Auth check is already triggered in main.dart when AuthBloc is created
+    // No need to check again here
   }
 
   void _navigateBasedOnState(AuthState state) {

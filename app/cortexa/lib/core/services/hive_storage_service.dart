@@ -21,6 +21,12 @@ class HiveStorageService {
   static const String _queriesKey = 'queries';
   static const String _teachersKey = 'teachers';
   static const String _settingsKey = 'settings';
+  static const String _metadataKey = 'metadata';
+  static const String _ragChatHistoryKey = 'rag_chat_history';
+  static const String _mcqSetsKey = 'mcq_sets';
+  static const String _mcqAttemptsKey = 'mcq_attempts';
+  static const String _uploadedDocumentsKey = 'uploaded_documents';
+  static const String _authorizedCoursesKey = 'authorized_courses';
 
   late Box<dynamic> _appBox;
 
@@ -59,6 +65,12 @@ class HiveStorageService {
     _appBox.put(_queriesKey, _appBox.get(_queriesKey, defaultValue: <String, dynamic>{}));
     _appBox.put(_teachersKey, _appBox.get(_teachersKey, defaultValue: <String, dynamic>{}));
     _appBox.put(_settingsKey, _appBox.get(_settingsKey, defaultValue: <String, dynamic>{}));
+    _appBox.put(_metadataKey, _appBox.get(_metadataKey, defaultValue: <String, dynamic>{}));
+    _appBox.put(_ragChatHistoryKey, _appBox.get(_ragChatHistoryKey, defaultValue: <dynamic>[]));
+    _appBox.put(_mcqSetsKey, _appBox.get(_mcqSetsKey, defaultValue: <String, dynamic>{}));
+    _appBox.put(_mcqAttemptsKey, _appBox.get(_mcqAttemptsKey, defaultValue: <String, dynamic>{}));
+    _appBox.put(_uploadedDocumentsKey, _appBox.get(_uploadedDocumentsKey, defaultValue: <String, dynamic>{}));
+    _appBox.put(_authorizedCoursesKey, _appBox.get(_authorizedCoursesKey, defaultValue: <dynamic>[]));
 
     print('🎉 HiveStorageService initialized successfully');
   }
@@ -73,7 +85,19 @@ class HiveStorageService {
 
   /// Get current user
   UserHiveModel? getCurrentUser() {
-    return _appBox.get(_currentUserKey) as UserHiveModel?;
+    try {
+      final userData = _appBox.get(_currentUserKey);
+      if (userData == null) {
+        print('🔍 [HiveStorage] No user data found in storage');
+        return null;
+      }
+      final user = userData as UserHiveModel;
+      print('🔍 [HiveStorage] Retrieved user: ${user.username} (${user.role})');
+      return user;
+    } catch (e) {
+      print('❌ [HiveStorage] Error getting current user: $e');
+      return null;
+    }
   }
 
   /// Delete current user
@@ -96,7 +120,10 @@ class HiveStorageService {
 
   /// Get authentication token string
   String? getToken() {
-    return _appBox.get(_currentTokenKey) as String?;
+    final token = _appBox.get(_currentTokenKey) as String?;
+    final hasToken = token != null && token.isNotEmpty;
+    print('🔍 [HiveStorage] Token exists: $hasToken');
+    return token;
   }
 
   /// Delete tokens
@@ -720,5 +747,146 @@ class HiveStorageService {
   Future<void> clearTeachers() async {
     await _appBox.put(_teachersKey, <String, dynamic>{});
   }
-}
 
+  // ===== Metadata Methods (for caching timestamps, etc.) =====
+
+  /// Save metadata (key-value pair for cache timestamps, etc.)
+  Future<void> saveMetadata(String key, String value) async {
+    final metadata = _appBox.get(_metadataKey, defaultValue: <String, dynamic>{}) as Map;
+    final updatedMetadata = Map<String, dynamic>.from(metadata);
+    updatedMetadata[key] = value;
+    await _appBox.put(_metadataKey, updatedMetadata);
+  }
+
+  /// Get metadata value
+  String? getMetadata(String key) {
+    final metadata = _appBox.get(_metadataKey, defaultValue: <String, dynamic>{}) as Map;
+    return metadata[key]?.toString();
+  }
+
+  /// Delete metadata
+  Future<void> deleteMetadata(String key) async {
+    final metadata = _appBox.get(_metadataKey, defaultValue: <String, dynamic>{}) as Map;
+    final updatedMetadata = Map<String, dynamic>.from(metadata);
+    updatedMetadata.remove(key);
+    await _appBox.put(_metadataKey, updatedMetadata);
+  }
+
+  /// Clear all metadata
+  Future<void> clearMetadata() async {
+    await _appBox.put(_metadataKey, <String, dynamic>{});
+  }
+
+  // ===== AI & RAG Methods =====
+
+  /// Get RAG chat history
+  List<dynamic> getRagChatHistory() {
+    return _appBox.get(_ragChatHistoryKey, defaultValue: <dynamic>[]) as List<dynamic>;
+  }
+
+  /// Add message to RAG chat history
+  Future<void> addRagChatMessage(Map<String, dynamic> message) async {
+    final history = getRagChatHistory();
+    final updatedHistory = List<dynamic>.from(history)..add(message);
+    await _appBox.put(_ragChatHistoryKey, updatedHistory);
+  }
+
+  /// Clear RAG chat history
+  Future<void> clearRagChatHistory() async {
+    await _appBox.put(_ragChatHistoryKey, <dynamic>[]);
+  }
+
+  /// Save MCQ set
+  Future<void> saveMcqSet(String id, Map<String, dynamic> mcqSet) async {
+    final mcqSets = _appBox.get(_mcqSetsKey, defaultValue: <String, dynamic>{}) as Map;
+    final updatedMcqSets = Map<String, dynamic>.from(mcqSets);
+    updatedMcqSets[id] = mcqSet;
+    await _appBox.put(_mcqSetsKey, updatedMcqSets);
+  }
+
+  /// Get all MCQ sets
+  List<Map<String, dynamic>> getAllMcqSets() {
+    final mcqSets = _appBox.get(_mcqSetsKey, defaultValue: <String, dynamic>{}) as Map;
+    return mcqSets.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Get MCQ set by ID
+  Map<String, dynamic>? getMcqSetById(String id) {
+    final mcqSets = _appBox.get(_mcqSetsKey, defaultValue: <String, dynamic>{}) as Map;
+    final mcqSet = mcqSets[id];
+    return mcqSet != null ? Map<String, dynamic>.from(mcqSet as Map) : null;
+  }
+
+  /// Delete MCQ set
+  Future<void> deleteMcqSet(String id) async {
+    final mcqSets = _appBox.get(_mcqSetsKey, defaultValue: <String, dynamic>{}) as Map;
+    final updatedMcqSets = Map<String, dynamic>.from(mcqSets);
+    updatedMcqSets.remove(id);
+    await _appBox.put(_mcqSetsKey, updatedMcqSets);
+  }
+
+  /// Save MCQ attempt
+  Future<void> saveMcqAttempt(String id, Map<String, dynamic> attempt) async {
+    final attempts = _appBox.get(_mcqAttemptsKey, defaultValue: <String, dynamic>{}) as Map;
+    final updatedAttempts = Map<String, dynamic>.from(attempts);
+    updatedAttempts[id] = attempt;
+    await _appBox.put(_mcqAttemptsKey, updatedAttempts);
+  }
+
+  /// Get MCQ attempt by ID
+  Map<String, dynamic>? getMcqAttemptById(String id) {
+    final attempts = _appBox.get(_mcqAttemptsKey, defaultValue: <String, dynamic>{}) as Map;
+    final attempt = attempts[id];
+    return attempt != null ? Map<String, dynamic>.from(attempt as Map) : null;
+  }
+
+  /// Get all MCQ attempts for a student
+  List<Map<String, dynamic>> getMcqAttemptsByStudent(String studentId) {
+    final attempts = _appBox.get(_mcqAttemptsKey, defaultValue: <String, dynamic>{}) as Map;
+    return attempts.values
+        .where((a) => (a as Map)['studentId'] == studentId)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  /// Save uploaded document metadata
+  Future<void> saveUploadedDocument(String id, Map<String, dynamic> document) async {
+    final docs = _appBox.get(_uploadedDocumentsKey, defaultValue: <String, dynamic>{}) as Map;
+    final updatedDocs = Map<String, dynamic>.from(docs);
+    updatedDocs[id] = document;
+    await _appBox.put(_uploadedDocumentsKey, updatedDocs);
+  }
+
+  /// Get all uploaded documents
+  List<Map<String, dynamic>> getAllUploadedDocuments() {
+    final docs = _appBox.get(_uploadedDocumentsKey, defaultValue: <String, dynamic>{}) as Map;
+    return docs.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Delete uploaded document
+  Future<void> deleteUploadedDocument(String id) async {
+    final docs = _appBox.get(_uploadedDocumentsKey, defaultValue: <String, dynamic>{}) as Map;
+    final updatedDocs = Map<String, dynamic>.from(docs);
+    updatedDocs.remove(id);
+    await _appBox.put(_uploadedDocumentsKey, updatedDocs);
+  }
+
+  // ===== Authorized Courses Methods (for Teachers) =====
+
+  /// Save authorized courses for current teacher
+  Future<void> saveAuthorizedCourses(List<Map<String, dynamic>> courses) async {
+    await _appBox.put(_authorizedCoursesKey, courses);
+    print('💾 Authorized courses saved: ${courses.length} courses');
+  }
+
+  /// Get authorized courses
+  List<Map<String, dynamic>>? getAuthorizedCourses() {
+    final courses = _appBox.get(_authorizedCoursesKey) as List?;
+    return courses?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Clear authorized courses
+  Future<void> clearAuthorizedCourses() async {
+    await _appBox.delete(_authorizedCoursesKey);
+  }
+}

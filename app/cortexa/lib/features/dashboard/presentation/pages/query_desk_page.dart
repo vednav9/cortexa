@@ -828,9 +828,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _isInstitutionContext
-                      ? 'Get help and support from $_institutionName'
-                      : 'Get help and support from Cortexa team',
+                  'Get help from Cortexa',
                   style: const TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,

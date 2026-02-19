@@ -8,6 +8,10 @@ import '../providers/app_state_provider.dart';
 import '../network/api_client.dart';
 import '../../features/auth/data/repositories/mock_auth_repository.dart';
 import '../../features/auth/data/repositories/auth_repository.dart';
+import '../../features/dashboard/data/repositories/dashboard_repository.dart';
+import '../../features/institution/data/repositories/institution_admin_repository.dart';
+import '../../features/rag_assistant/data/repositories/ai_repository.dart';
+import '../../features/teacher/data/repositories/teacher_ai_repository.dart';
 
 final getIt = GetIt.instance;
 
@@ -99,6 +103,45 @@ Future<void> setupServiceLocator() async {
     ),
   );
   print('✅ MockAuthRepository registered');
+  
+  // Dashboard Repository
+  print('📊 Creating DashboardRepository...');
+  getIt.registerSingleton<DashboardRepository>(
+    DashboardRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ DashboardRepository registered');
+  
+  // Institution Admin Repository
+  print('🏛️ Creating InstitutionAdminRepository...');
+  getIt.registerSingleton<InstitutionAdminRepository>(
+    InstitutionAdminRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ InstitutionAdminRepository registered');
+  
+  // AI Repository
+  print('🤖 Creating AiRepository...');
+  getIt.registerSingleton<AiRepository>(
+    AiRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ AiRepository registered');
+  
+  // Teacher AI Repository
+  print('👨‍🏫 Creating TeacherAiRepository...');
+  getIt.registerSingleton<TeacherAiRepository>(
+    TeacherAiRepository(
+      getIt<ApiClient>(),
+    ),
+  );
+  print('✅ TeacherAiRepository registered');
   
   print('🎉 Service locator setup complete!');
 }

@@ -5,6 +5,7 @@ import '../../../../../core/services/terminology_service.dart';
 import '../../../../../core/services/hive_storage_service.dart';
 import '../../../../../core/di/service_locator.dart';
 import '../../../../dashboard/data/models/institution_display_model.dart';
+import '../../../data/repositories/institution_admin_repository.dart';
 
 class InstitutionDashboardTab extends StatefulWidget {
   final InstitutionDisplayModel institution;
@@ -20,6 +21,8 @@ class InstitutionDashboardTab extends StatefulWidget {
 
 class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
   final _storage = getIt<HiveStorageService>();
+  final _adminRepository = getIt<InstitutionAdminRepository>();
+  
   int _departmentsCount = 0;
   int _coursesCount = 0;
   int _semestersCount = 0;
@@ -28,14 +31,18 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
   String _adminEmail = 'Not available';
   String _adminPhone = 'Not available';
   String _institutionWebsite = 'Not available';
+  String _institutionDescription = '';
+  bool _isLoadingFreshData = false;
 
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    _loadLocalStats();
+    _fetchFreshData();
   }
 
-  void _loadStats() {
+  /// Load stats from local Hive storage for immediate display
+  void _loadLocalStats() {
     try {
       final institutionId = widget.institution.id;
       final departments = _storage.getAllDepartments(institutionId: institutionId);
@@ -55,137 +62,238 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
       final students = institutionInvitations.where((inv) => inv['role'] == 'student').length;
       final teachers = institutionInvitations.where((inv) => inv['role'] == 'teacher').length;
       
-      setState(() {
-        _departmentsCount = departments.length;
-        _coursesCount = courses.length;
-        _semestersCount = semesters.length;
-        _studentsCount = students;
-        _teachersCount = teachers;
-        
-        // Set contact information from institution data
-        if (institutionData != null) {
-          _adminEmail = institutionData['admin_email']?.toString() ?? 'Not available';
-          _adminPhone = institutionData['admin_phone_number']?.toString() ?? 'Not available';
-          _institutionWebsite = institutionData['institution_website']?.toString() ?? 'Not available';
-        }
-      });
+      if (mounted) {
+        setState(() {
+          _departmentsCount = departments.length;
+          _coursesCount = courses.length;
+          _semestersCount = semesters.length;
+          _studentsCount = students;
+          _teachersCount = teachers;
+          
+          // Set contact information from institution data
+          if (institutionData != null) {
+            _adminEmail = institutionData['admin_email']?.toString() ?? 
+                         institutionData['contact']?['email']?.toString() ?? 
+                         'Not available';
+            _adminPhone = institutionData['admin_phone_number']?.toString() ?? 
+                         institutionData['contact']?['phone']?.toString() ?? 
+                         'Not available';
+            _institutionWebsite = institutionData['institution_website']?.toString() ?? 
+                                 institutionData['contact']?['website']?.toString() ?? 
+                                 'Not available';
+            _institutionDescription = institutionData['description']?.toString() ?? widget.institution.description;
+          }
+        });
+      }
     } catch (e) {
-      print('Error loading stats: $e');
+      print('❌ Error loading local stats: $e');
+    }
+  }
+
+  /// Fetch fresh data from backend API
+  Future<void> _fetchFreshData() async {
+    if (!mounted) return;
+    
+    setState(() => _isLoadingFreshData = true);
+
+    try {
+      print('🔄 Fetching fresh institution data from backend...');
+      
+      // Check user role to call correct endpoint
+      final currentUser = _storage.getCurrentUser();
+      final userRole = currentUser?.role?.toLowerCase() ?? 'admin';
+      
+      Map<String, dynamic> institutionData;
+      
+      // Try to fetch from backend based on user role
+      try {
+        if (userRole == 'admin') {
+          institutionData = await _adminRepository.getMyInstitution();
+        } else {
+          // For teachers/students, just use local cached data
+          print('⚠️ Non-admin user, using cached data only');
+          setState(() => _isLoadingFreshData = false);
+          return;
+        }
+      } catch (e) {
+        print('⚠️ Backend fetch failed, using cached data: $e');
+        setState(() => _isLoadingFreshData = false);
+        return; // Fail silently, keep using cached data
+      }
+      
+      if (!mounted) return;
+
+      // Update stats from backend response
+      setState(() {
+        final stats = institutionData['stats'] as Map<String, dynamic>?;
+        if (stats != null) {
+          _studentsCount = stats['students'] as int? ?? _studentsCount;
+          _teachersCount = stats['teachers'] as int? ?? _teachersCount;
+          _coursesCount = stats['courses'] as int? ?? _coursesCount;
+          _departmentsCount = stats['departments'] as int? ?? _departmentsCount;
+          _semestersCount = stats['semesters'] as int? ?? _semestersCount;
+        }
+
+        // Update contact information
+        final contact = institutionData['contact'] as Map<String, dynamic>?;
+        if (contact != null) {
+          _adminEmail = contact['email']?.toString() ?? _adminEmail;
+          _adminPhone = contact['phone']?.toString() ?? _adminPhone;
+          _institutionWebsite = contact['website']?.toString() ?? _institutionWebsite;
+        }
+
+        // Update description
+        if (institutionData['description'] != null) {
+          _institutionDescription = institutionData['description'].toString();
+        }
+
+        _isLoadingFreshData = false;
+      });
+
+      print('✅ Successfully updated dashboard with fresh data');
+    } catch (e) {
+      print('❌ Unexpected error in _fetchFreshData: $e');
+      if (mounted) {
+        setState(() => _isLoadingFreshData = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Banner Section with Institution Name and Description
-          Container(
-            width: double.infinity,
-            height: MediaQuery.of(context).size.height * 0.25,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(int.parse('0xff${widget.institution.primaryBrandColor.replaceAll('#', '')}')).withValues(alpha: 0.8),
-                  Color(int.parse('0xff${widget.institution.primaryBrandColor.replaceAll('#', '')}')).withValues(alpha: 0.5),
+    return RefreshIndicator(
+      onRefresh: _fetchFreshData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Banner Section with Institution Name and Description
+            Container(
+              width: double.infinity,
+              height: MediaQuery.of(context).size.height * 0.25,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(int.parse('0xff${widget.institution.primaryBrandColor.replaceAll('#', '')}')).withValues(alpha: 0.8),
+                    Color(int.parse('0xff${widget.institution.primaryBrandColor.replaceAll('#', '')}')).withValues(alpha: 0.5),
+                  ],
+                ),
+              ),
+              child: Stack(
+                children: [
+                  // Background pattern
+                  Positioned.fill(
+                    child: Opacity(
+                      opacity: 0.1,
+                      child: Image.asset(
+                        'assets/images/pattern.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(),
+                      ),
+                    ),
+                  ),
+                  // Loading indicator for fresh data
+                  if (_isLoadingFreshData)
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Content
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Row(
+                      children: [
+                        // Institution Logo
+                        if (widget.institution.logoUrl != null && widget.institution.logoUrl!.isNotEmpty)
+                          Container(
+                            width: 60,
+                            height: 60,
+                            margin: const EdgeInsets.only(right: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(widget.institution.logoUrl!),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    color: Colors.white,
+                                    child: Icon(
+                                      Icons.school,
+                                      color: Color(int.parse('0xff${widget.institution.primaryBrandColor.replaceAll('#', '')}')),
+                                      size: 30,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        // Name and Description
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.institution.name,
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 12),
+                              if (_institutionDescription.isNotEmpty)
+                                Text(
+                                  _institutionDescription,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    height: 1.4,
+                                  ),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            child: Stack(
-              children: [
-                // Background pattern
-                Positioned.fill(
-                  child: Opacity(
-                    opacity: 0.1,
-                    child: Image.asset(
-                      'assets/images/pattern.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(),
-                    ),
-                  ),
-                ),
-                // Content
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Row(
-                    children: [
-                      // Institution Logo
-                      if (widget.institution.logoUrl != null && widget.institution.logoUrl!.isNotEmpty)
-                        Container(
-                          width: 60,
-                          height: 60,
-                          margin: const EdgeInsets.only(right: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              File(widget.institution.logoUrl!),
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.white,
-                                  child: Icon(
-                                    Icons.school,
-                                    color: Color(int.parse('0xff${widget.institution.primaryBrandColor.replaceAll('#', '')}')),
-                                    size: 30,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      // Name and Description
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.institution.name,
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 0.5,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 12),
-                            if (widget.institution.description.isNotEmpty)
-                              Text(
-                                widget.institution.description,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                  height: 1.4,
-                                ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
 
           // Stats Section
           Padding(
@@ -412,6 +520,7 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
           const SizedBox(height: 20),
         ],
       ),
+    ),
     );
   }
 

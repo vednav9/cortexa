@@ -10,12 +10,11 @@ import '../../../dashboard/presentation/pages/query_desk_page.dart';
 import '../../../institution/presentation/pages/tabs/institution_dashboard_tab.dart';
 import 'tabs/teacher_announcements_tab.dart';
 import 'tabs/see_students_tab.dart';
-import 'tabs/upload_notes_tab.dart';
-import 'tabs/generate_mcqs_tab.dart' as mcq;
-import 'tabs/voice_to_text_tab.dart';
 import 'tabs/teacher_qa_portal_tab.dart';
 import 'tabs/teacher_assessment_tab.dart';
 import 'tabs/ai_chatbot_personal_tab.dart';
+import 'teacher_mcq_generation_page.dart';
+import 'teacher_document_upload_page.dart';
 
 enum TeacherTab {
   dashboard,
@@ -23,7 +22,6 @@ enum TeacherTab {
   seeStudents,
   uploadNotes,
   generateMCQs,
-  voiceToText,
   qaPortal,
   assessment,
   aiChatbot,
@@ -215,20 +213,14 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.upload_file_outlined,
-                    title: 'Upload Notes',
+                    title: 'Upload Documents',
                     tab: TeacherTab.uploadNotes,
                     context: context,
                   ),
                   _buildDrawerItem(
                     icon: Icons.quiz_outlined,
-                    title: 'Generate MCQs',
+                    title: 'Generate MCQs (AI)',
                     tab: TeacherTab.generateMCQs,
-                    context: context,
-                  ),
-                  _buildDrawerItem(
-                    icon: Icons.mic_outlined,
-                    title: 'Voice-to-Text',
-                    tab: TeacherTab.voiceToText,
                     context: context,
                   ),
                   _buildDrawerItem(
@@ -359,11 +351,9 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
       case TeacherTab.seeStudents:
         return const SeeStudentsTab();
       case TeacherTab.uploadNotes:
-        return const UploadNotesTab();
+        return const TeacherDocumentUploadPage();
       case TeacherTab.generateMCQs:
-        return const mcq.GenerateMCQsTab();
-      case TeacherTab.voiceToText:
-        return const VoiceToTextTab();
+        return const TeacherMcqGenerationPage();
       case TeacherTab.qaPortal:
         return const TeacherQAPortalTab();
       case TeacherTab.assessment:
