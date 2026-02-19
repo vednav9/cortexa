@@ -7,6 +7,7 @@ import { HiSparkles } from "react-icons/hi";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../../context/authcontext";
+import { API_BASE_URL } from "../../config/api";
 
 export default function Sidebar({
   isOpen,
@@ -30,7 +31,7 @@ export default function Sidebar({
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/api/auth/logout", {}, { withCredentials: true });
+      await axios.post(`${API_BASE_URL}/auth/logout`, {}, { withCredentials: true });
     } catch (_) { }
     setUser(null);
     navigate("/login", { replace: true });

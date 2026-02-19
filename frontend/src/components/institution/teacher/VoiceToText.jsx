@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AI_URL } from '../../../config/api';
 import {
   FiMic,
   FiStopCircle,
@@ -128,7 +129,7 @@ const LectureRecorder = () => {
       if (courseId) formData.append('course_id', courseId);
 
       // Call AI API
-      const response = await fetch('http://localhost:8000/speech/transcribe-and-upload', {
+      const response = await fetch(`${AI_URL}/speech/transcribe-and-upload`, {
         method: 'POST',
         body: formData
       });
@@ -165,7 +166,7 @@ const LectureRecorder = () => {
     try {
       const docxUrl = transcription.downloads?.docx;
       if (docxUrl) {
-        window.open(`http://localhost:8000${docxUrl}`, '_blank');
+        window.open(`${AI_URL}${docxUrl}`, '_blank');
         toast.success('Downloading document...');
       }
     } catch (error) {
