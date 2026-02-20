@@ -1,7 +1,9 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/config/api_config.dart';
 import '../models/institution_display_model.dart';
+import '../models/invitation_model.dart';
 
 /// Repository for dashboard data with API integration and Hive caching
 class DashboardRepository {
@@ -26,6 +28,13 @@ class DashboardRepository {
     bool forceRefresh = false,
   }) async {
     try {
+      // If force refresh, clear stale cache first
+      if (forceRefresh) {
+        print('🗑️ Clearing institution cache...');
+        await _storage.clearInstitutions();
+        await _storage.deleteMetadata('institutions_cache_timestamp');
+      }
+      
       // Check cache first unless forced refresh
       if (!forceRefresh) {
         final cached = _getCachedInstitutions();
@@ -41,6 +50,9 @@ class DashboardRepository {
         requiresAuth: false, // Public endpoint
       );
 
+      print('📊 API Response: ${response.keys.toList()}');
+      print('📊 Success: ${response['success']}');
+      
       if (response['success'] != true) {
         throw ServerException(
           message: response['message'] ?? 'Failed to fetch institutions',
@@ -48,7 +60,18 @@ class DashboardRepository {
         );
       }
 
-      final institutions = (response['institutions'] as List)
+      // Handle different possible response structures
+      final institutionsData = response['institutions'] ?? response['data'] ?? [];
+      print('📊 Institutions data type: ${institutionsData.runtimeType}');
+      print('📊 Institutions count: ${(institutionsData as List?)?.length ?? 0}');
+      
+      if (institutionsData is! List) {
+        print('❌ Institutions data is not a list!');
+        return [];
+      }
+
+      final List<dynamic> institutionsList = institutionsData;
+      final institutions = institutionsList
           .map((json) => _mapBackendInstitutionToModel(json))
           .toList();
 
@@ -406,6 +429,280 @@ class DashboardRepository {
       'custom_url_slug': model.customUrlSlug,
       'primary_brand_color': model.primaryBrandColor,
     };
+  }
+
+  /* ===========================
+     INVITATIONS
+  =========================== */
+
+  /// Get invitations for current user (students/teachers)
+  Future<List<InvitationModel>> getInvitations({
+    String? status,
+    bool forceRefresh = false,
+  }) async {
+    try {
+      print('🌐 Fetching invitations from API...');
+      
+      final params = <String, String>{};
+      if (status != null && status != 'all') {
+        params['status'] = status;
+      }
+      
+      final response = await _apiClient.get(
+        ApiConfig.invitations,
+        requiresAuth: true,
+      );
+
+      final invitations = (response['invitations'] as List?)
+          ?.map((json) => _mapBackendInvitationToModel(json as Map<String, dynamic>))
+          .toList() ?? [];
+
+      print('✅ Fetched ${invitations.length} invitations from API');
+      return invitations;
+    } on ApiException catch (e) {
+      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+    } catch (e) {
+      print('❌ Error fetching invitations: $e');
+      throw ServerException(
+        message: 'Failed to fetch invitations',
+        statusCode: 500,
+      );
+    }
+  }
+
+  /// Get sent invitations for admin
+  Future<List<InvitationModel>> getAdminInvitations({
+    bool forceRefresh = false,
+  }) async {
+    try {
+      print('🌐 Fetching admin invitations from API...');
+      
+      final response = await _apiClient.get(
+        ApiConfig.invitationsAdmin,
+        requiresAuth: true,
+      );
+
+      final invitations = (response['invitations'] as List?)
+          ?.map((json) => _mapBackendInvitationToModel(json as Map<String, dynamic>))
+          .toList() ?? [];
+
+      print('✅ Fetched ${invitations.length} admin invitations');
+      return invitations;
+    } on ApiException catch (e) {
+      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+    } catch (e) {
+      print('❌ Error fetching admin invitations: $e');
+      throw ServerException(
+        message: 'Failed to fetch invitations',
+        statusCode: 500,
+      );
+    }
+  }
+
+  /// Accept an invitation
+  Future<void> acceptInvitation(String invitationId) async {
+    try {
+      print('🌐 Accepting invitation: $invitationId');
+      
+      final response = await _apiClient.post(
+        ApiConfig.invitationAccept(invitationId),
+        requiresAuth: true,
+      );
+
+      if (response['success'] == false) {
+        throw ServerException(
+          message: response['message'] ?? 'Failed to accept invitation',
+          statusCode: 400,
+        );
+      }
+
+      // Update local user data with new institution info
+      final currentUser = _storage.getCurrentUser();
+      if (currentUser != null && response['user'] != null) {
+        final userData = response['user'] as Map<String, dynamic>;
+        final institutionId = userData['institution']?.toString();
+        
+        if (institutionId != null) {
+          final updatedUser = currentUser.copyWith(
+            institutionId: institutionId,
+            institutionRole: userData['role']?.toString(),
+            institutionJoinedAt: DateTime.now(),
+          );
+          
+          await _storage.saveUser(updatedUser);
+          await _storage.updateRegisteredUserInstitution(
+            userId: currentUser.id,
+            institutionId: institutionId,
+            institutionRole: userData['role']?.toString() ?? 'student',
+            joinedAt: DateTime.now(),
+          );
+          
+          print('✅ User joined institution successfully');
+        }
+      }
+
+      print('✅ Invitation accepted successfully');
+    } on ApiException catch (e) {
+      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+    } catch (e) {
+      print('❌ Error accepting invitation: $e');
+      throw ServerException(
+        message: 'Failed to accept invitation',
+        statusCode: 500,
+      );
+    }
+  }
+
+  /// Reject an invitation
+  Future<void> rejectInvitation(String invitationId) async {
+    try {
+      print('🌐 Rejecting invitation: $invitationId');
+      
+      final response = await _apiClient.post(
+        ApiConfig.invitationReject(invitationId),
+        requiresAuth: true,
+      );
+
+      if (response['success'] == false) {
+        throw ServerException(
+          message: response['message'] ?? 'Failed to reject invitation',
+          statusCode: 400,
+        );
+      }
+
+      print('✅ Invitation rejected successfully');
+    } on ApiException catch (e) {
+      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+    } catch (e) {
+      print('❌ Error rejecting invitation: $e');
+      throw ServerException(
+        message: 'Failed to reject invitation',
+        statusCode: 500,
+      );
+    }
+  }
+
+  /// Send invitation (admin only)
+  Future<void> createInvitation({
+    required String institutionId,
+    required String recipientType,
+    required String emailOrUsername,
+    String? message,
+    String? departmentId,
+    String? semesterId,
+    List<String>? courseIds,
+  }) async {
+    try {
+      print('🌐 Creating invitation for $emailOrUsername');
+      
+      final body = {
+        'institutionId': institutionId,
+        'recipientType': recipientType,
+        'emailOrUsername': emailOrUsername,
+        if (message != null) 'message': message,
+        if (departmentId != null) 'department': departmentId,
+        if (semesterId != null) 'semester': semesterId,
+        if (courseIds != null && courseIds.isNotEmpty) 'courses': courseIds,
+      };
+      
+      final response = await _apiClient.post(
+        ApiConfig.invitations,
+        body: body,
+        requiresAuth: true,
+      );
+
+      if (response['success'] == false) {
+        throw ServerException(
+          message: response['message'] ?? 'Failed to send invitation',
+          statusCode: 400,
+        );
+      }
+
+      print('✅ Invitation sent successfully');
+    } on ApiException catch (e) {
+      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+    } catch (e) {
+      print('❌ Error creating invitation: $e');
+      throw ServerException(
+        message: 'Failed to send invitation',
+        statusCode: 500,
+      );
+    }
+  }
+
+  /// Map backend invitation JSON to model
+  InvitationModel _mapBackendInvitationToModel(Map<String, dynamic> json) {
+    // Handle institution - can be String (ID only) or Map (populated)
+    final institutionRaw = json['institution'];
+    String institutionId = '';
+    String institutionName = 'Unknown Institution';
+    String institutionLogo = '';
+    String institutionType = 'Institute';
+    
+    if (institutionRaw is Map<String, dynamic>) {
+      // Populated institution object (from /invitations endpoint)
+      institutionId = (institutionRaw['_id'] ?? institutionRaw['id'])?.toString() ?? '';
+      institutionName = institutionRaw['name']?.toString() ?? 'Unknown Institution';
+      institutionLogo = institutionRaw['logo']?.toString() ?? '';
+      institutionType = institutionRaw['type']?.toString() ?? 'Institute';
+    } else if (institutionRaw is String) {
+      // Just ID (from /invitations/admin endpoint)
+      institutionId = institutionRaw;
+      // We'll keep default names for admin view since institution isn't populated
+    }
+    
+    // Handle sender - can be String (ID only) or Map (populated)
+    final senderRaw = json['sender'];
+    String invitedByName = 'Admin';
+    String invitedByEmail = '';
+    
+    if (senderRaw is Map<String, dynamic>) {
+      invitedByName = senderRaw['fullName']?.toString() ?? 'Admin';
+      invitedByEmail = senderRaw['email']?.toString() ?? '';
+    }
+    
+    // Handle recipient - for admin view (from /invitations/admin endpoint)
+    final recipientRaw = json['recipient'];
+    String recipientName = '';
+    String recipientEmail = '';
+    
+    if (recipientRaw is Map<String, dynamic>) {
+      // Populated recipient object (admin view)
+      recipientName = recipientRaw['fullName']?.toString() ?? '';
+      recipientEmail = recipientRaw['email']?.toString() ?? '';
+      // If no email in recipient object, try the 'email' field directly
+      if (recipientEmail.isEmpty) {
+        recipientEmail = json['email']?.toString() ?? '';
+      }
+    }
+    
+    return InvitationModel(
+      id: (json['_id'] ?? json['id'])?.toString() ?? '',
+      institutionId: institutionId,
+      institutionName: institutionName,
+      institutionLogoUrl: institutionLogo,
+      institutionType: institutionType,
+      role: json['recipientType']?.toString().toLowerCase() ?? 'student',
+      invitedByName: invitedByName,
+      invitedByEmail: invitedByEmail.isEmpty ? (json['email']?.toString() ?? '') : invitedByEmail,
+      recipientName: recipientName,
+      recipientEmail: recipientEmail,
+      invitedAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      status: _parseInvitationStatus(json['status']?.toString() ?? 'pending'),
+      message: json['message']?.toString(),
+    );
+  }
+
+  InvitationStatus _parseInvitationStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'accepted':
+        return InvitationStatus.accepted;
+      case 'rejected':
+      case 'denied':
+        return InvitationStatus.rejected;
+      default:
+        return InvitationStatus.pending;
+    }
   }
 
   /* ===========================

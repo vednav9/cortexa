@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/bloc/terminology/terminology_bloc.dart';
@@ -108,8 +109,8 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   Future<void> _loadInstitutions() async {
     setState(() => _isLoadingInstitutions = true);
     try {
-      // Fetch institutions from API (uses cache if valid)
-      final apiInstitutions = await _repository.getInstitutions();
+      // Fetch institutions from API (force refresh to bypass potentially stale cache)
+      final apiInstitutions = await _repository.getInstitutions(forceRefresh: true);
       
       setState(() {
         _institutions = apiInstitutions;
@@ -122,9 +123,10 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     } catch (e) {
       setState(() => _isLoadingInstitutions = false);
       if (mounted) {
+        final errorMessage = e is ApiException ? e.message : 'Failed to load institutions. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load institutions: $e'),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
           ),
         );
@@ -209,30 +211,36 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => SearchFilterModal(
-        searchController: _searchController,
-        selectedType: _selectedType,
-        selectedState: _selectedState,
-        selectedAffiliation: _selectedAffiliation,
-        selectedBoard: _selectedBoard,
-        selectedStrength: _selectedStrength,
-        onTypeChanged: (value) {
-          setState(() => _selectedType = value);
-        },
-        onStateChanged: (value) {
-          setState(() => _selectedState = value);
-        },
-        onAffiliationChanged: (value) {
-          setState(() => _selectedAffiliation = value);
-        },
-        onBoardChanged: (value) {
-          setState(() => _selectedBoard = value);
-        },
-        onStrengthChanged: (value) {
-          setState(() => _selectedStrength = value);
-        },
-        onClearFilters: _clearInstitutionFilters,
-        onApplyFilters: _applyInstitutionFilters,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: SearchFilterModal(
+            searchController: _searchController,
+            selectedType: _selectedType,
+            selectedState: _selectedState,
+            selectedAffiliation: _selectedAffiliation,
+            selectedBoard: _selectedBoard,
+            selectedStrength: _selectedStrength,
+            onTypeChanged: (value) {
+              setState(() => _selectedType = value);
+            },
+            onStateChanged: (value) {
+              setState(() => _selectedState = value);
+            },
+            onAffiliationChanged: (value) {
+              setState(() => _selectedAffiliation = value);
+            },
+            onBoardChanged: (value) {
+              setState(() => _selectedBoard = value);
+            },
+            onStrengthChanged: (value) {
+              setState(() => _selectedStrength = value);
+            },
+            onClearFilters: _clearInstitutionFilters,
+            onApplyFilters: _applyInstitutionFilters,
+          ),
+        ),
       ),
     );
   }

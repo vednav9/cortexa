@@ -8,7 +8,8 @@ class VoiceToTextTab extends StatefulWidget {
   State<VoiceToTextTab> createState() => _VoiceToTextTabState();
 }
 
-class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProviderStateMixin {
+class _VoiceToTextTabState extends State<VoiceToTextTab>
+    with SingleTickerProviderStateMixin {
   bool _isRecording = false;
   final TextEditingController _transcriptController = TextEditingController();
   final List<Map<String, dynamic>> _savedNotes = [];
@@ -38,11 +39,11 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    
+
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-    
+
     _loadSavedNotes();
   }
 
@@ -84,7 +85,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
   }
 
   Future<void> _simulateRealTimeTranscription() async {
-    while (_isRecording && _currentChunkIndex < _realTimeChunks.length && mounted) {
+    while (_isRecording &&
+        _currentChunkIndex < _realTimeChunks.length &&
+        mounted) {
       await Future.delayed(const Duration(milliseconds: 800));
       if (_isRecording && mounted) {
         setState(() {
@@ -101,9 +104,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
 
   void _saveTranscription() {
     if (_transcriptController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No text to save')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No text to save')));
       return;
     }
 
@@ -129,8 +132,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
             onPressed: () {
               setState(() {
                 _savedNotes.insert(0, {
-                  'title': titleController.text.isEmpty 
-                      ? 'Untitled Note' 
+                  'title': titleController.text.isEmpty
+                      ? 'Untitled Note'
                       : titleController.text,
                   'date': DateTime.now(),
                   'text': _transcriptController.text,
@@ -177,10 +180,7 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
             const SizedBox(height: 8),
             const Text(
               'Speak naturally and your words will appear below',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 48),
             _buildRecordingButton(),
@@ -234,7 +234,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
                             ],
                           )
                         : null,
-                    color: _isRecording ? null : AppColors.primary.withValues(alpha: 0.2),
+                    color: _isRecording
+                        ? null
+                        : AppColors.primary.withValues(alpha: 0.2),
                   ),
                   child: Icon(
                     _isRecording ? Icons.stop : Icons.mic,
@@ -313,7 +315,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
           height: 1.6,
         ),
         decoration: InputDecoration(
-          hintText: 'Your transcript will appear here...\nTap to edit manually (recording will pause)',
+          hintText:
+              'Your transcript will appear here...\nTap to edit manually (recording will pause)',
           hintStyle: TextStyle(
             fontSize: 14,
             color: AppColors.textSecondary.withValues(alpha: 0.6),
@@ -343,10 +346,7 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
         icon: const Icon(Icons.save, size: 22),
         label: const Text(
           'Save Transcription',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -370,7 +370,10 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -456,109 +459,117 @@ class _VoiceToTextTabState extends State<VoiceToTextTab> with SingleTickerProvid
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (_, controller) => Container(
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textTertiary.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, controller) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
-              // Header
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: AppColors.textTertiary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.description,
-                        color: AppColors.primary,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            note['title'],
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatDate(note['date']),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
-                ),
-              ),
-              // Content
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: controller,
-                  padding: const EdgeInsets.all(24),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppColors.textTertiary.withValues(alpha: 0.2),
+                      color: AppColors.textTertiary.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: AppColors.textTertiary.withValues(alpha: 0.2),
+                        ),
                       ),
                     ),
-                    child: SelectableText(
-                      note['text'],
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: AppColors.textPrimary,
-                        height: 1.6,
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.description,
+                            color: AppColors.primary,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                note['title'],
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatDate(note['date']),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Content
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: controller,
+                      padding: const EdgeInsets.all(24),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: AppColors.textTertiary.withValues(
+                              alpha: 0.2,
+                            ),
+                          ),
+                        ),
+                        child: SelectableText(
+                          note['text'],
+                          style: const TextStyle(
+                            fontSize: 15,
+                            color: AppColors.textPrimary,
+                            height: 1.6,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

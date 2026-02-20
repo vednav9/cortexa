@@ -80,300 +80,331 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => DraggableScrollableSheet(
-          initialChildSize: 0.85,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (_, controller) => Container(
-            decoration: const BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.textTertiary.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: StatefulBuilder(
+            builder: (context, setModalState) => DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, controller) => Container(
+                decoration: const BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Create New Assignment',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
+                child: Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.textTertiary.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                        color: AppColors.textSecondary,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
                       ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: controller,
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Assignment Title',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: titleController,
-                          decoration: InputDecoration(
-                            hintText: 'Enter assignment title',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: AppColors.textTertiary.withValues(alpha: 0.3),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Create New Assignment',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(
-                                color: AppColors.textTertiary.withValues(alpha: 0.3),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                            color: AppColors.textSecondary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: controller,
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Assignment Title',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                color: AppColors.primary,
-                                width: 2,
-                              ),
-                            ),
-                            filled: true,
-                            fillColor: AppColors.surface,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'Select MCQ Set',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.textTertiary.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: selectedMCQId,
-                              hint: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('Choose an MCQ set'),
-                              ),
-                              isExpanded: true,
-                              borderRadius: BorderRadius.circular(12),
-                              items: _availableMCQs.map((mcq) {
-                                return DropdownMenuItem<String>(
-                                  value: mcq['id'],
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    child: Text(
-                                      mcq['title'],
-                                      style: const TextStyle(fontSize: 14),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: titleController,
+                              decoration: InputDecoration(
+                                hintText: 'Enter assignment title',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: AppColors.textTertiary.withValues(
+                                      alpha: 0.3,
                                     ),
                                   ),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setModalState(() => selectedMCQId = value);
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'Due Date',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        InkWell(
-                          onTap: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: selectedDueDate,
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (date != null) {
-                              setModalState(() => selectedDueDate = date);
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.textTertiary.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.calendar_today,
-                                  color: AppColors.primary,
-                                  size: 20,
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  '${selectedDueDate.day}/${selectedDueDate.month}/${selectedDueDate.year}',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textPrimary,
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: AppColors.textTertiary.withValues(
+                                      alpha: 0.3,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'Assign To',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(
-                                Icons.people,
-                                color: AppColors.primary,
-                                size: 20,
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.primary,
+                                    width: 2,
+                                  ),
+                                ),
+                                filled: true,
+                                fillColor: AppColors.surface,
                               ),
-                              SizedBox(width: 12),
-                              Text(
-                                'All Students (30)',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
+                            ),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Select MCQ Set',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.textTertiary.withValues(
+                                    alpha: 0.3,
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -5),
-                      ),
-                    ],
-                  ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (titleController.text.isEmpty || selectedMCQId == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please fill all required fields'),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: selectedMCQId,
+                                  hint: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: Text('Choose an MCQ set'),
+                                  ),
+                                  isExpanded: true,
+                                  borderRadius: BorderRadius.circular(12),
+                                  items: _availableMCQs.map((mcq) {
+                                    return DropdownMenuItem<String>(
+                                      value: mcq['id'],
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        child: Text(
+                                          mcq['title'],
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    setModalState(() => selectedMCQId = value);
+                                  },
+                                ),
+                              ),
                             ),
-                          );
-                          return;
-                        }
-
-                        final selectedMCQ = _availableMCQs.firstWhere(
-                          (mcq) => mcq['id'] == selectedMCQId,
-                        );
-
-                        setState(() {
-                          _assignments.insert(0, {
-                            'id': DateTime.now().millisecondsSinceEpoch.toString(),
-                            'title': titleController.text,
-                            'mcqTitle': selectedMCQ['title'],
-                            'dueDate': selectedDueDate,
-                            'submissions': 0,
-                            'totalStudents': 30,
-                            'createdDate': DateTime.now(),
-                          });
-                        });
-
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Assignment created successfully'),
-                            backgroundColor: AppColors.primary,
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Create Assignment',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Due Date',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDueDate,
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(
+                                    const Duration(days: 365),
+                                  ),
+                                );
+                                if (date != null) {
+                                  setModalState(() => selectedDueDate = date);
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.textTertiary.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.calendar_today,
+                                      color: AppColors.primary,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '${selectedDueDate.day}/${selectedDueDate.month}/${selectedDueDate.year}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Assign To',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(
+                                    Icons.people,
+                                    color: AppColors.primary,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'All Students (30)',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, -5),
+                          ),
+                        ],
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (titleController.text.isEmpty ||
+                                selectedMCQId == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Please fill all required fields',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+
+                            final selectedMCQ = _availableMCQs.firstWhere(
+                              (mcq) => mcq['id'] == selectedMCQId,
+                            );
+
+                            setState(() {
+                              _assignments.insert(0, {
+                                'id': DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
+                                'title': titleController.text,
+                                'mcqTitle': selectedMCQ['title'],
+                                'dueDate': selectedDueDate,
+                                'submissions': 0,
+                                'totalStudents': 30,
+                                'createdDate': DateTime.now(),
+                              });
+                            });
+
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Assignment created successfully',
+                                ),
+                                backgroundColor: AppColors.primary,
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Create Assignment',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -413,9 +444,7 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -478,10 +507,7 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
         icon: const Icon(Icons.add, size: 24),
         label: const Text(
           'Create New Assignment',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -552,8 +578,11 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
           separatorBuilder: (context, index) => const SizedBox(height: 16),
           itemBuilder: (context, index) {
             final assignment = _assignments[index];
-            final submissionRate = assignment['submissions'] / assignment['totalStudents'];
-            final daysLeft = assignment['dueDate'].difference(DateTime.now()).inDays;
+            final submissionRate =
+                assignment['submissions'] / assignment['totalStudents'];
+            final daysLeft = assignment['dueDate']
+                .difference(DateTime.now())
+                .inDays;
 
             return Container(
               padding: const EdgeInsets.all(20),
@@ -586,7 +615,9 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
                               assignment['mcqTitle'],
                               style: TextStyle(
                                 fontSize: 13,
-                                color: AppColors.textSecondary.withValues(alpha: 0.8),
+                                color: AppColors.textSecondary.withValues(
+                                  alpha: 0.8,
+                                ),
                               ),
                             ),
                           ],
@@ -607,12 +638,14 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
                           daysLeft == 0
                               ? 'Due today'
                               : daysLeft == 1
-                                  ? '1 day left'
-                                  : '$daysLeft days left',
+                              ? '1 day left'
+                              : '$daysLeft days left',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: daysLeft < 2 ? Colors.red : AppColors.primary,
+                            color: daysLeft < 2
+                                ? Colors.red
+                                : AppColors.primary,
                           ),
                         ),
                       ),
@@ -629,7 +662,9 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
                               'Submissions',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary.withValues(alpha: 0.7),
+                                color: AppColors.textSecondary.withValues(
+                                  alpha: 0.7,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -652,7 +687,9 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
                               'Progress',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.textSecondary.withValues(alpha: 0.7),
+                                color: AppColors.textSecondary.withValues(
+                                  alpha: 0.7,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -661,8 +698,11 @@ class _TeacherAssessmentTabState extends State<TeacherAssessmentTab> {
                               child: LinearProgressIndicator(
                                 value: submissionRate,
                                 minHeight: 8,
-                                backgroundColor: AppColors.textTertiary.withValues(alpha: 0.2),
-                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                backgroundColor: AppColors.textTertiary
+                                    .withValues(alpha: 0.2),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppColors.primary,
+                                ),
                               ),
                             ),
                           ],

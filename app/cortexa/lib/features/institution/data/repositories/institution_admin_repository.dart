@@ -157,20 +157,21 @@ class InstitutionAdminRepository {
   }
 
   /// Update user
-  Future<void> updateUser(
+  Future<Map<String, dynamic>> updateUser(
     String userId,
     Map<String, dynamic> userData,
   ) async {
     try {
       print('🌐 Updating user: $userId');
       
-      await _apiClient.put(
+      final response = await _apiClient.put(
         '/admin/users/$userId',
         body: userData,
         requiresAuth: true,
       );
 
       print('✅ User updated successfully');
+      return response;
     } on ApiException catch (e) {
       throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
     } catch (e) {
@@ -202,19 +203,20 @@ class InstitutionAdminRepository {
   }
 
   /// Delete user
-  Future<void> deleteUser(
+  Future<Map<String, dynamic>> deleteUser(
     String userId,
     String role,
   ) async {
     try {
       print('🌐 Deleting user: $userId ($role)');
       
-      await _apiClient.delete(
+      final response = await _apiClient.delete(
         '/admin/users/$userId/$role',
         requiresAuth: true,
       );
 
       print('✅ User deleted successfully');
+      return response;
     } catch (e) {
       print('❌ Error deleting user: $e');
       rethrow;

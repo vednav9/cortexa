@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/services/terminology_service.dart';
-import 'academic_structure_tabs/departments_tab.dart';
-import 'academic_structure_tabs/courses_tab.dart';
-import 'academic_structure_tabs/semesters_tab.dart';
-import 'academic_structure_tabs/academic_calendar_tab.dart';
-import 'academic_structure_tabs/teachers_tab.dart';
+import 'departments_tab.dart';
+import 'courses_tab.dart';
+import 'semesters_tab.dart';
+import 'academic_calendar_tab.dart';
+import 'faculty_tab.dart';
 
 class AcademicStructureTab extends StatefulWidget {
   const AcademicStructureTab({super.key});
@@ -117,15 +117,15 @@ class _AcademicStructureTabState extends State<AcademicStructureTab>
                         ),
                       ),
                     ),
-                    Tab(
+                    const Tab(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.people_outline, size: 18),
-                            const SizedBox(width: 8),
-                            Text(TerminologyService.getInstructorLabel(context, plural: true)),
+                            Icon(Icons.people_outline, size: 18),
+                            SizedBox(width: 8),
+                            Text('Faculty'),
                           ],
                         ),
                       ),
@@ -142,7 +142,7 @@ class _AcademicStructureTabState extends State<AcademicStructureTab>
                     SemestersTab(),
                     CoursesTab(),
                     AcademicCalendarTab(),
-                    TeachersTab(),
+                    FacultyTab(),
                   ],
                 ),
               ),

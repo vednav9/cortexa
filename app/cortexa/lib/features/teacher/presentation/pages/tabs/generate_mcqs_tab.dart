@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../../../../core/constants/app_colors.dart';
+import '../../../../../../core/network/api_client.dart';
 import '../../../../../../core/services/hive_storage_service.dart';
 import '../../../../../../core/di/service_locator.dart';
 import '../../../data/mcq_storage.dart';
@@ -18,7 +19,7 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
   final _storage = getIt<HiveStorageService>();
   final _mcqStorage = MCQStorage();
   final _topicController = TextEditingController();
-  
+
   SourceType _sourceType = SourceType.topic;
   String? _selectedFileName;
   String? _selectedFileSize;
@@ -55,31 +56,36 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
       if (result != null) {
         setState(() {
           _selectedFileName = result.files.single.name;
-          _selectedFileSize = '${(result.files.single.size / 1024).toStringAsFixed(2)} KB';
+          _selectedFileSize =
+              '${(result.files.single.size / 1024).toStringAsFixed(2)} KB';
         });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking file: $e')),
-        );
+        final errorMessage = e is ApiException
+            ? e.message
+            : 'Failed to pick file';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     }
   }
 
   Future<void> _generateMCQs() async {
     // Validate input
-    if (_sourceType == SourceType.topic && _topicController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a topic')),
-      );
+    if (_sourceType == SourceType.topic &&
+        _topicController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter a topic')));
       return;
     }
 
     if (_sourceType == SourceType.document && _selectedFileName == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a document')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a document')));
       return;
     }
 
@@ -101,16 +107,20 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
       'numberOfQuestions': _numberOfQuestions,
       'difficulty': _difficulty,
       'createdDate': DateTime.now(),
-      'questions': List.generate(_numberOfQuestions, (index) => {
-        'question': 'Sample question ${index + 1} about ${_sourceType == SourceType.topic ? _topicController.text.trim() : "the document"}?',
-        'options': [
-          'Option A: First choice',
-          'Option B: Second choice',
-          'Option C: Third choice',
-          'Option D: Fourth choice',
-        ],
-        'correctAnswer': 0,
-      }),
+      'questions': List.generate(
+        _numberOfQuestions,
+        (index) => {
+          'question':
+              'Sample question ${index + 1} about ${_sourceType == SourceType.topic ? _topicController.text.trim() : "the document"}?',
+          'options': [
+            'Option A: First choice',
+            'Option B: Second choice',
+            'Option C: Third choice',
+            'Option D: Fourth choice',
+          ],
+          'correctAnswer': 0,
+        },
+      ),
     };
 
     // Save to Hive storage
@@ -191,9 +201,7 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -289,8 +297,8 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
           color: isSelected ? AppColors.primary : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected 
-                ? AppColors.primary 
+            color: isSelected
+                ? AppColors.primary
                 : AppColors.textTertiary.withValues(alpha: 0.3),
           ),
         ),
@@ -514,17 +522,11 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: _buildDifficultyButton('Easy', Colors.green),
-            ),
+            Expanded(child: _buildDifficultyButton('Easy', Colors.green)),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildDifficultyButton('Medium', Colors.orange),
-            ),
+            Expanded(child: _buildDifficultyButton('Medium', Colors.orange)),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildDifficultyButton('Hard', Colors.red),
-            ),
+            Expanded(child: _buildDifficultyButton('Hard', Colors.red)),
           ],
         ),
       ],
@@ -533,7 +535,7 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
 
   Widget _buildDifficultyButton(String level, Color color) {
     final isSelected = _difficulty == level;
-    
+
     return InkWell(
       onTap: () => setState(() => _difficulty = level),
       borderRadius: BorderRadius.circular(12),
@@ -543,7 +545,9 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
           color: isSelected ? color.withValues(alpha: 0.1) : AppColors.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? color : AppColors.textTertiary.withValues(alpha: 0.3),
+            color: isSelected
+                ? color
+                : AppColors.textTertiary.withValues(alpha: 0.3),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -589,19 +593,13 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
                   SizedBox(width: 12),
                   Text(
                     'Generating...',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ],
               )
             : const Text(
                 'Generate MCQs',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
       ),
     );
@@ -719,7 +717,10 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
                           runSpacing: 4,
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: difficultyColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
@@ -791,7 +792,9 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('This MCQ can be assigned in the Assessment tab'),
+                            content: Text(
+                              'This MCQ can be assigned in the Assessment tab',
+                            ),
                             backgroundColor: AppColors.primary,
                           ),
                         );
@@ -847,177 +850,199 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (_, controller) => Container(
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Handle bar
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textTertiary.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, controller) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
-              // Header
-              Container(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: AppColors.textTertiary.withValues(alpha: 0.2),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.textTertiary.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.quiz,
-                        color: AppColors.primary,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            mcq['title'],
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${mcq['numberOfQuestions']} Questions • ${mcq['difficulty']} Level',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
-                ),
-              ),
-              // Questions list
-              Expanded(
-                child: ListView.separated(
-                  controller: controller,
-                  padding: const EdgeInsets.all(24),
-                  itemCount: mcq['questions'].length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    final question = mcq['questions'][index];
-                    return Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
                           color: AppColors.textTertiary.withValues(alpha: 0.2),
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Question ${index + 1}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary.withValues(alpha: 0.7),
-                            ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            question['question'],
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                              height: 1.4,
-                            ),
+                          child: const Icon(
+                            Icons.quiz,
+                            color: AppColors.primary,
+                            size: 24,
                           ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                mcq['title'],
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${mcq['numberOfQuestions']} Questions • ${mcq['difficulty']} Level',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Questions list
+                  Expanded(
+                    child: ListView.separated(
+                      controller: controller,
+                      padding: const EdgeInsets.all(24),
+                      itemCount: mcq['questions'].length,
+                      separatorBuilder: (context, index) =>
                           const SizedBox(height: 16),
-                          ...List.generate(
-                            question['options'].length,
-                            (optIndex) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: question['correctAnswer'] == optIndex
-                                          ? AppColors.primary.withValues(alpha: 0.1)
-                                          : Colors.transparent,
-                                      border: Border.all(
-                                        color: question['correctAnswer'] == optIndex
-                                            ? AppColors.primary
-                                            : AppColors.textTertiary.withValues(alpha: 0.3),
-                                        width: 2,
-                                      ),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: question['correctAnswer'] == optIndex
-                                        ? const Icon(
-                                            Icons.check,
-                                            size: 16,
-                                            color: AppColors.primary,
-                                          )
-                                        : null,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      question['options'][optIndex],
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.textSecondary,
-                                        fontWeight: question['correctAnswer'] == optIndex
-                                            ? FontWeight.w600
-                                            : FontWeight.normal,
-                                        height: 1.4,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                      itemBuilder: (context, index) {
+                        final question = mcq['questions'][index];
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.textTertiary.withValues(
+                                alpha: 0.2,
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Question ${index + 1}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.7,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                question['question'],
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ...List.generate(
+                                question['options'].length,
+                                (optIndex) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 24,
+                                        height: 24,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              question['correctAnswer'] ==
+                                                  optIndex
+                                              ? AppColors.primary.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : Colors.transparent,
+                                          border: Border.all(
+                                            color:
+                                                question['correctAnswer'] ==
+                                                    optIndex
+                                                ? AppColors.primary
+                                                : AppColors.textTertiary
+                                                      .withValues(alpha: 0.3),
+                                            width: 2,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child:
+                                            question['correctAnswer'] ==
+                                                optIndex
+                                            ? const Icon(
+                                                Icons.check,
+                                                size: 16,
+                                                color: AppColors.primary,
+                                              )
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          question['options'][optIndex],
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: AppColors.textSecondary,
+                                            fontWeight:
+                                                question['correctAnswer'] ==
+                                                    optIndex
+                                                ? FontWeight.w600
+                                                : FontWeight.normal,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

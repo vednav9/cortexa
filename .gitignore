@@ -1,9 +1,15 @@
 # .gitignore
 node_modules
 .env
-<<<<<<< HEAD
 .venv
 ai/data
-=======
-.env.example
->>>>>>> 768cafc776c562bcce31faccb93a3643973f4d91
+
+#Important files for mobile side development
+
+# D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\vercel.json
+# D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\package.json
+# D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\src\services\api.js
+# D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\src\services\aiService.js
+# D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\src\socket.js
+# D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\src\context
+# D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\src\config\api.js

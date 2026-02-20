@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import '../../../../../../core/utils/fuzzy_search.dart';
 import '../../../../../../core/constants/app_colors.dart';
 import '../../../../../../core/services/terminology_service.dart';
 import '../../../../../../core/services/hive_storage_service.dart';
 import '../../../../../../core/di/service_locator.dart';
+import '../../../data/repositories/course_repository.dart';
+import '../../../data/repositories/department_repository.dart';
+import '../../../data/repositories/semester_repository.dart';
 
 class CoursesTab extends StatefulWidget {
   const CoursesTab({super.key});
@@ -19,13 +23,18 @@ class _CoursesTabState extends State<CoursesTab> {
   final TextEditingController _creditsController = TextEditingController();
   final TextEditingController _maxCapacityController = TextEditingController();
   final _storage = getIt<HiveStorageService>();
+  final _courseRepository = getIt<CourseRepository>();
+  final _departmentRepository = getIt<DepartmentRepository>();
+  final _semesterRepository = getIt<SemesterRepository>();
 
   List<Map<String, dynamic>> _courses = [];
+  bool _isLoading = true;
   List<Map<String, dynamic>> _departments = [];
   List<Map<String, dynamic>> _semesters = [];
-  String _selectedDepartment = 'All Departments';
-  String _selectedSemester = 'All Semesters';
-  String _selectedCourseDepartment = 'Select Department';
+  String _selectedDepartment = 'all';
+  String _selectedSemester = 'all';
+  String _selectedCourseDepartment = '';
+  String _selectedCourseSemester = '';
 
   @override
   void initState() {
@@ -38,40 +47,90 @@ class _CoursesTabState extends State<CoursesTab> {
     _loadCourses();
   }
 
-  void _loadCourses() {
+  Future<void> _loadCourses() async {
     try {
       final currentUser = _storage.getCurrentUser();
       final institutionId = currentUser?.institutionId;
-      
-      if (institutionId != null) {
-        setState(() {
-          _courses = _storage.getAllCourses(institutionId: institutionId);
-        });
-      } else {
+
+      if (institutionId == null) {
         setState(() {
           _courses = [];
+          _isLoading = false;
         });
+        return;
+      }
+
+      // Fetch from API first (Always get latest data from backend)
+      try {
+        final response = await _courseRepository.getCourses(institutionId);
+        if (!mounted) return;
+
+        setState(() {
+          _courses = response['courses'] as List<Map<String, dynamic>>;
+          _isLoading = false;
+        });
+        print('✅ Loaded ${_courses.length} courses from API');
+      } catch (apiError) {
+        print('⚠️ API fetch failed: $apiError');
+        // Fall back to cache if API fails
+        final cachedCourses = _courseRepository.getCachedCourses(institutionId);
+        setState(() {
+          _courses = cachedCourses;
+          _isLoading = false;
+        });
+        print('📦 Loaded ${_courses.length} courses from cache');
+
+        // Show error if both API and cache are empty
+        if (_courses.isEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to load courses. Check your connection.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     } catch (e) {
       print('Error loading courses: $e');
       setState(() {
         _courses = [];
+        _isLoading = false;
       });
     }
   }
 
-  void _loadDepartments() {
+  Future<void> _loadDepartments() async {
     try {
       final currentUser = _storage.getCurrentUser();
       final institutionId = currentUser?.institutionId;
-      
-      if (institutionId != null) {
-        setState(() {
-          _departments = _storage.getAllDepartments(institutionId: institutionId);
-        });
-      } else {
+
+      if (institutionId == null) {
         setState(() {
           _departments = [];
+        });
+        return;
+      }
+
+      // Fetch from API first
+      try {
+        final response = await _departmentRepository.getDepartments(
+          institutionId,
+        );
+        if (!mounted) return;
+
+        setState(() {
+          _departments = (response['data'] as List<dynamic>)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        });
+        print('✅ Loaded ${_departments.length} departments for dropdown');
+      } catch (apiError) {
+        print('⚠️ Department API failed: $apiError');
+        // Fall back to cache
+        setState(() {
+          _departments = _storage.getAllDepartments(
+            institutionId: institutionId,
+          );
         });
       }
     } catch (e) {
@@ -82,18 +141,34 @@ class _CoursesTabState extends State<CoursesTab> {
     }
   }
 
-  void _loadSemesters() {
+  Future<void> _loadSemesters() async {
     try {
       final currentUser = _storage.getCurrentUser();
       final institutionId = currentUser?.institutionId;
-      
-      if (institutionId != null) {
-        setState(() {
-          _semesters = _storage.getAllSemesters(institutionId: institutionId);
-        });
-      } else {
+
+      if (institutionId == null) {
         setState(() {
           _semesters = [];
+        });
+        return;
+      }
+
+      // Fetch from API first
+      try {
+        final response = await _semesterRepository.getSemesters(institutionId);
+        if (!mounted) return;
+
+        setState(() {
+          _semesters = (response['data'] as List<dynamic>)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        });
+        print('✅ Loaded ${_semesters.length} semesters for dropdown');
+      } catch (apiError) {
+        print('⚠️ Semester API failed: $apiError');
+        // Fall back to cache
+        setState(() {
+          _semesters = _storage.getAllSemesters(institutionId: institutionId);
         });
       }
     } catch (e) {
@@ -105,17 +180,45 @@ class _CoursesTabState extends State<CoursesTab> {
   }
 
   List<Map<String, dynamic>> get _filteredCourses {
-    final query = _searchController.text.toLowerCase().trim();
+    final query = _searchController.text.trim();
     var filtered = _courses;
-    
+
+    // Filter by search text
     if (query.isNotEmpty) {
       filtered = filtered.where((course) {
-        final name = course['name'].toString().toLowerCase();
-        final code = course['code'].toString().toLowerCase();
-        return name.contains(query) || code.contains(query);
+        return FuzzySearch.matchesAny([
+          (course['name'] ?? '').toString(),
+          (course['code'] ?? '').toString(),
+        ], query);
       }).toList();
     }
-    
+
+    // Filter by department — course['department'] may be a populated object {_id, name} or raw ID string
+    if (_selectedDepartment != 'all') {
+      filtered = filtered.where((course) {
+        final dept = course['department'];
+        if (dept == null) return false;
+        if (dept is Map) {
+          return dept['_id']?.toString() == _selectedDepartment ||
+              dept['name']?.toString() == _selectedDepartment;
+        }
+        return dept.toString() == _selectedDepartment;
+      }).toList();
+    }
+
+    // Filter by semester — course['semesterAvailable'] may be populated or raw ID
+    if (_selectedSemester != 'all') {
+      filtered = filtered.where((course) {
+        final sem = course['semesterAvailable'];
+        if (sem == null) return false;
+        if (sem is Map) {
+          return sem['_id']?.toString() == _selectedSemester ||
+              sem['name']?.toString() == _selectedSemester;
+        }
+        return sem.toString() == _selectedSemester;
+      }).toList();
+    }
+
     return filtered;
   }
 
@@ -138,14 +241,24 @@ class _CoursesTabState extends State<CoursesTab> {
       _codeController.text = course['code'];
       _descriptionController.text = course['description'] ?? '';
       _creditsController.text = course['credits']?.toString() ?? '';
-      _selectedCourseDepartment = course['department'] ?? 'Select Department';
       _maxCapacityController.text = course['maxCapacity']?.toString() ?? '';
+      // department may be a populated object or a raw ID string
+      final dept = course['department'];
+      _selectedCourseDepartment = dept is Map
+          ? (dept['_id']?.toString() ?? '')
+          : (dept?.toString() ?? '');
+      // semesterAvailable may be a populated object or a raw ID string
+      final sem = course['semesterAvailable'];
+      _selectedCourseSemester = sem is Map
+          ? (sem['_id']?.toString() ?? '')
+          : (sem?.toString() ?? '');
     } else {
       _nameController.clear();
       _codeController.clear();
       _descriptionController.clear();
       _creditsController.clear();
-      _selectedCourseDepartment = 'Select Department';
+      _selectedCourseDepartment = '';
+      _selectedCourseSemester = '';
       _maxCapacityController.clear();
     }
 
@@ -153,38 +266,53 @@ class _CoursesTabState extends State<CoursesTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Drag handle
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 14),
-                width: 45,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.borderDark.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(3),
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (context, scrollController) => Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+              children: [
+              // Drag handle — tapping dismisses the sheet
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 14),
+                  width: 45,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderDark.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
                 ),
               ),
 
               // Content
-              Flexible(
+              Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(28, 0, 28, 28),
+                  controller: scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    28,
+                    0,
+                    28,
+                    MediaQuery.of(context).viewInsets.bottom + 28,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isEditing ? 'Update ${TerminologyService.getLearningProgramLabel(context)}' : 'Add ${TerminologyService.getLearningProgramLabel(context)}',
+                        isEditing
+                            ? 'Update ${TerminologyService.getLearningProgramLabel(context)}'
+                            : 'Add ${TerminologyService.getLearningProgramLabel(context)}',
                         style: const TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.bold,
@@ -220,8 +348,11 @@ class _CoursesTabState extends State<CoursesTab> {
                                 const SizedBox(height: 8),
                                 TextField(
                                   controller: _codeController,
-                                  style: const TextStyle(color: AppColors.textPrimary),
-                                  textCapitalization: TextCapitalization.characters,
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  textCapitalization:
+                                      TextCapitalization.characters,
                                   decoration: InputDecoration(
                                     hintText: 'e.g., CS101',
                                     hintStyle: TextStyle(
@@ -279,7 +410,9 @@ class _CoursesTabState extends State<CoursesTab> {
                                 const SizedBox(height: 8),
                                 TextField(
                                   controller: _creditsController,
-                                  style: const TextStyle(color: AppColors.textPrimary),
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                  ),
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     hintText: '3',
@@ -449,12 +582,16 @@ class _CoursesTabState extends State<CoursesTab> {
                                       color: AppColors.cardBackground,
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: AppColors.borderDark.withValues(alpha: 0.3),
+                                        color: AppColors.borderDark.withValues(
+                                          alpha: 0.3,
+                                        ),
                                       ),
                                     ),
                                     child: DropdownButtonHideUnderline(
                                       child: DropdownButton<String>(
-                                        value: _selectedCourseDepartment,
+                                        value: _selectedCourseDepartment.isEmpty
+                                            ? ''
+                                            : _selectedCourseDepartment,
                                         isExpanded: true,
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 16,
@@ -468,13 +605,26 @@ class _CoursesTabState extends State<CoursesTab> {
                                         ),
                                         items: [
                                           DropdownMenuItem(
-                                            value: 'Select Department',
-                                            child: Text('Select ${TerminologyService.getOrganizationalUnitLabel(context)}'),
+                                            value: '',
+                                            child: Text(
+                                              'Select ${TerminologyService.getOrganizationalUnitLabel(context)}',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: AppColors.textSecondary
+                                                    .withValues(alpha: 0.6),
+                                              ),
+                                            ),
                                           ),
-                                          ..._departments.map((dept) => DropdownMenuItem(
-                                            value: dept['name'],
-                                            child: Text(dept['name']),
-                                          )),
+                                          ..._departments.map(
+                                            (dept) => DropdownMenuItem(
+                                              value:
+                                                  dept['_id']?.toString() ?? '',
+                                              child: Text(
+                                                dept['name']?.toString() ?? '',
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                         onChanged: (value) {
                                           setDropdownState(() {
@@ -492,6 +642,92 @@ class _CoursesTabState extends State<CoursesTab> {
                             ),
                           ),
                           const SizedBox(width: 16),
+                          // Semester dropdown
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  TerminologyService.getTimePeriodLabel(
+                                    context,
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                StatefulBuilder(
+                                  builder: (context, setSemDropState) => Container(
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cardBackground,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: AppColors.borderDark.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: _selectedCourseSemester.isEmpty
+                                            ? ''
+                                            : _selectedCourseSemester,
+                                        isExpanded: true,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 4,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        dropdownColor: AppColors.cardBackground,
+                                        style: const TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 16,
+                                        ),
+                                        items: [
+                                          DropdownMenuItem(
+                                            value: '',
+                                            child: Text(
+                                              'Select ${TerminologyService.getTimePeriodLabel(context)}',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: AppColors.textSecondary
+                                                    .withValues(alpha: 0.6),
+                                              ),
+                                            ),
+                                          ),
+                                          ..._semesters.map(
+                                            (sem) => DropdownMenuItem(
+                                              value:
+                                                  sem['_id']?.toString() ?? '',
+                                              child: Text(
+                                                sem['name']?.toString() ?? '',
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        onChanged: (value) {
+                                          setSemDropState(() {
+                                            _selectedCourseSemester = value!;
+                                          });
+                                          setState(() {
+                                            _selectedCourseSemester = value!;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -507,7 +743,9 @@ class _CoursesTabState extends State<CoursesTab> {
                                 const SizedBox(height: 8),
                                 TextField(
                                   controller: _maxCapacityController,
-                                  style: const TextStyle(color: AppColors.textPrimary),
+                                  style: const TextStyle(
+                                    color: AppColors.textPrimary,
+                                  ),
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     hintText: '60',
@@ -622,13 +860,16 @@ class _CoursesTabState extends State<CoursesTab> {
           ),
         ),
       ),
+    ),
+    ),
     );
   }
 
-  void _createCourse() {
+  Future<void> _createCourse() async {
     if (_nameController.text.trim().isEmpty ||
         _codeController.text.trim().isEmpty ||
-        _creditsController.text.trim().isEmpty) {
+        _creditsController.text.trim().isEmpty ||
+        _selectedCourseDepartment.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Please fill all required fields'),
@@ -642,7 +883,7 @@ class _CoursesTabState extends State<CoursesTab> {
 
     final currentUser = _storage.getCurrentUser();
     final institutionId = currentUser?.institutionId;
-    
+
     if (institutionId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -655,37 +896,89 @@ class _CoursesTabState extends State<CoursesTab> {
       return;
     }
 
-    final courseData = {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'institution_id': institutionId,
-      'name': _nameController.text.trim(),
-      'code': _codeController.text.trim().toUpperCase(),
-      'credits': int.tryParse(_creditsController.text.trim()) ?? 0,
-      'department': _selectedCourseDepartment,
-      'maxCapacity': int.tryParse(_maxCapacityController.text.trim()),
-      'description': _descriptionController.text.trim(),
-      'createdAt': DateTime.now().toIso8601String(),
-    };
+    // Find department ID from selected department ID
+    final selectedDept = _departments.firstWhere(
+      (dept) => dept['_id']?.toString() == _selectedCourseDepartment,
+      orElse: () => <String, dynamic>{},
+    );
 
-    _storage.saveCourse(courseData);
-
-    setState(() {
-      _courses.add(courseData);
-    });
+    final departmentId = selectedDept['_id']?.toString();
+    if (departmentId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Error: Invalid department selected'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
+    }
 
     Navigator.pop(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Course created successfully'),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+        ),
       ),
     );
+
+    try {
+      await _courseRepository.createCourse(
+        institutionId: institutionId,
+        departmentId: departmentId,
+        name: _nameController.text.trim(),
+        code: _codeController.text.trim().toUpperCase(),
+        credits: int.parse(_creditsController.text.trim()),
+        description: _descriptionController.text.trim(),
+        semesterAvailable: _selectedCourseSemester.isEmpty
+            ? null
+            : _selectedCourseSemester,
+        maxCapacity: int.tryParse(_maxCapacityController.text.trim()),
+      );
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${TerminologyService.getLearningProgramLabel(context)} created successfully',
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+
+      // Refresh courses list
+      await _loadCourses();
+    } catch (e) {
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      print('Error creating course: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
-  void _updateCourse(int index) {
+  Future<void> _updateCourse(int index) async {
     if (_nameController.text.trim().isEmpty ||
         _codeController.text.trim().isEmpty ||
         _creditsController.text.trim().isEmpty) {
@@ -700,35 +993,76 @@ class _CoursesTabState extends State<CoursesTab> {
       return;
     }
 
-    final currentUser = _storage.getCurrentUser();
-    final institutionId = currentUser?.institutionId;
-
-    final updatedCourse = {
-      'id': _courses[index]['id'],
-      'institution_id': institutionId,
-      'name': _nameController.text.trim(),
-      'code': _codeController.text.trim().toUpperCase(),
-      'credits': int.tryParse(_creditsController.text.trim()) ?? 0,
-      'description': _descriptionController.text.trim(),
-      'createdAt': _courses[index]['createdAt'],
-    };
-
-    _storage.updateCourse(_courses[index]['id'], updatedCourse);
-
-    setState(() {
-      _courses[index] = updatedCourse;
-    });
+    final courseId = _courses[index]['_id']?.toString();
+    if (courseId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Error: Invalid course ID'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
+    }
 
     Navigator.pop(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Course updated successfully'),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+        ),
       ),
     );
+
+    try {
+      await _courseRepository.updateCourse(
+        courseId: courseId,
+        name: _nameController.text.trim(),
+        code: _codeController.text.trim().toUpperCase(),
+        credits: int.parse(_creditsController.text.trim()),
+        description: _descriptionController.text.trim(),
+        maxCapacity: int.tryParse(_maxCapacityController.text.trim()),
+      );
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${TerminologyService.getLearningProgramLabel(context)} updated successfully',
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+
+      // Refresh courses list
+      await _loadCourses();
+    } catch (e) {
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      print('Error updating course: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   String _getInitials(String name) {
@@ -738,17 +1072,15 @@ class _CoursesTabState extends State<CoursesTab> {
     return (words[0].substring(0, 1) + words[1].substring(0, 1)).toUpperCase();
   }
 
-  void _deleteCourse(int index) {
-    showDialog(
+  Future<void> _deleteCourse(int index) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          'Delete Course',
-          style: TextStyle(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete ${TerminologyService.getLearningProgramLabel(context)}',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
           ),
@@ -761,290 +1093,377 @@ class _CoursesTabState extends State<CoursesTab> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              final courseId = _courses[index]['id'];
-              _storage.deleteCourse(courseId);
-              
-              setState(() {
-                _courses.removeAt(index);
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Course deleted successfully'),
-                  backgroundColor: AppColors.success,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              );
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.error,
-            ),
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Delete'),
           ),
         ],
       ),
     );
+
+    if (confirmed != true) return;
+
+    final courseId = _courses[index]['_id']?.toString();
+    if (courseId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Error: Invalid course ID'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
+    }
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+        ),
+      ),
+    );
+
+    try {
+      await _courseRepository.deleteCourse(courseId);
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${TerminologyService.getLearningProgramLabel(context)} deleted successfully',
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+
+      // Refresh courses list
+      await _loadCourses();
+    } catch (e) {
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.pop(context);
+
+      print('Error deleting course: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete: ${e.toString()}'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: true,
-      body: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            // Header Section
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.primary.withValues(alpha: 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      body: RefreshIndicator(
+        onRefresh: _loadCourses,
+        color: AppColors.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              // Header Section
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.1),
+                      AppColors.primary.withValues(alpha: 0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.2),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.book_outlined,
+                        size: 32,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Courses',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            TerminologyService.getLearningProgramDescription(
+                              context,
+                            ),
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.9,
+                              ),
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 20),
+
+              // Search Bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBackground,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
                     ),
-                    child: const Icon(
-                      Icons.book_outlined,
-                      size: 32,
-                      color: AppColors.primary,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Search ${TerminologyService.getLearningProgramLabel(context, plural: true).toLowerCase()}...',
+                      hintStyle: TextStyle(
+                        color: AppColors.textTertiary.withValues(alpha: 0.5),
+                        fontSize: 15,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        color: AppColors.primary.withValues(alpha: 0.7),
+                        size: 22,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.clear_rounded,
+                                color: AppColors.textTertiary.withValues(
+                                  alpha: 0.6,
+                                ),
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _searchController.clear();
+                                });
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          width: 1,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Filter Row
+              Row(
+                children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          TerminologyService.getLearningProgramLabel(context, plural: true),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.borderDark.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedDepartment,
+                          isExpanded: true,
+                          dropdownColor: AppColors.surface,
                           style: const TextStyle(
                             color: AppColors.textPrimary,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          TerminologyService.getLearningProgramDescription(context),
-                          style: TextStyle(
-                            color: AppColors.textSecondary.withValues(alpha: 0.9),
                             fontSize: 14,
-                            height: 1.4,
                           ),
+                          icon: Icon(
+                            Icons.arrow_drop_down,
+                            color: AppColors.textTertiary.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: 'all',
+                              child: Text(
+                                'All ${TerminologyService.getOrganizationalUnitLabel(context, plural: true)}',
+                              ),
+                            ),
+                            ..._departments.map(
+                              (dept) => DropdownMenuItem(
+                                value: dept['_id']?.toString() ?? dept['name'],
+                                child: Text(
+                                  dept['name']?.toString() ?? '',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedDepartment = value!;
+                            });
+                          },
                         ),
-                      ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.borderDark.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedSemester,
+                          isExpanded: true,
+                          dropdownColor: AppColors.surface,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                          ),
+                          icon: Icon(
+                            Icons.arrow_drop_down,
+                            color: AppColors.textTertiary.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: 'all',
+                              child: Text(
+                                'All ${TerminologyService.getTimePeriodLabel(context, plural: true)}',
+                              ),
+                            ),
+                            ..._semesters.map(
+                              (semester) => DropdownMenuItem(
+                                value:
+                                    semester['_id']?.toString() ??
+                                    semester['name'],
+                                child: Text(
+                                  semester['name']?.toString() ?? '',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedSemester = value!;
+                            });
+                          },
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
-            // Search Bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.cardBackground,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.05),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: 200,
+                  maxHeight: MediaQuery.of(context).size.height - 400,
                 ),
-                child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search ${TerminologyService.getLearningProgramLabel(context, plural: true).toLowerCase()}...',
-                    hintStyle: TextStyle(
-                      color: AppColors.textTertiary.withValues(alpha: 0.5),
-                      fontSize: 15,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: AppColors.primary.withValues(alpha: 0.7),
-                      size: 22,
-                    ),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear_rounded,
-                              color: AppColors.textTertiary.withValues(alpha: 0.6),
-                              size: 20,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _searchController.clear();
-                              });
-                            },
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        width: 1,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        width: 1,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                        width: 1.5,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                  ),
-                ),
+                child: _courses.isEmpty
+                    ? _buildEmptyState()
+                    : _filteredCourses.isEmpty
+                    ? _buildNoResultsState()
+                    : _buildCoursesList(),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            // Filter Row
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.borderDark.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedDepartment,
-                        isExpanded: true,
-                        dropdownColor: AppColors.surface,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                        ),
-                        icon: Icon(
-                          Icons.arrow_drop_down,
-                          color: AppColors.textTertiary.withValues(alpha: 0.6),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: 'All Departments',
-                            child: Text('All ${TerminologyService.getOrganizationalUnitLabel(context, plural: true)}'),
-                          ),
-                          ..._departments.map((dept) => DropdownMenuItem(
-                            value: dept['name'],
-                            child: Text(dept['name']),
-                          )),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedDepartment = value!;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.borderDark.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedSemester,
-                        isExpanded: true,
-                        dropdownColor: AppColors.surface,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                        ),
-                        icon: Icon(
-                          Icons.arrow_drop_down,
-                          color: AppColors.textTertiary.withValues(alpha: 0.6),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: 'All Semesters',
-                            child: Text('All ${TerminologyService.getTimePeriodLabel(context, plural: true)}'),
-                          ),
-                          ..._semesters.map((semester) => DropdownMenuItem(
-                            value: semester['name'],
-                            child: Text(semester['name']),
-                          )),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedSemester = value!;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Content
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: 200,
-                maxHeight: MediaQuery.of(context).size.height - 400,
-              ),
-              child: _courses.isEmpty
-                  ? _buildEmptyState()
-                  : _buildCoursesList(),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       floatingActionButton: Padding(
@@ -1114,6 +1533,53 @@ class _CoursesTabState extends State<CoursesTab> {
                 ),
                 textAlign: TextAlign.center,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoResultsState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 60, left: 24, right: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.textSecondary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(40),
+              ),
+              child: Icon(
+                Icons.search_off_rounded,
+                size: 40,
+                color: AppColors.textSecondary.withValues(alpha: 0.4),
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'No courses match your filters',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Try changing the department or semester filter.',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary.withValues(alpha: 0.7),
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

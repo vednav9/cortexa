@@ -108,8 +108,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _loadInstitutions() async {
     setState(() => _isLoading = true);
     try {
-      // Fetch institutions from API (uses cache if valid)
-      final apiInstitutions = await _repository.getInstitutions();
+      // Fetch institutions from API (force refresh to bypass potentially stale cache)
+      final apiInstitutions = await _repository.getInstitutions(forceRefresh: true);
       
       setState(() {
         _institutions = apiInstitutions;
@@ -210,30 +210,36 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => SearchFilterModal(
-        searchController: _searchController,
-        selectedType: _selectedType,
-        selectedState: _selectedState,
-        selectedAffiliation: _selectedAffiliation,
-        selectedBoard: _selectedBoard,
-        selectedStrength: _selectedStrength,
-        onTypeChanged: (value) {
-          setState(() => _selectedType = value);
-        },
-        onStateChanged: (value) {
-          setState(() => _selectedState = value);
-        },
-        onAffiliationChanged: (value) {
-          setState(() => _selectedAffiliation = value);
-        },
-        onBoardChanged: (value) {
-          setState(() => _selectedBoard = value);
-        },
-        onStrengthChanged: (value) {
-          setState(() => _selectedStrength = value);
-        },
-        onClearFilters: _clearFilters,
-        onApplyFilters: _applyFilters,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: SearchFilterModal(
+            searchController: _searchController,
+            selectedType: _selectedType,
+            selectedState: _selectedState,
+            selectedAffiliation: _selectedAffiliation,
+            selectedBoard: _selectedBoard,
+            selectedStrength: _selectedStrength,
+            onTypeChanged: (value) {
+              setState(() => _selectedType = value);
+            },
+            onStateChanged: (value) {
+              setState(() => _selectedState = value);
+            },
+            onAffiliationChanged: (value) {
+              setState(() => _selectedAffiliation = value);
+            },
+            onBoardChanged: (value) {
+              setState(() => _selectedBoard = value);
+            },
+            onStrengthChanged: (value) {
+              setState(() => _selectedStrength = value);
+            },
+            onClearFilters: _clearFilters,
+            onApplyFilters: _applyFilters,
+          ),
+        ),
       ),
     );
   }

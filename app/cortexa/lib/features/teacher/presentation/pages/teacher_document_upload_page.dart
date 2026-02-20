@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../../../../core/constants/app_colors.dart';
+import '../../../../../core/network/api_client.dart';
 import '../../../../../core/di/service_locator.dart';
 import '../../../../../core/services/hive_storage_service.dart';
 import '../../data/repositories/teacher_ai_repository.dart';
@@ -63,9 +64,10 @@ class _TeacherDocumentUploadPageState extends State<TeacherDocumentUploadPage> {
         _isLoading = false;
       });
       if (mounted) {
+        final errorMessage = e is ApiException ? e.message : e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load documents: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -90,9 +92,10 @@ class _TeacherDocumentUploadPageState extends State<TeacherDocumentUploadPage> {
         }
       }
     } catch (e) {
+      final errorMessage = e is ApiException ? e.message : 'Failed to pick file';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to pick file: ${e.toString()}'),
+          content: Text(errorMessage),
           backgroundColor: Colors.red,
         ),
       );
@@ -140,9 +143,10 @@ class _TeacherDocumentUploadPageState extends State<TeacherDocumentUploadPage> {
         _isUploading = false;
       });
       if (mounted) {
+        final errorMessage = e is ApiException ? e.message : 'Upload failed. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Upload failed: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -187,9 +191,10 @@ class _TeacherDocumentUploadPageState extends State<TeacherDocumentUploadPage> {
       _loadDocuments();
     } catch (e) {
       if (mounted) {
+        final errorMessage = e is ApiException ? e.message : 'Delete failed. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Delete failed: ${e.toString()}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.red,
           ),
         );

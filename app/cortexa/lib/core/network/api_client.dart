@@ -371,24 +371,24 @@ class ApiClient {
     if (statusCode >= 200 && statusCode < 300) {
       return data;
     } else {
-      // Get error message from response or status code
-      final technicalMessage = data['message'] as String?;
-      final userFriendlyMessage = ErrorMessageMapper.getCombinedMessage(
+      // Get error message from response - backend messages are already user-friendly
+      final backendMessage = data['message'] as String?;
+      final userMessage = ErrorMessageMapper.getCombinedMessage(
         statusCode, 
-        technicalMessage,
+        backendMessage,
       );
       
       print('❌ [ApiClient] Error Response:');
       print('   Status Code: $statusCode');
-      print('   Technical Message: $technicalMessage');
-      print('   User Message: $userFriendlyMessage');
+      print('   Backend Message: $backendMessage');
+      print('   User Message: $userMessage');
       
       // Only clear auth data on 401 if it's actually an authentication error
       // Don't clear on "token missing" errors that might be temporary
-      if (statusCode == 401 && technicalMessage != null) {
-        final shouldClearAuth = technicalMessage.toLowerCase().contains('invalid') ||
-                               technicalMessage.toLowerCase().contains('expired') ||
-                               technicalMessage.toLowerCase().contains('unauthorized');
+      if (statusCode == 401 && backendMessage != null) {
+        final shouldClearAuth = backendMessage.toLowerCase().contains('invalid') ||
+                               backendMessage.toLowerCase().contains('expired') ||
+                               backendMessage.toLowerCase().contains('unauthorized');
         
         if (shouldClearAuth) {
           print('⚠️ [ApiClient] Clearing auth data due to invalid/expired token');
@@ -399,9 +399,9 @@ class ApiClient {
       }
       
       throw ApiException(
-        userFriendlyMessage,
+        userMessage,
         statusCode: statusCode,
-        technicalMessage: technicalMessage,
+        technicalMessage: backendMessage,
       );
     }
   }

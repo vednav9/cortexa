@@ -19,13 +19,42 @@ class InstitutionDetailPage extends StatefulWidget {
 
 class _InstitutionDetailPageState extends State<InstitutionDetailPage> {
   final _repository = getIt<DashboardRepository>();
+  final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
   InstitutionDisplayModel? _institutionData;
+  double _titleOpacity = 0.0;
+  double _bottomNameOpacity = 1.0;
 
   @override
   void initState() {
     super.initState();
     _loadInstitutionData();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    // Calculate opacity based on scroll position
+    // Start fading at 100px, complete fade at 200px
+    const double fadeStart = 100.0;
+    const double fadeEnd = 200.0;
+    
+    final offset = _scrollController.offset;
+    final titleOpacity = ((offset - fadeStart) / (fadeEnd - fadeStart)).clamp(0.0, 1.0);
+    final bottomOpacity = (1.0 - ((offset - fadeStart) / (fadeEnd - fadeStart))).clamp(0.0, 1.0);
+    
+    if (_titleOpacity != titleOpacity || _bottomNameOpacity != bottomOpacity) {
+      setState(() {
+        _titleOpacity = titleOpacity;
+        _bottomNameOpacity = bottomOpacity;
+      });
+    }
   }
 
   Future<void> _loadInstitutionData() async {
@@ -79,6 +108,7 @@ class _InstitutionDetailPageState extends State<InstitutionDetailPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
+              controller: _scrollController,
               slivers: [
                 // Banner with Logo and Name Overlay
                 SliverAppBar(
@@ -88,6 +118,19 @@ class _InstitutionDetailPageState extends State<InstitutionDetailPage> {
                   leading: IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  title: Opacity(
+                    opacity: _titleOpacity,
+                    child: Text(
+                      institution.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   flexibleSpace: FlexibleSpaceBar(
                     background: Stack(
@@ -177,55 +220,58 @@ class _InstitutionDetailPageState extends State<InstitutionDetailPage> {
                               const SizedBox(width: 16),
                               // Institution Name and Location
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      institution.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        shadows: [
-                                          Shadow(
-                                            color: Colors.black54,
-                                            blurRadius: 4,
+                                child: Opacity(
+                                  opacity: _bottomNameOpacity,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        institution.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.bold,
+                                          shadows: [
+                                            Shadow(
+                                              color: Colors.black54,
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.location_on,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              '${institution.city}, ${institution.country}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                shadows: [
+                                                  Shadow(
+                                                    color: Colors.black54,
+                                                    blurRadius: 3,
+                                                  ),
+                                                ],
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
                                         ],
                                       ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on,
-                                          color: Colors.white,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Expanded(
-                                          child: Text(
-                                            '${institution.city}, ${institution.country}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              shadows: [
-                                                Shadow(
-                                                  color: Colors.black54,
-                                                  blurRadius: 3,
-                                                ),
-                                              ],
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],

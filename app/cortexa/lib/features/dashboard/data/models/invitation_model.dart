@@ -9,6 +9,8 @@ class InvitationModel extends Equatable {
   final String institutionType;
   final String invitedByName; // Name of the admin who sent the invite
   final String invitedByEmail;
+  final String recipientName; // Name of the invited user (for admin view)
+  final String recipientEmail; // Email of the invited user (for admin view)
   final String role; // 'student' or 'teacher'
   final DateTime invitedAt;
   final InvitationStatus status;
@@ -22,6 +24,8 @@ class InvitationModel extends Equatable {
     required this.institutionType,
     required this.invitedByName,
     required this.invitedByEmail,
+    this.recipientName = '',
+    this.recipientEmail = '',
     required this.role,
     required this.invitedAt,
     required this.status,
@@ -37,6 +41,8 @@ class InvitationModel extends Equatable {
       institutionType: json['institution_type'] ?? 'Institute',
       invitedByName: json['invited_by_name'] ?? '',
       invitedByEmail: json['invited_by_email'] ?? '',
+      recipientName: json['recipient_name'] ?? '',
+      recipientEmail: json['recipient_email'] ?? '',
       role: json['role'] ?? 'student',
       invitedAt: json['invited_at'] != null
           ? DateTime.parse(json['invited_at'])
@@ -55,6 +61,8 @@ class InvitationModel extends Equatable {
       'institution_type': institutionType,
       'invited_by_name': invitedByName,
       'invited_by_email': invitedByEmail,
+      'recipient_name': recipientName,
+      'recipient_email': recipientEmail,
       'role': role,
       'invited_at': invitedAt.toIso8601String(),
       'status': status.value,
@@ -70,6 +78,8 @@ class InvitationModel extends Equatable {
     String? institutionType,
     String? invitedByName,
     String? invitedByEmail,
+    String? recipientName,
+    String? recipientEmail,
     String? role,
     DateTime? invitedAt,
     InvitationStatus? status,
@@ -83,6 +93,8 @@ class InvitationModel extends Equatable {
       institutionType: institutionType ?? this.institutionType,
       invitedByName: invitedByName ?? this.invitedByName,
       invitedByEmail: invitedByEmail ?? this.invitedByEmail,
+      recipientName: recipientName ?? this.recipientName,
+      recipientEmail: recipientEmail ?? this.recipientEmail,
       role: role ?? this.role,
       invitedAt: invitedAt ?? this.invitedAt,
       status: status ?? this.status,
@@ -99,6 +111,8 @@ class InvitationModel extends Equatable {
         institutionType,
         invitedByName,
         invitedByEmail,
+        recipientName,
+        recipientEmail,
         role,
         invitedAt,
         status,
