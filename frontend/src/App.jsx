@@ -50,6 +50,7 @@ import CortexaAdminLogin from "./components/dashboard/cortexaAdminLogin";
 import InstitutionDashboard from "./components/institution/Dashboard";
 // Layout
 import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
 
 // Auth
 import { useAuth } from "./context/authcontext";
@@ -88,7 +89,7 @@ function App() {
           <main className="flex-1">
             <Routes>
               {/* Public */}
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<><Home /><Footer /></>} />
               <Route path="/login" element={<Login />} />
               <Route path="/cortexaAdminLogin" element={<CortexaAdminLogin />} />
               <Route path="/signup" element={<SignUp />} />
