@@ -362,7 +362,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                           StatefulBuilder(
                             builder: (context, setDialogState) =>
                                 DropdownButtonFormField<String>(
-                                  value: _selectedCategory,
+                                  initialValue: _selectedCategory,
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: AppColors.textPrimary,
@@ -415,7 +415,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                           StatefulBuilder(
                             builder: (context, setDialogState) =>
                                 DropdownButtonFormField<String>(
-                                  value: _selectedPriority,
+                                  initialValue: _selectedPriority,
                                   style: const TextStyle(
                                     fontSize: 15,
                                     color: AppColors.textPrimary,
@@ -1040,7 +1040,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                       ],
                                     ),
                                   );
-                                }).toList(),
+                                }),
                             ],
                           ),
                         ),

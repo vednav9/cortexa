@@ -1523,7 +1523,7 @@ class _ManageUsersTabState extends State<ManageUsersTab> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: selectedDepartment.isEmpty || 
+                  initialValue: selectedDepartment.isEmpty || 
                          !_departments.any((d) => d['_id'].toString() == selectedDepartment)
                       ? null 
                       : selectedDepartment,
@@ -1569,7 +1569,7 @@ class _ManageUsersTabState extends State<ManageUsersTab> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: selectedSemester.isEmpty || 
+                  initialValue: selectedSemester.isEmpty || 
                          !_semesters.any((s) => s['_id'].toString() == selectedSemester)
                       ? null 
                       : selectedSemester,
@@ -1615,7 +1615,7 @@ class _ManageUsersTabState extends State<ManageUsersTab> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: selectedStatus,
+                  initialValue: selectedStatus,
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: AppColors.background,

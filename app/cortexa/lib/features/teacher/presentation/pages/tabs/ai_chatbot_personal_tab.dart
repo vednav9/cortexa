@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
-import '../../../../../../core/services/hive_storage_service.dart';
-import '../../../../../../core/di/service_locator.dart';
-import '../../../../rag_assistant/presentation/widgets/rag_chat_widget.dart';
+﻿import 'package:flutter/material.dart';
+import '../../../../../core/di/service_locator.dart';
+import '../../../../../core/services/hive_storage_service.dart';
+import '../../../../personal_chat/presentation/widgets/personal_chat_home_widget.dart';
 
 class AIChatbotPersonalTab extends StatefulWidget {
   const AIChatbotPersonalTab({super.key});
@@ -11,35 +11,34 @@ class AIChatbotPersonalTab extends StatefulWidget {
 }
 
 class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
-  String _institutionId = '';
+  String _userId = '';
+  String _userName = '';
 
   @override
   void initState() {
     super.initState();
-    _loadInstitutionId();
+    _loadUser();
   }
 
-  void _loadInstitutionId() {
-    final storage = getIt<HiveStorageService>();
-    final currentInstitution = storage.getCurrentInstitution();
+  void _loadUser() {
+    final user = getIt<HiveStorageService>().getCurrentUser();
     setState(() {
-      _institutionId = currentInstitution?['_id'] ?? currentInstitution?['id'] ?? '';
+      _userId = user?.id ?? '';
+      _userName = user?.fullName ?? user?.username ?? 'Teacher';
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_institutionId.isEmpty) {
+    if (_userId.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(),
+        child: CircularProgressIndicator(color: Color(0xFF10B981)),
       );
     }
-
-    return RagChatWidget(
-      institutionId: _institutionId,
-      useHybridMode: true,
-      welcomeMessage: 'Hello! I\'m your AI assistant. I can help you with teaching resources, course content, and general topics from your uploaded materials. How can I assist you today?',
-      placeholderText: 'Ask me anything about your courses...',
+    return PersonalChatHomeWidget(
+      userId: _userId,
+      userName: _userName,
+      role: 'teacher',
     );
   }
 }

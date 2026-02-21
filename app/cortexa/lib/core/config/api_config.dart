@@ -23,6 +23,25 @@ class ApiConfig {
     // Use production or local based on flag
     return _useLocalBackend ? _localUrl : _productionUrl;
   }
+
+  /* ===========================
+     AI SERVICE CONFIGURATION
+  =========================== */
+  
+  // Production AI URL (proxied through backend)
+  static const String _productionAiUrl = 'https://cortexa-backend.vercel.app/api/ai';
+  
+  // Local AI URL (for testing with local AI service)
+  static const String _localAiUrl = 'http://10.0.2.2:8000/api';
+  
+  static String get aiBaseUrl {
+    // Allow override via environment variable
+    const overridden = String.fromEnvironment('AI_BASE_URL');
+    if (overridden.isNotEmpty) return overridden;
+
+    // Use production or local based on flag
+    return _useLocalBackend ? _localAiUrl : _productionAiUrl;
+  }
   
   /* ===========================
      AUTHENTICATION ENDPOINTS
@@ -39,6 +58,21 @@ class ApiConfig {
   static const String teacherLogin = '/teacher/login';
   static const String teacherLogout = '/teacher/logout';
   static const String teacherMyInstitution = '/teacher/my-institution';
+  
+  // Teacher Courses & Students
+  static const String teacherAuthorizedCourses = '/teacher/authorized-courses';
+  static const String teacherStudents = '/teacher/students';
+  
+  // Teacher MCQ Management
+  static const String teacherGenerateMCQs = '/teacher/mcq/generate';
+  static const String teacherSaveMCQSet = '/teacher/mcq/save';
+  static const String teacherGetMCQSets = '/teacher/mcq/sets';
+  static const String teacherMCQSetBase = '/teacher/mcq';
+  
+  // Teacher Document Management
+  static const String teacherUploadDocument = '/teacher/notes/upload';
+  static const String teacherGetDocuments = '/teacher/notes'; // + /{courseId}
+  static const String teacherDeleteDocument = '/teacher/notes'; // + /{documentId}
   
   // Admin Auth
   static const String adminRegister = '/admin/register';
@@ -119,6 +153,36 @@ class ApiConfig {
   static const String chatHistory = '/rag/history';
   
   /* ===========================
+     GEMINI PERSONAL AI CONFIGURATION
+  =========================== */
+
+  // Replace this value with your actual Gemini API key from https://aistudio.google.com/app/apikey
+  // You can also override it at build time: --dart-define=GEMINI_API_KEY=your_key
+  static const String geminiApiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'AIzaSyACZbjOU8blZWz8tJWeXRDvkf28HSMqYt8',
+  );
+
+  /* ===========================
+     AI SERVICE ENDPOINTS
+  =========================== */
+
+  // MCQ Generation (Teacher)
+  static const String aiGenerateMcq = '/mcq/generate';
+  static const String aiValidateMcq = '/mcq/validate';
+  
+  // Vector Database / Document Processing (Teacher)
+  static const String aiUploadDocument = '/vectordb/upload';
+  static const String aiProcessDocument = '/vectordb/process';
+  static const String aiListDocuments = '/vectordb/documents';
+  static const String aiDeleteDocument = '/vectordb/delete'; // + /{id}
+  
+  // RAG Query (Student)
+  static const String aiRagQuery = '/rag/query';
+  static const String aiRagHistory = '/rag/history';
+  static const String aiWebSearch = '/hybrid/search'; // Web search + RAG
+  
+  /* ===========================
      NETWORK TIMEOUTS
   =========================== */
   
@@ -133,6 +197,9 @@ class ApiConfig {
      HELPER METHODS
   =========================== */
   
-  /// Build full URL from endpoint path
+  /// Build full URL from endpoint path (for backend APIs)
   static String buildUrl(String endpoint) => baseUrl + endpoint;
+  
+  /// Build full AI URL from endpoint path (for AI services)
+  static String buildAiUrl(String endpoint) => aiBaseUrl + endpoint;
 }

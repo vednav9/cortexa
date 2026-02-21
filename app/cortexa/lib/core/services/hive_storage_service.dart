@@ -1,6 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../features/auth/data/models/user_hive_model.dart';
 import '../../features/auth/data/models/auth_token_model.dart';
+import '../../features/personal_chat/data/models/personal_conversation.dart';
 
 class HiveStorageService {
   // Single unified box for all app data
@@ -888,5 +889,84 @@ class HiveStorageService {
   /// Clear authorized courses
   Future<void> clearAuthorizedCourses() async {
     await _appBox.delete(_authorizedCoursesKey);
+  }
+
+  // ===== Personal Chat Methods (per-user, device-local) =====
+
+  /// Get raw personal chat history for a specific user (keyed by userId)
+  List<dynamic> getPersonalChatHistory(String userId) {
+    return _appBox.get('personal_chat_$userId', defaultValue: <dynamic>[]) as List<dynamic>;
+  }
+
+  /// Append a message to a user's personal chat history
+  Future<void> addPersonalChatMessage(String userId, Map<String, dynamic> message) async {
+    final history = getPersonalChatHistory(userId);
+    final updated = List<dynamic>.from(history)..add(message);
+    await _appBox.put('personal_chat_$userId', updated);
+  }
+
+  /// Overwrite the entire history list (used for trimming)
+  Future<void> setPersonalChatHistory(String userId, List<dynamic> messages) async {
+    await _appBox.put('personal_chat_$userId', messages);
+  }
+
+  /// Clear all personal chat history for a specific user
+  Future<void> clearPersonalChatHistory(String userId) async {
+    await _appBox.put('personal_chat_$userId', <dynamic>[]);
+  }
+
+  // ===== Personal Chat — Conversations (multi-chat support) =====
+
+  /// Get all conversations for a user, sorted newest first.
+  List<PersonalConversation> getPersonalConversations(String userId) {
+    final raw = _appBox.get('personal_convs_$userId', defaultValue: <dynamic>[]) as List<dynamic>;
+    final convs = raw.map((e) => PersonalConversation.fromMap(e as Map)).toList();
+    convs.sort((a, b) => b.lastUpdatedAt.compareTo(a.lastUpdatedAt));
+    return convs;
+  }
+
+  /// Upsert a conversation (insert or update by id).
+  Future<void> savePersonalConversation(String userId, PersonalConversation conv) async {
+    final raw = _appBox.get('personal_convs_$userId', defaultValue: <dynamic>[]) as List<dynamic>;
+    final updatedList = List<dynamic>.from(raw);
+    final idx = updatedList.indexWhere((e) => (e as Map)['id'] == conv.id);
+    if (idx >= 0) {
+      updatedList[idx] = conv.toMap();
+    } else {
+      updatedList.add(conv.toMap());
+    }
+    await _appBox.put('personal_convs_$userId', updatedList);
+  }
+
+  /// Delete a conversation and its message history.
+  Future<void> deletePersonalConversation(String userId, String convId) async {
+    final raw = _appBox.get('personal_convs_$userId', defaultValue: <dynamic>[]) as List<dynamic>;
+    final filtered = raw.where((e) => (e as Map)['id'] != convId).toList();
+    await _appBox.put('personal_convs_$userId', filtered);
+    await _appBox.delete('personal_conv_msgs_${userId}_$convId');
+  }
+
+  // ===== Personal Chat — Per-conversation messages =====
+
+  /// Get raw message list for a specific conversation.
+  List<dynamic> getConvChatHistory(String userId, String convId) {
+    return _appBox.get('personal_conv_msgs_${userId}_$convId', defaultValue: <dynamic>[]) as List<dynamic>;
+  }
+
+  /// Append a message map to a specific conversation.
+  Future<void> addConvChatMessage(String userId, String convId, Map<String, dynamic> message) async {
+    final history = getConvChatHistory(userId, convId);
+    final updated = List<dynamic>.from(history)..add(message);
+    await _appBox.put('personal_conv_msgs_${userId}_$convId', updated);
+  }
+
+  /// Overwrite the entire message list for a conversation (used for trimming).
+  Future<void> setConvChatHistory(String userId, String convId, List<dynamic> messages) async {
+    await _appBox.put('personal_conv_msgs_${userId}_$convId', messages);
+  }
+
+  /// Clear all messages for a specific conversation.
+  Future<void> clearConvChatHistory(String userId, String convId) async {
+    await _appBox.put('personal_conv_msgs_${userId}_$convId', <dynamic>[]);
   }
 }

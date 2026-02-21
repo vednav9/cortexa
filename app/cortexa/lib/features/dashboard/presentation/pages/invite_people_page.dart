@@ -157,7 +157,7 @@ class _InvitePeoplePageState extends State<InvitePeoplePage> {
 
       if (deptMatch || semMatch) {
         print(
-          '  Course: ${course['name']} - Dept Match: $deptMatch (${courseDeptId}), Sem Match: $semMatch (${courseSemId})',
+          '  Course: ${course['name']} - Dept Match: $deptMatch ($courseDeptId), Sem Match: $semMatch ($courseSemId)',
         );
       }
 
@@ -1197,7 +1197,7 @@ class _InvitePeoplePageState extends State<InvitePeoplePage> {
       children: [
         // Department dropdown
         DropdownButtonFormField<String>(
-          value: _selectedDepartment.isEmpty ? null : _selectedDepartment,
+          initialValue: _selectedDepartment.isEmpty ? null : _selectedDepartment,
           isExpanded: true,
           menuMaxHeight: 300,
           hint: Text(
@@ -1256,7 +1256,7 @@ class _InvitePeoplePageState extends State<InvitePeoplePage> {
 
         // Semester dropdown
         DropdownButtonFormField<String>(
-          value: _selectedSemester.isEmpty ? null : _selectedSemester,
+          initialValue: _selectedSemester.isEmpty ? null : _selectedSemester,
           isExpanded: true,
           menuMaxHeight: 300,
           hint: Text(

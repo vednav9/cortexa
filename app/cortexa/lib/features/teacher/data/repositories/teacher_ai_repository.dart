@@ -173,7 +173,7 @@ class TeacherAiRepository {
   /// Upload document/notes for a course
   /// 
   /// [filePath] - Local file path
-  /// [fileName] - File name
+  /// [fileName] - Display name for the file
   /// [courseId] - Course ID
   /// 
   /// Returns: Upload response with document ID
@@ -187,7 +187,10 @@ class TeacherAiRepository {
         '/teacher/notes/upload',
         filePath: filePath,
         fieldName: 'file',
-        additionalFields: {'courseId': courseId},
+        additionalFields: {
+          'courseId': courseId,
+          'fileName': fileName,
+        },
         requiresAuth: true,
       );
 

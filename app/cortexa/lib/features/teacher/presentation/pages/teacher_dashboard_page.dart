@@ -13,8 +13,9 @@ import 'tabs/see_students_tab.dart';
 import 'tabs/teacher_qa_portal_tab.dart';
 import 'tabs/teacher_assessment_tab.dart';
 import 'tabs/ai_chatbot_personal_tab.dart';
-import 'teacher_mcq_generation_page.dart';
-import 'teacher_document_upload_page.dart';
+import 'tabs/generate_mcqs_tab.dart';
+import 'tabs/upload_notes_tab.dart';
+import 'tabs/voice_to_text_tab.dart';
 
 enum TeacherTab {
   dashboard,
@@ -22,6 +23,7 @@ enum TeacherTab {
   seeStudents,
   uploadNotes,
   generateMCQs,
+  voiceToText,
   qaPortal,
   assessment,
   aiChatbot,
@@ -213,7 +215,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.upload_file_outlined,
-                    title: 'Upload Documents',
+                    title: 'Upload Notes',
                     tab: TeacherTab.uploadNotes,
                     context: context,
                   ),
@@ -221,6 +223,12 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                     icon: Icons.quiz_outlined,
                     title: 'Generate MCQs (AI)',
                     tab: TeacherTab.generateMCQs,
+                    context: context,
+                  ),
+                  _buildDrawerItem(
+                    icon: Icons.mic_outlined,
+                    title: 'Voice to Text',
+                    tab: TeacherTab.voiceToText,
                     context: context,
                   ),
                   _buildDrawerItem(
@@ -351,9 +359,11 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
       case TeacherTab.seeStudents:
         return const SeeStudentsTab();
       case TeacherTab.uploadNotes:
-        return const TeacherDocumentUploadPage();
+        return const UploadNotesTab();
       case TeacherTab.generateMCQs:
-        return const TeacherMcqGenerationPage();
+        return const GenerateMCQsTab();
+      case TeacherTab.voiceToText:
+        return const VoiceToTextTab();
       case TeacherTab.qaPortal:
         return const TeacherQAPortalTab();
       case TeacherTab.assessment:

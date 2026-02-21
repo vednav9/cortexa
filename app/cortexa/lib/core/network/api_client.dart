@@ -141,7 +141,7 @@ class ApiClient {
         
         // Detect MIME type from file extension
         final mimeType = _getMimeType(f.path);
-        print('📎 Adding file: ${entry.key} = ${f.path.split('/').last} (${mimeType})');
+        print('📎 Adding file: ${entry.key} = ${f.path.split('/').last} ($mimeType)');
         
         request.files.add(
           await http.MultipartFile.fromPath(
@@ -153,7 +153,7 @@ class ApiClient {
       }
     } else if (file != null) {
       final mimeType = _getMimeType(file.path);
-      print('📎 Adding file: $fileFieldName = ${file.path.split('/').last} (${mimeType})');
+      print('📎 Adding file: $fileFieldName = ${file.path.split('/').last} ($mimeType)');
       
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -275,6 +275,38 @@ class ApiClient {
         'Request timed out. Please check your internet connection and try again.',
         statusCode: 408,
         technicalMessage: 'PUT request timed out after ${ApiConfig.connectionTimeout.inSeconds}s. Base URL: ${ApiConfig.baseUrl}',
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Network error. Please check your internet connection and try again.',
+        technicalMessage: 'Network error: $e',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> patch(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    bool requiresAuth = false,
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final headers = await _buildHeaders(requiresAuth);
+
+    try {
+      final response = await _client
+          .patch(
+            url,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(ApiConfig.connectionTimeout);
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'Request timed out. Please check your internet connection and try again.',
+        statusCode: 408,
+        technicalMessage: 'PATCH request timed out after ${ApiConfig.connectionTimeout.inSeconds}s. Base URL: ${ApiConfig.baseUrl}',
       );
     } catch (e) {
       if (e is ApiException) rethrow;
@@ -469,7 +501,7 @@ class ApiClient {
         request.fields.addAll(additionalFields);
       }
 
-      print('🚀 Uploading ${fileName} (${fileLength} bytes)...');
+      print('🚀 Uploading $fileName ($fileLength bytes)...');
       final streamedResponse = await request.send().timeout(timeout);
       final response = await http.Response.fromStream(streamedResponse);
 

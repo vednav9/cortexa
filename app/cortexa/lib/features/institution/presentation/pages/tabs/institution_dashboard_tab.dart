@@ -4,6 +4,8 @@ import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/services/terminology_service.dart';
 import '../../../../../core/services/hive_storage_service.dart';
 import '../../../../../core/di/service_locator.dart';
+import '../../../../../core/network/api_client.dart';
+import '../../../../../core/config/api_config.dart';
 import '../../../../dashboard/data/models/institution_display_model.dart';
 import '../../../data/repositories/department_repository.dart';
 import '../../../data/repositories/course_repository.dart';
@@ -24,6 +26,7 @@ class InstitutionDashboardTab extends StatefulWidget {
 
 class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
   final _storage = getIt<HiveStorageService>();
+  final _apiClient = getIt<ApiClient>();
   final _departmentRepository = getIt<DepartmentRepository>();
   final _courseRepository = getIt<CourseRepository>();
   final _semesterRepository = getIt<SemesterRepository>();
@@ -39,7 +42,6 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
   String _adminPhone = 'Not available';
   String _institutionWebsite = 'Not available';
   bool _isLoadingFreshData = false;
-  double _titleOpacity = 0.0;
   double _bottomNameOpacity = 1.0;
 
   @override
@@ -63,18 +65,16 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
     const double fadeEnd = 200.0;
     
     final offset = _scrollController.offset;
-    final titleOpacity = ((offset - fadeStart) / (fadeEnd - fadeStart)).clamp(0.0, 1.0);
     final bottomOpacity = (1.0 - ((offset - fadeStart) / (fadeEnd - fadeStart))).clamp(0.0, 1.0);
     
-    if (_titleOpacity != titleOpacity || _bottomNameOpacity != bottomOpacity) {
+    if (_bottomNameOpacity != bottomOpacity) {
       setState(() {
-        _titleOpacity = titleOpacity;
         _bottomNameOpacity = bottomOpacity;
       });
     }
   }
 
-  /// Load stats - API-first approach
+  /// Load stats - API-first approach with role-based endpoint selection
   Future<void> _loadStats() async {
     if (!mounted) return;
     
@@ -82,27 +82,49 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
 
     try {
       final institutionId = widget.institution.id;
-      print('🔄 Fetching stats from backend API for institution: $institutionId');
+      final currentUser = _storage.getCurrentUser();
+      final userRole = currentUser?.role.toLowerCase() ?? '';
+      
+      print('🔄 Fetching stats from backend API for institution: $institutionId (role: $userRole)');
       
       // Fetch from backend APIs first
       try {
-        final results = await Future.wait([
+        // STEP 1: Fetch common data (departments, courses, semesters) - works for all roles
+        final commonDataFutures = [
           _departmentRepository.getDepartments(institutionId),
           _courseRepository.getCourses(institutionId),
           _semesterRepository.getSemesters(institutionId),
-          _adminRepository.getInstitutionStudents(institutionId),
-          _adminRepository.getInstitutionTeachers(institutionId),
-          _adminRepository.getMyInstitution(), // Fetch institution details with contact info
+        ];
+        
+        // STEP 2: Fetch role-specific institution data with stats
+        Future<Map<String, dynamic>> institutionDataFuture;
+        
+        if (userRole == 'admin') {
+          // Admin: use admin-specific endpoint
+          institutionDataFuture = _adminRepository.getMyInstitution();
+        } else if (userRole == 'teacher') {
+          // Teacher: use teacher-specific endpoint
+          institutionDataFuture = _fetchTeacherInstitution();
+        } else if (userRole == 'student') {
+          // Student: use student-specific endpoint
+          institutionDataFuture = _fetchStudentInstitution();
+        } else {
+          // Unknown role: return empty data
+          institutionDataFuture = Future.value(<String, dynamic>{});
+        }
+        
+        // Wait for all data to be fetched
+        final results = await Future.wait([
+          ...commonDataFutures,
+          institutionDataFuture,
         ]);
 
         if (!mounted) return;
 
-        final departmentsData = results[0] as Map<String, dynamic>;
-        final coursesData = results[1] as Map<String, dynamic>;
-        final semestersData = results[2] as Map<String, dynamic>;
-        final studentsData = results[3] as List<Map<String, dynamic>>;
-        final teachersData = results[4] as List<Map<String, dynamic>>;
-        final institutionData = results[5] as Map<String, dynamic>;
+        final departmentsData = results[0];
+        final coursesData = results[1];
+        final semestersData = results[2];
+        final institutionData = results[3];
 
         final departments = departmentsData['data'] as List<dynamic>? ?? [];
         final courses = coursesData['courses'] as List<dynamic>? ?? [];
@@ -112,30 +134,55 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
           _departmentsCount = departments.length;
           _coursesCount = courses.length;
           _semestersCount = semesters.length;
-          _studentsCount = studentsData.length;
-          _teachersCount = teachersData.length;
           
-          // Set contact information from backend API response
+          // Extract stats from institution data (backend returns stats object)
+          final stats = institutionData['stats'] as Map<String, dynamic>?;
+          if (stats != null) {
+            _studentsCount = (stats['students'] as int?) ?? 
+                            (stats['studentCount'] as int?) ?? 
+                            0;
+            _teachersCount = (stats['teachers'] as int?) ?? 
+                            (stats['teacherCount'] as int?) ?? 
+                            0;
+          } else {
+            // If no stats, try direct fields or fallback to 0
+            _studentsCount = (institutionData['studentCount'] as int?) ?? 
+                            (institutionData['students_count'] as int?) ?? 
+                            0;
+            _teachersCount = (institutionData['teacherCount'] as int?) ?? 
+                            (institutionData['teachers_count'] as int?) ?? 
+                            0;
+          }
+          
+          // Extract contact information (works for all role responses)
           final contact = institutionData['contact'] as Map<String, dynamic>?;
           if (contact != null) {
             _adminEmail = contact['email']?.toString() ?? 'Not available';
             _adminPhone = contact['phone']?.toString() ?? 'Not available';
             _institutionWebsite = contact['website']?.toString() ?? 'Not available';
           } else {
-            _adminEmail = 'Not available';
-            _adminPhone = 'Not available';
-            _institutionWebsite = 'Not available';
+            // Fallback to direct fields
+            _adminEmail = institutionData['admin_email']?.toString() ?? 
+                         institutionData['email']?.toString() ??
+                         'Not available';
+            _adminPhone = institutionData['admin_phone_number']?.toString() ?? 
+                         institutionData['phone']?.toString() ??
+                         'Not available';
+            _institutionWebsite = institutionData['institution_website']?.toString() ?? 
+                                 institutionData['website']?.toString() ??
+                                 'Not available';
           }
           
           _isLoadingFreshData = false;
         });
 
-        print('✅ Loaded stats from API:');
+        print('✅ Loaded fresh stats from API:');
         print('   Departments: $_departmentsCount');
         print('   Courses: $_coursesCount');
         print('   Semesters: $_semestersCount');
         print('   Students: $_studentsCount');
         print('   Teachers: $_teachersCount');
+        print('   Contact - Email: $_adminEmail, Phone: $_adminPhone, Website: $_institutionWebsite');
       } catch (apiError) {
         print('⚠️ API fetch failed: $apiError');
         // Fall back to cache
@@ -146,6 +193,54 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
       if (mounted) {
         setState(() => _isLoadingFreshData = false);
       }
+    }
+  }
+  
+  /// Fetch teacher's institution data using teacher endpoint
+  Future<Map<String, dynamic>> _fetchTeacherInstitution() async {
+    try {
+      print('🌐 Fetching teacher institution details from ${ApiConfig.teacherMyInstitution}');
+      
+      final response = await _apiClient.get(
+        ApiConfig.teacherMyInstitution,
+        requiresAuth: true,
+      );
+
+      final institution = response['institution'] as Map<String, dynamic>?;
+      if (institution != null) {
+        print('✅ Fetched teacher institution: ${institution['name']}');
+        return institution;
+      } else {
+        print('⚠️ No institution data in teacher response');
+        return {};
+      }
+    } catch (e) {
+      print('❌ Error fetching teacher institution: $e');
+      return {};
+    }
+  }
+  
+  /// Fetch student's institution data using student endpoint
+  Future<Map<String, dynamic>> _fetchStudentInstitution() async {
+    try {
+      print('🌐 Fetching student institution details from ${ApiConfig.studentMyInstitution}');
+      
+      final response = await _apiClient.get(
+        ApiConfig.studentMyInstitution,
+        requiresAuth: true,
+      );
+
+      final institution = response['institution'] as Map<String, dynamic>?;
+      if (institution != null) {
+        print('✅ Fetched student institution: ${institution['name']}');
+        return institution;
+      } else {
+        print('⚠️ No institution data in student response');
+        return {};
+      }
+    } catch (e) {
+      print('❌ Error fetching student institution: $e');
+      return {};
     }
   }
 
@@ -177,17 +272,24 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
           _studentsCount = students;
           _teachersCount = teachers;
           
-          // Set contact information from institution data
+          // Set contact information from institution data (try multiple fields)
           if (institutionData != null) {
             _adminEmail = institutionData['admin_email']?.toString() ?? 
                          institutionData['contact']?['email']?.toString() ?? 
+                         institutionData['email']?.toString() ??
                          'Not available';
             _adminPhone = institutionData['admin_phone_number']?.toString() ?? 
                          institutionData['contact']?['phone']?.toString() ?? 
+                         institutionData['phone']?.toString() ??
                          'Not available';
             _institutionWebsite = institutionData['institution_website']?.toString() ?? 
                                  institutionData['contact']?['website']?.toString() ?? 
+                                 institutionData['website']?.toString() ??
                                  'Not available';
+          } else {
+            _adminEmail = 'Not available';
+            _adminPhone = 'Not available';
+            _institutionWebsite = 'Not available';
           }
           
           _isLoadingFreshData = false;
@@ -200,6 +302,7 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
       print('   Semesters: $_semestersCount');
       print('   Students: $_studentsCount (from invitations)');
       print('   Teachers: $_teachersCount (from invitations)');
+      print('   Contact - Email: $_adminEmail, Phone: $_adminPhone, Website: $_institutionWebsite');
     } catch (e) {
       print('❌ Error loading from cache: $e');
       if (mounted) {
@@ -238,13 +341,13 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
                         ? Image.network(
                             widget.institution.bannerImageUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
+                            errorBuilder: (_, __, ___) =>
                                 _buildBannerPlaceholder(brandColor),
                           )
                         : Image.file(
                             File(widget.institution.bannerImageUrl!),
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
+                            errorBuilder: (_, __, ___) =>
                                 _buildBannerPlaceholder(brandColor),
                           )
                   else
@@ -320,7 +423,7 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
                                           widget.institution.logoUrl!,
                                           fit: BoxFit.cover,
                                           errorBuilder:
-                                              (context, error, stackTrace) =>
+                                              (_, __, ___) =>
                                                   _buildLogoPlaceholder(
                                                       brandColor),
                                         )
@@ -328,7 +431,7 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
                                           File(widget.institution.logoUrl!),
                                           fit: BoxFit.cover,
                                           errorBuilder:
-                                              (context, error, stackTrace) =>
+                                              (_, __, ___) =>
                                                   _buildLogoPlaceholder(
                                                       brandColor),
                                         ),
@@ -813,7 +916,7 @@ class _InstitutionDashboardTabState extends State<InstitutionDashboardTab> {
         child: Image.asset(
           'assets/images/pattern.png',
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(),
+          errorBuilder: (_, __, ___) => Container(),
         ),
       ),
     );
