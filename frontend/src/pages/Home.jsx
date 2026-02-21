@@ -7,6 +7,8 @@ import {
 import { HiSparkles } from 'react-icons/hi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import GreenParticles from '../ui/GreenParticles';
+import { contactAPI } from '../services/api';
+import { FiCheckCircle, FiAlertCircle, FiLoader } from 'react-icons/fi';
 
 // ===========================
 // HOME WRAPPER
@@ -115,7 +117,8 @@ const Hero = () => {
           >
             <button
               onClick={() => navigate('/signup')}
-              className="group px-8 py-4 rounded-xl font-semibold text-black bg-gradient-to-r from-emerald-400 to-green-500 shadow-lg hover:shadow-emerald-500/50 transition-all"
+              className="group px-8 py-4 rounded-xl font-semibold text-black bg-gradient-to-r from-emerald-400 to-green-500 shadow-lg hover:shadow-emerald-500/50 focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-black focus:outline-none transition-all active:scale-95"
+              aria-label="Get Started with Cortexa"
             >
               <span className="flex items-center space-x-2">
                 <span>Get Started</span>
@@ -125,7 +128,8 @@ const Hero = () => {
 
             <button
               onClick={() => scrollToSection('about')}
-              className="px-8 py-4 rounded-xl font-medium text-gray-300 border border-gray-700 hover:border-emerald-400/50 hover:text-emerald-400 transition-all"
+              className="px-8 py-4 rounded-xl font-medium text-gray-300 border border-gray-700 hover:border-emerald-400/50 hover:text-emerald-400 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 focus:ring-offset-black focus:outline-none transition-all active:scale-95"
+              aria-label="Learn more about Cortexa"
             >
               Learn More
             </button>
@@ -137,8 +141,14 @@ const Hero = () => {
       <motion.div
         animate={{ y: [0, 8, 0] }}
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute bottom-10 left-1/2 -translate-x-1/2 cursor-pointer z-10 opacity-40 hover:opacity-100 transition-opacity"
+        className="absolute bottom-10 left-1/2 -translate-x-1/2 cursor-pointer z-10 opacity-40 hover:opacity-100 transition-opacity focus:outline-none"
         onClick={() => scrollToSection('about')}
+        role="button"
+        aria-label="Scroll to About Section"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') scrollToSection('about');
+        }}
       >
         <div className="w-6 h-10 rounded-full border-2 border-emerald-400/40 flex justify-center pt-2">
           <div className="w-1 h-2 rounded-full bg-emerald-400" />
@@ -185,9 +195,9 @@ const About = () => {
             initial={{ opacity: 0, x: -20 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-red-500/10 hover:border-red-500/30 transition-all"
+            className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-red-500/10 hover:border-red-500/30 hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-red-500/5 group"
           >
-            <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 mb-6">
+            <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 mb-6 group-hover:bg-red-500/20 transition-colors">
               <span className="text-red-400 font-medium text-sm">The Problem</span>
             </div>
             <h3 className="text-2xl md:text-3xl font-bold text-white mb-6">Educational Fragmentation</h3>
@@ -212,9 +222,9 @@ const About = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-emerald-500/10 hover:border-emerald-500/30 transition-all"
+            className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-emerald-500/10 hover:border-emerald-500/30 hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-emerald-500/5 group"
           >
-            <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6">
+            <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6 group-hover:bg-emerald-500/20 transition-colors">
               <span className="text-emerald-400 font-medium text-sm">Our Solution</span>
             </div>
             <h3 className="text-2xl md:text-3xl font-bold text-white mb-6">Unified AI Platform</h3>
@@ -248,9 +258,9 @@ const About = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: 0.3 + (i * 0.1) }}
-              className="p-6 text-center rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-emerald-500/10 hover:border-emerald-500/30 transition-all"
+              className="p-6 text-center rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-emerald-500/10 hover:border-emerald-500/30 hover:-translate-y-1 transition-all duration-300 group"
             >
-              <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent mb-2">
+              <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent mb-2 group-hover:scale-105 transition-transform">
                 {item.number}
               </div>
               <div className="text-base md:text-lg text-white font-medium mb-1">{item.label}</div>
@@ -308,9 +318,9 @@ const Features = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: i * 0.1 }}
-              className="group p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-gray-800 hover:border-emerald-500/30 transition-all"
+              className="group p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-gray-800 hover:border-emerald-500/30 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5 transition-all duration-300"
             >
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300`}>
                 <f.icon className="text-white text-2xl" />
               </div>
               <h3 className="text-xl md:text-2xl font-bold text-white mb-3">{f.title}</h3>
@@ -365,7 +375,7 @@ const Reviews = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: i * 0.15 }}
-              className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-gray-800 hover:border-emerald-500/30 transition-all"
+              className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-gray-800 hover:border-emerald-500/30 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5 transition-all duration-300"
             >
               <div className="flex space-x-1 mb-4">
                 {[...Array(t.rating)].map((_, idx) => (
@@ -397,6 +407,7 @@ const ContactUs = () => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
+  const [status, setStatus] = useState({ state: "idle", message: "" }); // idle, submitting, success, error
 
   const contactInfo = [
     { icon: FiMail, label: "Email", value: "contact@cortexa.com", link: "mailto:contact@cortexa.com" },
@@ -404,9 +415,22 @@ const ContactUs = () => {
     { icon: FiMapPin, label: "Address", value: "123 Education Street, Learning City", link: null }
   ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
+    setStatus({ state: "submitting", message: "" });
+
+    try {
+      const response = await contactAPI.submit(formData);
+      if (response.data.success) {
+        setStatus({ state: "success", message: "Your message has been sent successfully! We'll be in touch." });
+        setFormData({ name: "", email: "", message: "" });
+      } else {
+        setStatus({ state: "error", message: response.data.message || "Something went wrong." });
+      }
+    } catch (error) {
+      console.error("Submission error", error);
+      setStatus({ state: "error", message: error.response?.data?.message || "Failed to send message. Please try again." });
+    }
   };
 
   return (
@@ -441,10 +465,12 @@ const ContactUs = () => {
             className="space-y-6"
           >
             <div>
-              <label className="text-gray-300 text-sm font-medium mb-2 block">Name</label>
+              <label htmlFor="contact-name" className="text-gray-300 text-sm font-medium mb-2 block">Name</label>
               <input
+                id="contact-name"
                 required
-                className="w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                disabled={status.state === "submitting"}
+                className={`w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-transparent transition-all disabled:opacity-50 ${status.state === 'error' ? 'border-red-500/50 focus:ring-red-500/50' : ''}`}
                 placeholder="Your name"
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -452,11 +478,13 @@ const ContactUs = () => {
             </div>
 
             <div>
-              <label className="text-gray-300 text-sm font-medium mb-2 block">Email</label>
+              <label htmlFor="contact-email" className="text-gray-300 text-sm font-medium mb-2 block">Email</label>
               <input
+                id="contact-email"
                 type="email"
                 required
-                className="w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                disabled={status.state === "submitting"}
+                className={`w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-transparent transition-all disabled:opacity-50 ${status.state === 'error' ? 'border-red-500/50 focus:ring-red-500/50' : ''}`}
                 placeholder="you@example.com"
                 value={formData.email}
                 onChange={e => setFormData({ ...formData, email: e.target.value })}
@@ -464,22 +492,43 @@ const ContactUs = () => {
             </div>
 
             <div>
-              <label className="text-gray-300 text-sm font-medium mb-2 block">Message</label>
+              <label htmlFor="contact-message" className="text-gray-300 text-sm font-medium mb-2 block">Message</label>
               <textarea
+                id="contact-message"
                 required
                 rows="5"
-                className="w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors resize-none"
+                disabled={status.state === "submitting"}
+                className={`w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-transparent transition-all resize-none disabled:opacity-50 ${status.state === 'error' ? 'border-red-500/50 focus:ring-red-500/50' : ''}`}
                 placeholder="Tell us about your institution..."
                 value={formData.message}
                 onChange={e => setFormData({ ...formData, message: e.target.value })}
               />
             </div>
 
+            {status.state === 'success' && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-3">
+                <FiCheckCircle className="text-emerald-400 w-5 h-5 flex-shrink-0 mt-0.5" />
+                <p className="text-emerald-300 text-sm leading-relaxed">{status.message}</p>
+              </motion.div>
+            )}
+
+            {status.state === 'error' && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
+                <FiAlertCircle className="text-red-400 w-5 h-5 flex-shrink-0 mt-0.5" />
+                <p className="text-red-300 text-sm leading-relaxed">{status.message}</p>
+              </motion.div>
+            )}
+
             <button
               type="submit"
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-400 to-green-500 text-black font-semibold hover:shadow-lg hover:shadow-emerald-500/50 transition-all"
+              disabled={status.state === "submitting"}
+              className="w-full flex items-center justify-center py-4 rounded-xl bg-gradient-to-r from-emerald-400 to-green-500 text-black font-semibold hover:shadow-lg hover:shadow-emerald-500/50 focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-70 disabled:cursor-not-allowed transition-all active:scale-[0.98]"
             >
-              Send Message
+              {status.state === "submitting" ? (
+                <FiLoader className="w-5 h-5 animate-spin" />
+              ) : (
+                "Send Message"
+              )}
             </button>
           </motion.form>
 

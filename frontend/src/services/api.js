@@ -243,38 +243,45 @@ export const queryAPI = {
 export const qaAPI = {
   // Get Q&As by course
   getByCourse: (courseId, params) => api.get(`/qa/course/${courseId}`, { params }),
-  
+
   // Get Q&As by institution
   getByInstitution: (institutionId, params) => api.get(`/qa/institution/${institutionId}`, { params }),
-  
+
   // Get stats
   getStatsByCourse: (courseId) => api.get(`/qa/course/${courseId}/stats`),
   getStatsByInstitution: (institutionId) => api.get(`/qa/institution/${institutionId}/stats`),
-  
+
   // Get single Q&A
   getById: (qaId) => api.get(`/qa/${qaId}`),
-  
+
   // Get user's Q&As
   getMyQuestions: (params) => api.get('/qa/my-questions', { params }),
-  
+
   // Create Q&A
   create: (courseId, data) => api.post(`/qa/course/${courseId}`, data),
-  
+
   // Add answer
   addAnswer: (qaId, data) => api.post(`/qa/${qaId}/answer`, data),
-  
+
   // Accept answer
   acceptAnswer: (qaId, answerId) => api.patch(`/qa/${qaId}/answer/${answerId}/accept`),
-  
+
   // Upvote
   upvoteQA: (qaId) => api.post(`/qa/${qaId}/upvote`),
   upvoteAnswer: (qaId, answerId) => api.post(`/qa/${qaId}/answer/${answerId}/upvote`),
-  
+
   // Update status
   updateStatus: (qaId, status) => api.patch(`/qa/${qaId}/status`, { status }),
-  
+
   // Delete
   delete: (qaId) => api.delete(`/qa/${qaId}`)
+};
+
+// ============================================
+// CONTACT APIs
+// ============================================
+export const contactAPI = {
+  submit: (data) => api.post('/contact', data),
 };
 
 export default api;
