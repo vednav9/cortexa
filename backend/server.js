@@ -40,7 +40,12 @@ io.on("connection", (socket) => {
 /* =====================
    DATABASE
 ===================== */
-mongoose.connect(process.env.MONGO_URI, { family: 4 })
+mongoose.connect(process.env.MONGO_URI, {
+    family: 4,
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
+    maxPoolSize: 50
+})
     .then(() => console.log("MongoDB connected"))
     .catch(err => console.error("MongoDB error:", err));
 

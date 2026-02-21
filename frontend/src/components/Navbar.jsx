@@ -4,7 +4,7 @@ import { FiMenu, FiX, FiUser, FiSettings, FiLogOut, FiChevronDown } from "react-
 import { HiSparkles } from "react-icons/hi";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/authcontext";
-import axios from "axios";
+import { authAPI } from "../services/api";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -66,10 +66,12 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/api/auth/logout", {}, { withCredentials: true });
-    } catch (_) { }
+      await authAPI.logout();
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
     setUser(null);
-    localStorage.removeItem("token");
+    localStorage.removeItem("auth");
     navigate("/login", { replace: true });
     setProfileMenuOpen(false);
   };
@@ -77,8 +79,8 @@ const Navbar = () => {
   return (
     <motion.nav
       className={`fixed left-0 right-0 top-0 z-[9999] w-full transition-all duration-300 ${scrolled
-          ? "border-b border-white/[0.06] bg-[#080808]/90 backdrop-blur-xl"
-          : "border-b border-transparent bg-transparent"
+        ? "border-b border-white/[0.06] bg-[#080808]/90 backdrop-blur-xl"
+        : "border-b border-transparent bg-transparent"
         }`}
     >
       <div className="mx-auto flex h-[68px] max-w-7xl items-center justify-between px-6">
@@ -103,8 +105,8 @@ const Navbar = () => {
               key={item.path}
               onClick={() => scrollToSection(item.path)}
               className={`relative rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200 ${activeSection === item.path
-                  ? "text-white"
-                  : "text-gray-500 hover:text-gray-200"
+                ? "text-white"
+                : "text-gray-500 hover:text-gray-200"
                 }`}
             >
               {item.name}
@@ -235,8 +237,8 @@ const Navbar = () => {
                   key={item.path}
                   onClick={() => scrollToSection(item.path)}
                   className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors duration-200 ${activeSection === item.path
-                      ? "bg-white/[0.05] text-white"
-                      : "text-gray-500 hover:text-gray-200"
+                    ? "bg-white/[0.05] text-white"
+                    : "text-gray-500 hover:text-gray-200"
                     }`}
                 >
                   {item.name}

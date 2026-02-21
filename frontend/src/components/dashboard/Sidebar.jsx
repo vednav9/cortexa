@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FiHome, FiBell, FiHelpCircle, FiLogOut, FiX } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { authAPI } from "../../services/api";
 import { useAuth } from "../../context/authcontext";
 
 export default function Sidebar({
@@ -26,9 +26,12 @@ export default function Sidebar({
 
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/api/auth/logout", {}, { withCredentials: true });
-    } catch (_) { }
+      await authAPI.logout();
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
     setUser(null);
+    localStorage.removeItem("auth");
     navigate("/login", { replace: true });
   };
 

@@ -23,11 +23,11 @@ import { socket } from "../../socket";
 import { useNotification } from "../../context/NotificationContext";
 
 
-import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
+import { studentAPI, teacherAPI, adminAPI, authAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
 const CortexaDashboard = () => {
-    const { user, loading, refreshUser } = useAuth();
+    const { user, setUser, loading, refreshUser } = useAuth();
 
     console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -331,8 +331,11 @@ const CortexaDashboard = () => {
                                             <button
                                                 onClick={async () => {
                                                     try {
-                                                        await axios.post("http://localhost:5000/api/auth/logout", {}, { withCredentials: true });
-                                                    } catch (_) { }
+                                                        await authAPI.logout();
+                                                    } catch (err) {
+                                                        console.error("Logout failed", err);
+                                                    }
+                                                    setUser(null);
                                                     localStorage.removeItem("auth");
                                                     window.location.href = "/login";
                                                 }}

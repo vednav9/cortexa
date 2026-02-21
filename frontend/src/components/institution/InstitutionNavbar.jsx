@@ -10,7 +10,7 @@ import {
 } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/authcontext";
-import axios from "axios";
+import { authAPI } from "../../services/api";
 
 export default function InstitutionNavbar({
   institution,
@@ -39,13 +39,12 @@ export default function InstitutionNavbar({
 
   const handleLogout = async () => {
     try {
-      await axios.post(
-        "http://localhost:5000/api/auth/logout",
-        {},
-        { withCredentials: true }
-      );
-    } catch (_) {}
+      await authAPI.logout();
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
     setUser(null);
+    localStorage.removeItem("auth");
     navigate("/login", { replace: true });
   };
 
