@@ -24,53 +24,41 @@ const Navbar = () => {
     { name: "Contact", path: "contact" },
   ];
 
-  // ✅ ALL HOOKS FIRST (NO EARLY RETURNS ABOVE THIS)
-
+  // ── scroll tracking ──────────────────────────────────────────────────────
   useEffect(() => {
-    const handleScroll = () => {
+    const onScroll = () => {
       setScrolled(window.scrollY > 30);
-
-      const scrollY = window.scrollY + 120;
-      ["hero", ...navItems.map((i) => i.path)].forEach((sectionId) => {
-        const sec = document.getElementById(sectionId);
-        if (sec) {
-          const top = sec.offsetTop;
-          const bottom = top + sec.offsetHeight;
-          if (scrollY >= top && scrollY < bottom) {
-            setActiveSection(sectionId);
-          }
+      const y = window.scrollY + 120;
+      ["hero", ...navItems.map(i => i.path)].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && y >= el.offsetTop && y < el.offsetTop + el.offsetHeight) {
+          setActiveSection(id);
         }
       });
     };
-
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close profile menu when clicking outside
+  // ── close profile menu on outside click ──────────────────────────────────
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        profileMenuRef.current &&
-        !profileMenuRef.current.contains(event.target)
-      ) {
+    const handler = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
         setProfileMenuOpen(false);
       }
     };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ✅ CONDITIONS ONLY AFTER HOOKS
+  // ── only visible on home page ─────────────────────────────────────────────
   const isHomePage = location.pathname === "/";
   if (!isHomePage) return null;
 
   const scrollToSection = (id) => {
     const el = document.getElementById(id);
     if (el) {
-      const offset = 90;
-      const pos = el.getBoundingClientRect().top + window.scrollY - offset;
+      const pos = el.getBoundingClientRect().top + window.scrollY - 80;
       window.scrollTo({ top: pos, behavior: "smooth" });
     }
     setIsOpen(false);
@@ -78,12 +66,8 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      await axios.post(
-        "http://localhost:5000/api/auth/logout",
-        {},
-        { withCredentials: true }
-      );
-    } catch (_) {}
+      await axios.post("http://localhost:5000/api/auth/logout", {}, { withCredentials: true });
+    } catch (_) { }
     setUser(null);
     localStorage.removeItem("token");
     navigate("/login", { replace: true });
@@ -91,255 +75,212 @@ const Navbar = () => {
   };
 
   return (
-    <motion.nav className="fixed top-0 left-0 right-0 w-full bg-black/95 backdrop-blur-xl border-b border-white/10 z-[9999]">
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-20">
-        {/* Logo */}
-        <div
-          className="flex items-center space-x-3 cursor-pointer"
+    <motion.nav
+      className={`fixed left-0 right-0 top-0 z-[9999] w-full transition-all duration-300 ${scrolled
+          ? "border-b border-white/[0.06] bg-[#080808]/90 backdrop-blur-xl"
+          : "border-b border-transparent bg-transparent"
+        }`}
+    >
+      <div className="mx-auto flex h-[68px] max-w-7xl items-center justify-between px-6">
+
+        {/* ── Logo ── */}
+        <button
           onClick={() => navigate("/")}
+          className="group flex items-center gap-2.5 focus:outline-none"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center">
-            <HiSparkles className="text-white text-xl" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 shadow-md shadow-emerald-500/20 transition-transform duration-300 group-hover:scale-105">
+            <HiSparkles className="h-4 w-4 text-black" />
           </div>
-          <span className="text-2xl font-bold bg-gradient-to-r from-emerald-300 to-green-400 bg-clip-text text-transparent">
+          <span className="text-base font-extrabold tracking-tight text-white transition-colors group-hover:text-emerald-300">
             Cortexa
           </span>
-        </div>
+        </button>
 
-        {/* Desktop nav */}
-        <div className="hidden md:flex items-center space-x-6">
-          {navItems.map((item) => (
+        {/* ── Desktop nav links ── */}
+        <div className="hidden items-center gap-1 md:flex">
+          {navItems.map(item => (
             <button
               key={item.path}
               onClick={() => scrollToSection(item.path)}
-              className={`text-sm font-medium transition-colors ${
-                activeSection === item.path
-                  ? "text-emerald-400"
-                  : "text-gray-300 hover:text-emerald-400"
-              }`}
+              className={`relative rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200 ${activeSection === item.path
+                  ? "text-white"
+                  : "text-gray-500 hover:text-gray-200"
+                }`}
             >
               {item.name}
+              {activeSection === item.path && (
+                <motion.span
+                  layoutId="nav-indicator"
+                  className="absolute bottom-1 left-1/2 h-[2px] w-4 -translate-x-1/2 rounded-full bg-emerald-400"
+                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                />
+              )}
             </button>
           ))}
         </div>
 
-        {/* Right actions */}
-        <div className="hidden md:flex items-center space-x-4">
+        {/* ── Desktop right actions ── */}
+        <div className="hidden items-center gap-2.5 md:flex">
           {user ? (
-            // Show Profile Dropdown when logged in
             <div className="relative" ref={profileMenuRef}>
-              <motion.button
-                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-white/10 transition-all"
+              {/* Trigger */}
+              <button
+                onClick={() => setProfileMenuOpen(v => !v)}
+                className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.07]"
               >
-                {/* User Avatar */}
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-xs font-bold text-black">
                   {user?.name?.charAt(0).toUpperCase() || "U"}
                 </div>
-
-                {/* User Info */}
-                <div className="hidden lg:block text-left">
-                  <p className="text-sm font-semibold text-white leading-tight">
-                    {user?.name || "User"}
-                  </p>
-                  <p className="text-xs text-gray-400 capitalize">
-                    {user?.role || "Member"}
-                  </p>
+                <div className="hidden text-left lg:block">
+                  <p className="text-xs font-semibold leading-tight text-white">{user?.name || "User"}</p>
+                  <p className="text-[10px] capitalize text-gray-500">{user?.role || "Member"}</p>
                 </div>
-
-                {/* Dropdown Icon */}
-                <motion.div
-                  animate={{ rotate: profileMenuOpen ? 180 : 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <FiChevronDown className="w-4 h-4 text-gray-400" />
+                <motion.div animate={{ rotate: profileMenuOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                  <FiChevronDown className="h-3.5 w-3.5 text-gray-500" />
                 </motion.div>
-              </motion.button>
+              </button>
 
-              {/* Dropdown Menu - FIXED Z-INDEX */}
+              {/* Dropdown */}
               <AnimatePresence>
                 {profileMenuOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    initial={{ opacity: 0, y: -8, scale: 0.97 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border-2 border-gray-100 overflow-hidden z-[99999]"
-                    style={{ position: "absolute" }}
+                    exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute right-0 mt-2 w-60 overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111111] shadow-2xl shadow-black/60"
                   >
-                    {/* User Info Header */}
-                    <div className="px-4 py-3 border-b border-gray-100 bg-emerald-50">
-                      <p className="text-sm font-bold text-gray-900">
-                        {user?.name || "User"}
-                      </p>
-                      <p className="text-xs text-gray-600">{user?.email}</p>
-                      <p className="text-xs font-semibold mt-1 capitalize text-emerald-600">
+                    {/* Header */}
+                    <div className="border-b border-white/[0.06] px-4 py-4">
+                      <p className="text-sm font-semibold text-white">{user?.name || "User"}</p>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                      <span className="mt-2 inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-semibold capitalize text-emerald-400">
                         {user?.role || "Member"}
-                      </p>
+                      </span>
                     </div>
 
-                    {/* Menu Items */}
-                    <div className="py-2">
-                      {/* Dashboard */}
-                      <motion.button
-                        whileHover={{ x: 4, backgroundColor: "#f0fdf4" }}
-                        onClick={() => {
-                          setProfileMenuOpen(false);
-                          navigate("/dashboard");
-                        }}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:text-gray-900 transition-all text-left"
-                      >
-                        <HiSparkles className="w-4 h-4" />
-                        <span className="text-sm font-medium">Dashboard</span>
-                      </motion.button>
-
-                      {/* Profile */}
-                      <motion.button
-                        whileHover={{ x: 4, backgroundColor: "#f0fdf4" }}
-                        onClick={() => {
-                          setProfileMenuOpen(false);
-                          // Navigate to profile
-                        }}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:text-gray-900 transition-all text-left"
-                      >
-                        <FiUser className="w-4 h-4" />
-                        <span className="text-sm font-medium">My Profile</span>
-                      </motion.button>
-
-                      {/* Settings */}
-                      <motion.button
-                        whileHover={{ x: 4, backgroundColor: "#f0fdf4" }}
-                        onClick={() => {
-                          setProfileMenuOpen(false);
-                          // Navigate to settings
-                        }}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-gray-700 hover:text-gray-900 transition-all text-left"
-                      >
-                        <FiSettings className="w-4 h-4" />
-                        <span className="text-sm font-medium">Settings</span>
-                      </motion.button>
+                    {/* Menu items */}
+                    <div className="p-1.5">
+                      {[
+                        { icon: HiSparkles, label: "Dashboard", action: () => { navigate("/dashboard"); setProfileMenuOpen(false); } },
+                        { icon: FiUser, label: "My Profile", action: () => { setProfileMenuOpen(false); } },
+                        { icon: FiSettings, label: "Settings", action: () => { setProfileMenuOpen(false); } },
+                      ].map((item, i) => (
+                        <button
+                          key={i}
+                          onClick={item.action}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-gray-400 transition-all duration-150 hover:bg-white/[0.05] hover:text-white"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* Logout (Highlighted at bottom) */}
-                    <div className="border-t border-gray-100">
-                      <motion.button
-                        whileHover={{ x: 4, backgroundColor: "#fef2f2" }}
+                    {/* Logout */}
+                    <div className="border-t border-white/[0.06] p-1.5">
+                      <button
                         onClick={handleLogout}
-                        className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:text-red-700 transition-all text-left font-medium"
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-400 transition-all duration-150 hover:bg-red-500/[0.08] hover:text-red-300"
                       >
-                        <FiLogOut className="w-4 h-4" />
-                        <span className="text-sm">Logout</span>
-                      </motion.button>
+                        <FiLogOut className="h-4 w-4" />
+                        Logout
+                      </button>
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
           ) : (
-            // Show Login/Signup buttons when not logged in
             <>
               <button
                 onClick={() => navigate("/login")}
-                className="px-5 py-2 text-sm rounded-lg text-emerald-400 border border-emerald-400/40 hover:bg-emerald-400/10 transition-all"
+                className="rounded-xl px-4 py-2 text-sm font-medium text-gray-400 transition-colors duration-200 hover:text-white"
               >
-                Login
+                Log in
               </button>
-
               <button
                 onClick={() => navigate("/signup")}
-                className="px-5 py-2 text-sm rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black font-semibold hover:shadow-lg hover:shadow-emerald-500/50 transition-all"
+                className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black shadow-md shadow-emerald-500/20 transition-all duration-300 hover:bg-emerald-400 active:scale-95"
               >
-                Sign Up
+                Get Started
               </button>
             </>
           )}
         </div>
 
-        {/* Mobile toggle */}
+        {/* ── Mobile hamburger ── */}
         <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden p-2 rounded-lg bg-white/10 text-gray-200"
+          onClick={() => setIsOpen(v => !v)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] text-gray-400 transition-colors hover:text-white md:hidden"
+          aria-label="Toggle menu"
         >
-          {isOpen ? <FiX size={22} /> : <FiMenu size={22} />}
+          {isOpen ? <FiX className="h-5 w-5" /> : <FiMenu className="h-5 w-5" />}
         </button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* ── Mobile menu ── */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="md:hidden bg-black/95 border-t border-white/10"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden border-t border-white/[0.06] bg-[#080808]/95 backdrop-blur-xl md:hidden"
           >
-            <div className="px-6 py-5 space-y-3">
-              {navItems.map((item) => (
+            <div className="px-6 pb-6 pt-4 space-y-1">
+              {navItems.map(item => (
                 <button
                   key={item.path}
                   onClick={() => scrollToSection(item.path)}
-                  className="block w-full text-left px-3 py-2 rounded-md text-gray-300 hover:text-emerald-400 hover:bg-white/5 transition-all"
+                  className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors duration-200 ${activeSection === item.path
+                      ? "bg-white/[0.05] text-white"
+                      : "text-gray-500 hover:text-gray-200"
+                    }`}
                 >
                   {item.name}
                 </button>
               ))}
 
-              <div className="pt-4 border-t border-white/10 space-y-3">
+              <div className="pt-4 border-t border-white/[0.06] space-y-2">
                 {user ? (
-                  // Mobile: Show user info and logout
                   <>
-                    <div className="px-3 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      <p className="text-sm font-semibold text-white">
-                        {user?.name || "User"}
-                      </p>
-                      <p className="text-xs text-gray-400">{user?.email}</p>
-                      <p className="text-xs font-semibold mt-1 capitalize text-emerald-400">
+                    <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-3">
+                      <p className="text-sm font-semibold text-white">{user?.name}</p>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                      <span className="mt-2 inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold capitalize text-emerald-400">
                         {user?.role || "Member"}
-                      </p>
+                      </span>
                     </div>
-
                     <button
-                      onClick={() => {
-                        navigate("/dashboard");
-                        setIsOpen(false);
-                      }}
-                      className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black font-semibold flex items-center justify-center space-x-2"
+                      onClick={() => { navigate("/dashboard"); setIsOpen(false); }}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-all hover:bg-emerald-400"
                     >
-                      <HiSparkles className="w-4 h-4" />
-                      <span>Go to Dashboard</span>
+                      <HiSparkles className="h-4 w-4" />
+                      Dashboard
                     </button>
-
                     <button
                       onClick={handleLogout}
-                      className="w-full px-4 py-3 rounded-lg border border-red-500/40 text-red-400 font-semibold flex items-center justify-center space-x-2 hover:bg-red-500/10"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm font-medium text-red-400 transition-all hover:bg-red-500/[0.12]"
                     >
-                      <FiLogOut className="w-4 h-4" />
-                      <span>Logout</span>
+                      <FiLogOut className="h-4 w-4" />
+                      Logout
                     </button>
                   </>
                 ) : (
-                  // Mobile: Show login/signup buttons
                   <>
                     <button
-                      onClick={() => {
-                        navigate("/login");
-                        setIsOpen(false);
-                      }}
-                      className="w-full px-4 py-3 rounded-lg text-emerald-400 border border-emerald-400/40"
+                      onClick={() => { navigate("/login"); setIsOpen(false); }}
+                      className="w-full rounded-xl border border-white/[0.08] px-4 py-3 text-sm font-medium text-gray-400 transition-colors hover:text-white"
                     >
-                      Login
+                      Log in
                     </button>
-
                     <button
-                      onClick={() => {
-                        navigate("/signup");
-                        setIsOpen(false);
-                      }}
-                      className="w-full px-4 py-3 rounded-lg bg-gradient-to-r from-emerald-400 to-green-500 text-black font-semibold"
+                      onClick={() => { navigate("/signup"); setIsOpen(false); }}
+                      className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-black transition-all hover:bg-emerald-400"
                     >
-                      Sign Up
+                      Get Started
                     </button>
                   </>
                 )}
