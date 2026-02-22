@@ -36,17 +36,17 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Pre-load models on startup"""
-    print("="*60)
-    print("🚀 Starting Cortexa AI Server...")
-    print("="*60)
-    print("📦 Loading AI models (this may take 30-60 seconds)...")
-    print("✅ Models loaded successfully!")
-    print("🌐 Server ready at http://localhost:8000")
-    print("📚 API docs at http://localhost:8000/docs")
-    print("="*60)
+# @app.on_event("startup")
+# async def startup_event():
+#     """Pre-load models on startup"""
+#     print("="*60)
+#     print("🚀 Starting Cortexa AI Server...")
+#     print("="*60)
+#     print("📦 Loading AI models (this may take 30-60 seconds)...")
+#     print("✅ Models loaded successfully!")
+#     print("🌐 Server ready at http://localhost:8000")
+#     print("📚 API docs at http://localhost:8000/docs")
+#     print("="*60)
 
 
 # ============================================================================
