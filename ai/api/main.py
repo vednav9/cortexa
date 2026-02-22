@@ -764,16 +764,16 @@ def delete_transcript(filename: str):
 # SERVER STARTUP
 # ============================================================================
 
-if __name__ == "__main__":
-    import uvicorn
-    print("\n" + "="*60)
-    print("🚀 Starting Cortexa AI Server with Voice-to-Text")
-    print("="*60)
+# if __name__ == "__main__":
+#     import uvicorn
+#     print("\n" + "="*60)
+#     print("🚀 Starting Cortexa AI Server with Voice-to-Text")
+#     print("="*60)
     
-    uvicorn.run(
-        app, 
-        host="0.0.0.0", 
-        port=8000,
-        timeout_keep_alive=300,  # 5 minutes for long audio processing
-        timeout_graceful_shutdown=30
-    )
+#     uvicorn.run(
+#         app, 
+#         host="0.0.0.0", 
+#         port=8000,
+#         timeout_keep_alive=300,  # 5 minutes for long audio processing
+#         timeout_graceful_shutdown=30
+#     )
