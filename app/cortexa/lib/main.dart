@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
+import 'core/config/api_config.dart';
 import 'core/constants/app_theme.dart';
 import 'core/di/service_locator.dart';
 import 'core/providers/app_state_provider.dart';
@@ -32,6 +33,9 @@ void main() async {
   );
   
   try {
+    // Load secrets from android/local.properties (via BuildConfig MethodChannel)
+    await ApiConfig.initialize();
+
     // Initialize dependencies
     print('🔧 Initializing app dependencies...');
     await setupServiceLocator();

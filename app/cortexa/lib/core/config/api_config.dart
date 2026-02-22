@@ -1,46 +1,61 @@
+import 'package:flutter/services.dart';
+
 class ApiConfig {
+  // ─── Platform channel (Android side provides BuildConfig values) ───────────
+  static const _channel = MethodChannel('com.example.cortexa/secrets');
+
+  /// Call once in main() before anything else.
+  /// Reads GEMINI_API_KEY / API_BASE_URL / AI_BASE_URL from the native
+  /// BuildConfig (which was populated from android/local.properties at
+  /// build time). Falls back to local dev URLs when running without secrets.
+  static Future<void> initialize() async {
+    try {
+      final secrets =
+          await _channel.invokeMapMethod<String, String>('getSecrets');
+      _productionUrl  = secrets?['API_BASE_URL']   ?? '';
+      _productionAiUrl = secrets?['AI_BASE_URL']    ?? '';
+      geminiApiKey     = secrets?['GEMINI_API_KEY'] ?? '';
+    } catch (_) {
+      // Running on a non-Android platform or channel not available →
+      // keep empty strings, getters will fall back to local dev URLs.
+    }
+  }
+
   /* ===========================
      BASE URL CONFIGURATION
   =========================== */
-  
-  // Production backend URL (hosted on Vercel)
-  static const String _productionUrl = 'https://cortexa-backend.vercel.app/api';
-  
-  // Local development URL (for testing with local backend)
-  // For Android Emulator: use 10.0.2.2 (maps to host's localhost)
-  // For iOS Simulator: use localhost
-  // For Physical Device: use your computer's IP address (e.g., 192.168.x.x)
-  static const String _localUrl = 'http://10.0.2.2:5000/api';
-  
-  // Set to true to use local backend for development, false for production
-  static const bool _useLocalBackend = false;
-  
-  static String get baseUrl {
-    // Allow override via environment variable
-    const overridden = String.fromEnvironment('API_BASE_URL');
-    if (overridden.isNotEmpty) return overridden;
 
-    // Use production or local based on flag
-    return _useLocalBackend ? _localUrl : _productionUrl;
+  // Local development URL (never a secret — only for machines running the backend locally)
+  // Android Emulator: 10.0.2.2 maps to host localhost
+  // Physical device:  use your machine's LAN IP (e.g. 192.168.x.x:5000)
+  static const String _localUrl = 'http://10.0.2.2:5000/api';
+
+  // Production URL — populated by ApiConfig.initialize() from local.properties.
+  // NEVER hardcode this value here.
+  static String _productionUrl = '';
+
+  // Set to true to force the local backend during development.
+  static const bool _useLocalBackend = false;
+
+  static String get baseUrl {
+    if (_useLocalBackend || _productionUrl.isEmpty) return _localUrl;
+    return _productionUrl;
   }
 
   /* ===========================
      AI SERVICE CONFIGURATION
   =========================== */
-  
-  // Production AI URL (proxied through backend)
-  static const String _productionAiUrl = 'https://cortexa-backend.vercel.app/api/ai';
-  
+
   // Local AI URL (for testing with local AI service)
   static const String _localAiUrl = 'http://10.0.2.2:8000/api';
-  
-  static String get aiBaseUrl {
-    // Allow override via environment variable
-    const overridden = String.fromEnvironment('AI_BASE_URL');
-    if (overridden.isNotEmpty) return overridden;
 
-    // Use production or local based on flag
-    return _useLocalBackend ? _localAiUrl : _productionAiUrl;
+  // Production AI URL — populated by ApiConfig.initialize() from local.properties.
+  // NEVER hardcode this value here.
+  static String _productionAiUrl = '';
+
+  static String get aiBaseUrl {
+    if (_useLocalBackend || _productionAiUrl.isEmpty) return _localAiUrl;
+    return _productionAiUrl;
   }
   
   /* ===========================
@@ -156,12 +171,10 @@ class ApiConfig {
      GEMINI PERSONAL AI CONFIGURATION
   =========================== */
 
-  // Replace this value with your actual Gemini API key from https://aistudio.google.com/app/apikey
-  // You can also override it at build time: --dart-define=GEMINI_API_KEY=your_key
-  static const String geminiApiKey = String.fromEnvironment(
-    'GEMINI_API_KEY',
-    defaultValue: 'AIzaSyACZbjOU8blZWz8tJWeXRDvkf28HSMqYt8',
-  );
+  // Populated by ApiConfig.initialize() from android/local.properties.
+  // NEVER hardcode the key here.
+  // Obtain a key at: https://aistudio.google.com/app/apikey
+  static String geminiApiKey = '';
 
   /* ===========================
      AI SERVICE ENDPOINTS

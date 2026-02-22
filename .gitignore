@@ -4,6 +4,9 @@ node_modules
 .venv
 ai/data
 
+# Flutter secrets — android/local.properties holds secrets and is
+# gitignored by app/cortexa/android/.gitignore. See local.properties.example.
+
 #Important files for mobile side development
 
 # D:\NHITM\BE\BE Major Project\code\mobile\cortexa\frontend\vercel.json
