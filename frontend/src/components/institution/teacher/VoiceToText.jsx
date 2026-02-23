@@ -34,6 +34,8 @@ const LectureRecorder = () => {
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
+  const [serverReady, setServerReady] = useState(false);
+  const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'ready' | 'waking'
   const [transcription, setTranscription] = useState(null);
   const [formattedText, setFormattedText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -46,6 +48,27 @@ const LectureRecorder = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
+
+  // Ping AI server on mount to wake it up
+  useEffect(() => {
+    const warmUp = async () => {
+      setServerStatus('waking');
+      try {
+        const res = await fetch(`${AI_URL}/health`, { signal: AbortSignal.timeout(60000) });
+        if (res.ok) {
+          setServerReady(true);
+          setServerStatus('ready');
+        } else {
+          setServerStatus('waking');
+          setTimeout(warmUp, 5000);
+        }
+      } catch {
+        setServerStatus('waking');
+        setTimeout(warmUp, 5000);
+      }
+    };
+    warmUp();
+  }, []);
 
   // Format time display
   const formatTime = (seconds) => {
@@ -267,6 +290,29 @@ const LectureRecorder = () => {
         </div>
       </motion.div>
 
+      {/* Server Status Banner */}
+      {serverStatus !== 'ready' && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 bg-amber-50 border-2 border-amber-200 rounded-xl px-5 py-3 text-amber-800 text-sm font-medium"
+        >
+          <FiLoader className="w-4 h-4 animate-spin text-amber-500 shrink-0" />
+          <span>AI server is waking up (free tier cold start ~30s). Please wait before transcribing...</span>
+        </motion.div>
+      )}
+      {serverStatus === 'ready' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="flex items-center gap-3 bg-green-50 border-2 border-green-200 rounded-xl px-5 py-3 text-green-800 text-sm font-medium"
+        >
+          <FiCheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+          <span>AI server is ready. You can now transcribe.</span>
+        </motion.div>
+      )}
+
       {/* Recording Controls */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -358,7 +404,7 @@ const LectureRecorder = () => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleTranscribe}
-                    disabled={isProcessing}
+                    disabled={isProcessing || !serverReady}
                     className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
                   >
                     {isProcessing ? (
