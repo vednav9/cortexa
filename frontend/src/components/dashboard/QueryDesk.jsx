@@ -1,587 +1,575 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+// dashboard/QueryDesk.jsx – Consistent Brand-Themed Design
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  FiHelpCircle, FiPlus, FiSearch, FiFilter, FiCheck, FiClock,
-  FiAlertCircle, FiMessageSquare, FiSend, FiX, FiChevronDown
-} from 'react-icons/fi';
-import { useAuth } from '../../context/authcontext';
-import api from '../../services/api';
-import toast from 'react-hot-toast';
+  FiHelpCircle, FiPlus, FiSearch, FiCheck, FiClock,
+  FiAlertCircle, FiMessageSquare, FiSend, FiX, FiChevronDown,
+} from "react-icons/fi";
+import { useAuth } from "../../context/authcontext";
+import api from "../../services/api";
+import toast from "react-hot-toast";
 
+/* ─── Helpers ─────────────────────────────────────────────────── */
+const hexToRgb = (hex) => {
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r ? `${parseInt(r[1], 16)}, ${parseInt(r[2], 16)}, ${parseInt(r[3], 16)}` : "16, 185, 129";
+};
+
+const timeAgo = (d) => {
+  const s = Math.floor((Date.now() - new Date(d)) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(d).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+};
+
+const inputFocus = (brand) => (e) => { e.target.style.borderColor = brand; e.target.style.backgroundColor = "#fff"; };
+const inputBlur = (e) => { e.target.style.borderColor = ""; e.target.style.backgroundColor = ""; };
+
+/* ─── Config ─────────────────────────────────────────────────── */
+const STATUS_CFG = {
+  open: { label: "Open", dot: "#f59e0b", pill: "bg-amber-50 text-amber-600" },
+  "in-progress": { label: "In Progress", dot: "#3b82f6", pill: "bg-blue-50 text-blue-600" },
+  resolved: { label: "Resolved", dot: "#10b981", pill: "bg-emerald-50 text-emerald-600" },
+  closed: { label: "Closed", dot: "#94a3b8", pill: "bg-slate-100 text-slate-500" },
+};
+const PRIORITY_CFG = {
+  low: { label: "Low", dot: "#94a3b8", bar: "#94a3b8" },
+  normal: { label: "Normal", dot: "#3b82f6", bar: "#3b82f6" },
+  high: { label: "High", dot: "#f59e0b", bar: "#f59e0b" },
+  urgent: { label: "Urgent", dot: "#ef4444", bar: "#ef4444" },
+};
+const CATEGORIES = ["general", "technical", "academic", "administrative"];
+const PRIORITIES = ["low", "normal", "high", "urgent"];
+const EMPTY_QUERY = { title: "", description: "", category: "general", priority: "normal" };
+
+/* ─── Skeleton card ─────────────────────────────────────────── */
+const Skeleton = () => (
+  <div className="space-y-3">
+    {[1, 2, 3].map(i => (
+      <div key={i} className="bg-white rounded-2xl border border-gray-100 flex overflow-hidden animate-pulse">
+        <div className="w-[3px] bg-gray-100 flex-shrink-0" />
+        <div className="flex-1 p-5 space-y-3">
+          <div className="flex gap-2">
+            <div className="h-4 w-16 bg-gray-100 rounded-full" />
+            <div className="h-4 w-12 bg-gray-100 rounded-full" />
+          </div>
+          <div className="h-5 w-3/5 bg-gray-100 rounded-lg" />
+          <div className="h-3.5 w-full bg-gray-50 rounded-lg" />
+          <div className="h-3 w-1/4 bg-gray-50 rounded-lg mt-2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+/* ─── Query card ────────────────────────────────────────────── */
+function QueryCard({ query, brand, rgb, index, onClick }) {
+  const s = STATUS_CFG[query.status] || STATUS_CFG.open;
+  const p = PRIORITY_CFG[query.priority] || PRIORITY_CFG.normal;
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ delay: index * 0.04, duration: 0.28 }}
+      onClick={() => onClick(query)}
+      className="bg-white rounded-2xl border border-gray-100 overflow-hidden cursor-pointer hover:border-gray-200 hover:shadow-[0_4px_24px_-6px_rgba(0,0,0,0.08)] transition-all group"
+    >
+      <div className="flex">
+        {/* Priority bar */}
+        <div className="w-[3px] flex-shrink-0" style={{ backgroundColor: p.bar }} />
+
+        <div className="flex-1 min-w-0 p-5">
+          {/* Badges */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${s.pill}`}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.dot }} />
+              {s.label}
+            </span>
+            {query.priority !== "normal" && (
+              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-500">
+                {p.label}
+              </span>
+            )}
+            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-500 capitalize">
+              {query.category}
+            </span>
+          </div>
+
+          {/* Title + description */}
+          <h3 className="text-[15px] font-extrabold text-gray-900 leading-snug mb-1.5 group-hover:text-gray-700 transition-colors">
+            {query.title}
+          </h3>
+          <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2 mb-3">
+            {query.description}
+          </p>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+            <div className="flex items-center gap-2 text-[12px] text-gray-400">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold text-white flex-shrink-0"
+                style={{ backgroundColor: brand }}>
+                {query.createdBy?.name?.charAt(0).toUpperCase() || "?"}
+              </div>
+              <span className="font-semibold text-gray-500">{query.createdBy?.name}</span>
+              <span className="text-gray-200">·</span>
+              <div className="flex items-center gap-1">
+                <FiClock className="w-3 h-3" />
+                <span>{timeAgo(query.createdAt)}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[12px] text-gray-400">
+              <FiMessageSquare className="w-3.5 h-3.5" />
+              <span>{query.replies?.length || 0}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+════════════════════════════════════════════════════════════════ */
 export default function QueryDesk({ institution }) {
   const { user } = useAuth();
+
   const [queries, setQueries] = useState([]);
   const [stats, setStats] = useState({ total: 0, open: 0, inProgress: 0, resolved: 0 });
   const [loading, setLoading] = useState(true);
-  const [showNewQuery, setShowNewQuery] = useState(false);
-  const [selectedQuery, setSelectedQuery] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [newQuery, setNewQuery] = useState({
-    title: '',
-    description: '',
-    category: 'general',
-    priority: 'normal'
-  });
-  const [replyText, setReplyText] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [selectedQ, setSelectedQ] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [newQuery, setNewQuery] = useState(EMPTY_QUERY);
+  const [replyText, setReplyText] = useState("");
 
-  const brandColor = institution?.branding?.primaryColor || '#10b981';
+  const brand = institution?.branding?.primaryColor || "#10b981";
+  const rgb = hexToRgb(brand);
+  const isStaff = ["admin", "teacher"].includes(user?.role);
 
-  // Fetch queries
+  /* ── Fetch ── */
   const fetchQueries = async () => {
+    if (!institution?._id) { setLoading(false); return; }
     try {
       setLoading(true);
-      const params = {
-        status: filterStatus,
-        search: searchTerm
-      };
-      const response = await api.get(`/queries/institution/${institution._id}`, { params });
-      setQueries(response.data.queries || []);
-    } catch (error) {
-      console.error('Error fetching queries:', error);
-      toast.error('Failed to load queries');
-    } finally {
-      setLoading(false);
-    }
+      const { data } = await api.get(`/queries/institution/${institution._id}`, {
+        params: { status: filterStatus, search },
+      });
+      setQueries(data.queries || []);
+    } catch { toast.error("Failed to load queries"); }
+    finally { setLoading(false); }
   };
 
-  // Fetch stats
   const fetchStats = async () => {
+    if (!institution?._id) return;
     try {
-      const response = await api.get(`/queries/institution/${institution._id}/stats`);
-      setStats(response.data.stats || { total: 0, open: 0, inProgress: 0, resolved: 0 });
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
+      const { data } = await api.get(`/queries/institution/${institution._id}/stats`);
+      setStats(data.stats || { total: 0, open: 0, inProgress: 0, resolved: 0 });
+    } catch { }
   };
 
-  useEffect(() => {
-    if (!institution?._id) {
-      setLoading(false); // ⬅️ STOP infinite loader
-      return;
-    }
+  useEffect(() => { fetchQueries(); fetchStats(); }, [institution?._id, filterStatus, search]);
 
-    fetchQueries();
-    fetchStats();
-  }, [institution?._id, filterStatus, searchTerm]);
-
-
-  const categories = [
-    { value: 'general', label: 'General', color: 'blue' },
-    { value: 'technical', label: 'Technical', color: 'purple' },
-    { value: 'academic', label: 'Academic', color: 'green' },
-    { value: 'administrative', label: 'Administrative', color: 'orange' }
-  ];
-
-  const priorities = [
-    { value: 'low', label: 'Low', color: 'gray' },
-    { value: 'normal', label: 'Normal', color: 'blue' },
-    { value: 'high', label: 'High', color: 'orange' },
-    { value: 'urgent', label: 'Urgent', color: 'red' }
-  ];
-
-  const statuses = [
-    { value: 'all', label: 'All', icon: FiMessageSquare },
-    { value: 'open', label: 'Open', icon: FiAlertCircle },
-    { value: 'in-progress', label: 'In Progress', icon: FiClock },
-    { value: 'resolved', label: 'Resolved', icon: FiCheck }
-  ];
-
-  const handleSubmitQuery = async () => {
-    if (!institution?._id) {
-      toast.error("Institution not loaded yet. Please wait.");
-      return;
-    }
-
+  /* ── Actions ── */
+  const handleSubmit = async () => {
+    if (!institution?._id) { toast.error("Institution not loaded"); return; }
     if (!newQuery.title.trim() || !newQuery.description.trim()) {
-      toast.error('Please fill in all required fields');
-      return;
+      toast.error("Please fill in all required fields"); return;
     }
-
     try {
-      const response = await api.post(
-        `/queries/institution/${institution._id}`,
-        newQuery
-      );
-
-      setQueries([response.data.query, ...queries]);
-      setNewQuery({ title: '', description: '', category: 'general', priority: 'normal' });
-      setShowNewQuery(false);
-      toast.success('Query submitted successfully!');
+      const { data } = await api.post(`/queries/institution/${institution._id}`, newQuery);
+      setQueries(prev => [data.query, ...prev]);
+      setNewQuery(EMPTY_QUERY);
+      setShowNew(false);
+      toast.success("Query submitted!");
       fetchStats();
-    } catch (error) {
-      console.error('Error submitting query:', error);
-      toast.error(error.response?.data?.message || 'Failed to submit query');
-    }
+    } catch (err) { toast.error(err.response?.data?.message || "Failed to submit"); }
   };
-
 
   const handleReply = async () => {
-    if (!replyText.trim()) {
-      toast.error('Please enter a reply');
-      return;
-    }
-
+    if (!replyText.trim()) { toast.error("Please enter a reply"); return; }
     try {
-      const response = await api.post(`/queries/${selectedQuery._id}/reply`, { text: replyText });
-
-      // Update queries list
-      setQueries(queries.map(q =>
-        q._id === selectedQuery._id ? response.data.query : q
-      ));
-
-      // Update selected query
-      setSelectedQuery(response.data.query);
-      setReplyText('');
-      toast.success('Reply sent!');
-    } catch (error) {
-      console.error('Error sending reply:', error);
-      toast.error(error.response?.data?.message || 'Failed to send reply');
-    }
+      const { data } = await api.post(`/queries/${selectedQ._id}/reply`, { text: replyText });
+      setQueries(prev => prev.map(q => q._id === selectedQ._id ? data.query : q));
+      setSelectedQ(data.query);
+      setReplyText("");
+      toast.success("Reply sent!");
+    } catch (err) { toast.error(err.response?.data?.message || "Failed to send reply"); }
   };
 
-  const handleStatusChange = async (queryId, newStatus) => {
+  const handleStatusChange = async (queryId, status) => {
     try {
-      const response = await api.patch(`/queries/${queryId}/status`, { status: newStatus });
-
-      // Update queries list
-      setQueries(queries.map(q =>
-        q._id === queryId ? response.data.query : q
-      ));
-
-      // Update selected query if open
-      if (selectedQuery?._id === queryId) {
-        setSelectedQuery(response.data.query);
-      }
-
-      toast.success('Status updated!');
+      const { data } = await api.patch(`/queries/${queryId}/status`, { status });
+      setQueries(prev => prev.map(q => q._id === queryId ? data.query : q));
+      if (selectedQ?._id === queryId) setSelectedQ(data.query);
+      toast.success("Status updated!");
       fetchStats();
-    } catch (error) {
-      console.error('Error updating status:', error);
-      toast.error(error.response?.data?.message || 'Failed to update status');
-    }
+    } catch (err) { toast.error(err.response?.data?.message || "Failed to update status"); }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'open': return 'text-orange-600 bg-orange-50';
-      case 'in-progress': return 'text-blue-600 bg-blue-50';
-      case 'resolved': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'urgent': return 'text-red-600 bg-red-50';
-      case 'high': return 'text-orange-600 bg-orange-50';
-      case 'normal': return 'text-blue-600 bg-blue-50';
-      case 'low': return 'text-gray-600 bg-gray-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  const formatDate = (date) => {
-    return new Date(date).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const displayStats = [
-    { label: 'Total Queries', value: stats.total, icon: FiMessageSquare, color: 'blue' },
-    { label: 'Open', value: stats.open, icon: FiAlertCircle, color: 'orange' },
-    { label: 'In Progress', value: stats.inProgress, icon: FiClock, color: 'blue' },
-    { label: 'Resolved', value: stats.resolved, icon: FiCheck, color: 'green' }
+  /* ── Filter config ── */
+  const FILTERS = [
+    { key: "all", label: "All", count: stats.total },
+    { key: "open", label: "Open", count: stats.open },
+    { key: "in-progress", label: "In Progress", count: stats.inProgress },
+    { key: "resolved", label: "Resolved", count: stats.resolved },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Top action row */}
-      <div className="flex items-center justify-end mb-1">
-        <motion.button
-          whileHover={{ scale: 1.01, y: -1 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setShowNewQuery(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white font-semibold shadow-[0_4px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.35)] transition-all text-[13px]"
-          style={{ backgroundColor: brandColor, boxShadow: `0 4px 12px ${brandColor}40` }}
+    <div className="min-h-screen pb-16" style={{ backgroundColor: `rgba(${rgb},0.03)` }}>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+
+        {/* ── TOP BAR ─────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8"
         >
-          <FiPlus className="w-4 h-4" />
-          Create New Query
-        </motion.button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {displayStats.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-white border border-gray-200/60 rounded-2xl p-5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 group"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[12px] font-semibold text-gray-500 uppercase tracking-widest">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2 tracking-tight leading-none">{stat.value}</p>
-                </div>
-                <div className={`w-12 h-12 rounded-[14px] bg-${stat.color}-50 flex items-center justify-center border border-${stat.color}-100/50 group-hover:scale-105 transition-transform`}>
-                  <Icon className={`w-5 h-5 text-${stat.color}-600`} />
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-6">
-        {/* Search */}
-        <div className="flex-1 w-full sm:max-w-md">
-          <div className="relative">
-            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search queries..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200/80 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] transition-all text-[13px]"
-            />
-          </div>
-        </div>
-
-        {/* Status Filter */}
-        <div className="flex gap-1.5 p-1 bg-gray-100/80 border border-gray-200/60 rounded-2xl overflow-x-auto">
-          {statuses.map((status) => {
-            const Icon = status.icon;
-            return (
-              <button
-                key={status.value}
-                onClick={() => setFilterStatus(status.value)}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-[12px] font-semibold transition-all whitespace-nowrap ${filterStatus === status.value
-                  ? 'bg-white text-gray-900 shadow-sm border border-gray-200/80'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50 border border-transparent'
-                  }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {status.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Queries List */}
-      {loading ? (
-        <div className="text-center py-20 bg-white border border-gray-200/60 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
-          <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-emerald-100/50">
-            <FiClock className="w-8 h-8 text-emerald-500 animate-spin" />
-          </div>
-          <p className="text-gray-900 text-lg font-bold tracking-tight">Loading queries...</p>
-          <p className="text-[13px] text-gray-500 mt-1">Please wait while we fetch your query history</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <AnimatePresence mode="popLayout">
-            {queries.map((query, index) => (
-              <motion.div
-                key={query._id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: index * 0.05 }}
-                onClick={() => setSelectedQuery(query)}
-                className="group bg-white border border-gray-200/60 rounded-2xl p-6 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-emerald-200/60 transition-all duration-300 cursor-pointer overflow-hidden relative flex flex-col"
-              >
-                {/* Hover gradient top */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gray-200 to-gray-200 group-hover:from-emerald-400 group-hover:to-emerald-500 opacity-80 group-hover:opacity-100 transition-all duration-500"></div>
-
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4 mt-1 gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-bold text-gray-900 leading-tight truncate mb-1">{query.title}</h3>
-                    <p className="text-[13px] text-gray-600 line-clamp-2 leading-relaxed">{query.description}</p>
-                  </div>
-                  <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-widest whitespace-nowrap border border-gray-100 ${getStatusColor(query.status)}`}>
-                    {query.status}
-                  </span>
-                </div>
-
-                {/* Meta */}
-                <div className="flex flex-wrap items-center gap-3 text-[12px] font-semibold text-gray-500 mb-5">
-                  <span className={`px-2 py-1 rounded-md border border-gray-100 uppercase tracking-widest text-[10px] ${getPriorityColor(query.priority)}`}>
-                    {query.priority}
-                  </span>
-                  <span className="px-2 py-1 rounded-md bg-gray-50 border border-gray-100 text-gray-600 uppercase tracking-widest text-[10px]">
-                    {query.category}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <FiClock className="w-3.5 h-3.5 text-gray-400" />
-                    {formatDate(query.createdAt)}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <FiMessageSquare className="w-3.5 h-3.5 text-gray-400" />
-                    {query.replies?.length || 0} Replies
-                  </span>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-auto pt-4 border-t border-gray-100/80 flex items-center justify-between">
-                  <span className="text-[13px] text-gray-500 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600">
-                      {query.createdBy?.name?.[0]?.toUpperCase() || 'U'}
-                    </span>
-                    {query.createdBy.name}
-                  </span>
-                  <span className="text-[13px] font-semibold text-emerald-600 group-hover:text-emerald-500 flex items-center gap-1 transition-colors">
-                    View Thread →
-                  </span>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-
-          {queries.length === 0 && (
-            <div className="col-span-1 lg:col-span-2 text-center py-20 bg-white border border-gray-200/60 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
-              <div className="w-20 h-20 bg-gray-50/80 rounded-[18px] flex items-center justify-center mx-auto mb-5 border border-gray-100 shadow-sm">
-                <FiHelpCircle className="w-8 h-8 text-gray-400" />
-              </div>
-              <p className="text-gray-900 text-xl font-bold tracking-tight mb-2">No queries found</p>
-              <p className="text-[13px] text-gray-500 max-w-sm mx-auto">You haven't submitted any support queries yet. If you need help, create a new query.</p>
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: `rgba(${rgb},0.12)` }}>
+              <FiHelpCircle className="w-5 h-5" style={{ color: brand }} />
             </div>
-          )}
-        </div>
-      )}
+            <div>
+              <h1 className="text-[20px] font-extrabold text-gray-900 tracking-tight">Query Desk</h1>
+              <p className="text-[12px] text-gray-400 font-medium mt-0.5">{institution?.name}</p>
+            </div>
+          </div>
 
-      {/* New Query Modal */}
-      <AnimatePresence>
-        {showNewQuery && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50"
-              onClick={() => setShowNewQuery(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[550px] bg-white rounded-[24px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] z-50 p-8 border border-gray-100"
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search queries…"
+                className="pl-9 pr-4 py-2.5 text-[13px] border-2 border-gray-100 rounded-xl bg-white outline-none w-44 transition-all focus:w-56"
+                onFocus={inputFocus(brand)} onBlur={inputBlur}
+              />
+            </div>
+
+            {/* New Query */}
+            <motion.button
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setShowNew(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-bold shadow-sm hover:shadow-md transition-all flex-shrink-0"
+              style={{ backgroundColor: brand }}
             >
-              <div className="flex items-start justify-between mb-8">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 tracking-tight">Create New Query</h2>
-                  <p className="text-[13px] text-gray-500 mt-1">Submit a detailed support request directly to the institution.</p>
-                </div>
-                <button
-                  onClick={() => setShowNewQuery(false)}
-                  className="p-2 hover:bg-gray-100 rounded-xl transition-colors bg-gray-50 text-gray-500 hover:text-gray-700"
-                >
-                  <FiX className="w-4 h-4" />
-                </button>
+              <FiPlus className="w-4 h-4" />
+              <span className="hidden sm:inline">New Query</span>
+            </motion.button>
+          </div>
+        </motion.div>
+
+        {/* ── BODY: sidebar + feed ─────────────────────────────── */}
+        <div className="flex flex-col lg:flex-row gap-6">
+
+          {/* ── SIDEBAR ─── */}
+          <motion.aside
+            initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 }}
+            className="w-full lg:w-56 flex-shrink-0"
+          >
+            <div className="bg-white rounded-2xl border p-5" style={{ borderColor: `rgba(${rgb},0.15)` }}>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Filter</p>
+              <div className="space-y-1">
+                {FILTERS.map(f => (
+                  <button key={f.key} onClick={() => setFilterStatus(f.key)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-[13px] transition-all text-left"
+                    style={filterStatus === f.key
+                      ? { backgroundColor: `rgba(${rgb},0.10)`, color: brand, fontWeight: 600 }
+                      : { color: "#6b7280", fontWeight: 500 }
+                    }>
+                    <span>{f.label}</span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                      style={filterStatus === f.key
+                        ? { backgroundColor: `rgba(${rgb},0.15)`, color: brand }
+                        : { backgroundColor: "#f3f4f6", color: "#9ca3af" }
+                      }>
+                      {f.count}
+                    </span>
+                  </button>
+                ))}
               </div>
+            </div>
+          </motion.aside>
 
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-[12px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                    Subject Title <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={newQuery.title}
-                    onChange={(e) => setNewQuery({ ...newQuery, title: e.target.value })}
-                    placeholder="Brief title of your query"
-                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200/80 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-[13px]"
-                  />
+          {/* ── MAIN FEED ─── */}
+          <div className="flex-1 min-w-0">
+            {loading && <Skeleton />}
+
+            {!loading && queries.length === 0 && (
+              <div className="bg-white rounded-2xl border p-14 text-center" style={{ borderColor: `rgba(${rgb},0.15)` }}>
+                <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                  style={{ backgroundColor: `rgba(${rgb},0.08)` }}>
+                  <FiHelpCircle className="w-6 h-6" style={{ color: `rgba(${rgb},0.4)` }} />
                 </div>
+                <p className="text-[15px] font-extrabold text-gray-800">No queries yet</p>
+                <p className="text-[13px] text-gray-400 mt-1 mb-5">
+                  {filterStatus !== "all" ? "No queries match this filter." : "Submit a query to get support from your institution."}
+                </p>
+                {filterStatus === "all" && (
+                  <button onClick={() => setShowNew(true)}
+                    className="px-5 py-2.5 rounded-xl text-white text-[13px] font-bold shadow-sm"
+                    style={{ backgroundColor: brand }}>
+                    New Query
+                  </button>
+                )}
+              </div>
+            )}
 
-                <div>
-                  <label className="block text-[12px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-                    Description <span className="text-red-400">*</span>
-                  </label>
-                  <textarea
-                    value={newQuery.description}
-                    onChange={(e) => setNewQuery({ ...newQuery, description: e.target.value })}
-                    placeholder="Describe your query in detail..."
-                    rows={4}
-                    className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200/80 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-[13px] resize-none"
-                  />
-                </div>
+            {!loading && queries.length > 0 && (
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {queries.map((q, i) => (
+                    <QueryCard key={q._id} query={q} brand={brand} rgb={rgb}
+                      index={i} onClick={setSelectedQ} />
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[12px] font-bold text-gray-500 uppercase tracking-widest mb-2">Category</label>
-                    <div className="relative">
-                      <select
-                        value={newQuery.category}
-                        onChange={(e) => setNewQuery({ ...newQuery, category: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200/80 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-[13px] appearance-none"
-                      >
-                        {categories.map(cat => (
-                          <option key={cat.value} value={cat.value}>{cat.label}</option>
-                        ))}
-                      </select>
-                      <FiChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none w-4 h-4" />
+      {/* ══ NEW QUERY MODAL ═══════════════════════════════════════ */}
+      <AnimatePresence>
+        {showNew && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowNew(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="h-[4px]" style={{ background: `linear-gradient(90deg,${brand},rgba(${rgb},0.25))` }} />
+
+              <div className="p-7">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                      style={{ backgroundColor: `rgba(${rgb},0.10)` }}>
+                      <FiHelpCircle className="w-4 h-4" style={{ color: brand }} />
+                    </div>
+                    <div>
+                      <h2 className="text-[16px] font-extrabold text-gray-900">New Query</h2>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Send a support request to the institution</p>
                     </div>
                   </div>
+                  <button onClick={() => setShowNew(false)}
+                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors">
+                    <FiX className="w-4 h-4" />
+                  </button>
+                </div>
 
+                <div className="space-y-4">
+                  {/* Title */}
                   <div>
-                    <label className="block text-[12px] font-bold text-gray-500 uppercase tracking-widest mb-2">Priority</label>
-                    <div className="relative">
-                      <select
-                        value={newQuery.priority}
-                        onChange={(e) => setNewQuery({ ...newQuery, priority: e.target.value })}
-                        className="w-full px-4 py-3 bg-gray-50/50 border border-gray-200/80 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-[13px] appearance-none"
-                      >
-                        {priorities.map(pri => (
-                          <option key={pri.value} value={pri.value}>{pri.label}</option>
-                        ))}
-                      </select>
-                      <FiChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none w-4 h-4" />
-                    </div>
+                    <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Subject *</label>
+                    <input type="text" placeholder="Brief title of your query"
+                      value={newQuery.title} onChange={e => setNewQuery({ ...newQuery, title: e.target.value })}
+                      className="w-full px-4 py-3 text-[14px] border-2 border-gray-100 rounded-xl bg-gray-50 outline-none transition-all placeholder:text-gray-300"
+                      onFocus={inputFocus(brand)} onBlur={inputBlur}
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Description *</label>
+                    <textarea rows={4} placeholder="Describe your issue in detail…"
+                      value={newQuery.description} onChange={e => setNewQuery({ ...newQuery, description: e.target.value })}
+                      className="w-full px-4 py-3 text-[14px] border-2 border-gray-100 rounded-xl bg-gray-50 outline-none resize-none transition-all placeholder:text-gray-300"
+                      onFocus={inputFocus(brand)} onBlur={inputBlur}
+                    />
+                  </div>
+
+                  {/* Category + Priority */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { field: "category", label: "Category", opts: CATEGORIES },
+                      { field: "priority", label: "Priority", opts: PRIORITIES },
+                    ].map(({ field, label, opts }) => (
+                      <div key={field}>
+                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{label}</label>
+                        <select value={newQuery[field]}
+                          onChange={e => setNewQuery({ ...newQuery, [field]: e.target.value })}
+                          className="w-full px-3 py-3 text-[13px] border-2 border-gray-100 rounded-xl bg-gray-50 outline-none transition-all appearance-none capitalize"
+                          onFocus={e => { e.target.style.borderColor = brand; }}
+                          onBlur={e => { e.target.style.borderColor = ""; }}
+                        >
+                          {opts.map(o => <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-1">
+                    <button onClick={() => setShowNew(false)}
+                      className="flex-1 py-3 text-[13px] font-semibold text-gray-500 rounded-xl border-2 border-gray-100 hover:bg-gray-50 transition-colors">
+                      Cancel
+                    </button>
+                    <motion.button onClick={handleSubmit}
+                      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      className="flex-1 py-3 text-[13px] font-bold text-white rounded-xl shadow-sm transition-all"
+                      style={{ backgroundColor: brand }}>
+                      Submit Query
+                    </motion.button>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex gap-3 mt-8">
-                <button
-                  onClick={() => setShowNewQuery(false)}
-                  className="flex-1 px-6 py-3 bg-white border border-gray-200/80 rounded-xl font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all text-[13px] shadow-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSubmitQuery}
-                  className="flex-1 px-6 py-3 rounded-xl font-semibold text-white shadow-[0_4px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.35)] transition-all text-[13px]"
-                  style={{ backgroundColor: brandColor, boxShadow: `0 4px 12px ${brandColor}40` }}
-                >
-                  Submit Query
-                </button>
               </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Query Details Modal */}
+      {/* ══ QUERY DETAIL PANEL (slide-in from right) ════════════ */}
       <AnimatePresence>
-        {selectedQuery && (
+        {selectedQ && (
           <>
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50"
-              onClick={() => setSelectedQuery(null)}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+              onClick={() => setSelectedQ(null)}
             />
             <motion.div
-              initial={{ opacity: 0, x: '100%' }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 w-full max-w-[600px] h-full bg-white shadow-[-10px_0_40px_rgba(0,0,0,0.05)] z-50 flex flex-col border-l border-gray-100"
+              initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 280, damping: 28 }}
+              className="fixed top-0 right-0 h-full w-full max-w-[560px] bg-white shadow-2xl z-50 flex flex-col border-l"
+              style={{ borderColor: `rgba(${rgb},0.15)` }}
             >
+              {/* Brand strip */}
+              <div className="h-[4px] flex-shrink-0"
+                style={{ background: `linear-gradient(90deg,${brand},rgba(${rgb},0.25))` }} />
+
               {/* Header */}
-              <div className="p-8 border-b border-gray-100 bg-gray-50/50">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0 pr-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold border border-gray-100 ${getStatusColor(selectedQuery.status)}`}>
-                        {selectedQuery.status}
-                      </span>
-                      <span className={`px-2 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold border border-gray-100 ${getPriorityColor(selectedQuery.priority)}`}>
-                        {selectedQuery.priority}
-                      </span>
-                      {(user?.role === 'admin' || user?.role === 'teacher') && (
-                        <div className="relative">
-                          <select
-                            value={selectedQuery.status}
-                            onChange={(e) => handleStatusChange(selectedQuery._id, e.target.value)}
-                            className="text-[11px] font-semibold text-gray-700 bg-white border border-gray-200/80 rounded-md px-2 py-1 appearance-none pr-6 cursor-pointer hover:border-gray-300 transition-colors"
-                          >
-                            <option value="open">Open</option>
-                            <option value="in-progress">In Progress</option>
-                            <option value="resolved">Resolved</option>
-                            <option value="closed">Closed</option>
-                          </select>
-                          <FiChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none w-3 h-3" />
-                        </div>
-                      )}
+              <div className="px-7 pt-6 pb-5 flex-shrink-0 border-b" style={{ borderColor: `rgba(${rgb},0.08)` }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    {/* Badges */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      {(() => {
+                        const s = STATUS_CFG[selectedQ.status] || STATUS_CFG.open;
+                        const p = PRIORITY_CFG[selectedQ.priority] || PRIORITY_CFG.normal;
+                        return <>
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${s.pill}`}>
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.dot }} />
+                            {s.label}
+                          </span>
+                          {selectedQ.priority !== "normal" && (
+                            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-500">{p.label}</span>
+                          )}
+                          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-500 capitalize">
+                            {selectedQ.category}
+                          </span>
+                          {isStaff && (
+                            <select value={selectedQ.status}
+                              onChange={e => handleStatusChange(selectedQ._id, e.target.value)}
+                              className="text-[11px] px-2.5 py-0.5 border border-gray-200 rounded-lg outline-none bg-white text-gray-500 appearance-none"
+                              onFocus={e => { e.target.style.borderColor = brand; }}
+                              onBlur={e => { e.target.style.borderColor = ""; }}
+                            >
+                              <option value="open">Open</option>
+                              <option value="in-progress">In Progress</option>
+                              <option value="resolved">Resolved</option>
+                              <option value="closed">Closed</option>
+                            </select>
+                          )}
+                        </>;
+                      })()}
                     </div>
-                    <h2 className="text-xl font-bold text-gray-900 tracking-tight leading-tight mb-2">{selectedQuery.title}</h2>
-                    <p className="text-[13px] text-gray-600 leading-relaxed">{selectedQuery.description}</p>
+
+                    <h2 className="text-[18px] font-extrabold text-gray-900 leading-snug mb-1.5">{selectedQ.title}</h2>
+                    <p className="text-[13.5px] text-gray-600 leading-[1.7] whitespace-pre-wrap">{selectedQ.description}</p>
+
+                    {/* Meta */}
+                    <div className="flex items-center gap-3 mt-3 text-[12px] text-gray-400">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold text-white flex-shrink-0"
+                          style={{ backgroundColor: brand }}>
+                          {selectedQ.createdBy?.name?.charAt(0).toUpperCase() || "?"}
+                        </div>
+                        <span className="font-semibold text-gray-500">{selectedQ.createdBy?.name}</span>
+                      </div>
+                      <span className="text-gray-200">·</span>
+                      <span>{timeAgo(selectedQ.createdAt)}</span>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setSelectedQuery(null)}
-                    className="p-2 hover:bg-white rounded-xl transition-colors bg-gray-100 text-gray-500 hover:text-gray-700 hover:shadow-sm border border-transparent hover:border-gray-200/80"
-                  >
+
+                  <button onClick={() => setSelectedQ(null)}
+                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors flex-shrink-0">
                     <FiX className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
               {/* Replies */}
-              <div className="flex-1 overflow-y-auto p-8 space-y-5 bg-white">
-                {selectedQuery.replies && selectedQuery.replies.length > 0 ? (
-                  selectedQuery.replies.map((reply) => (
-                    <div key={reply._id} className="bg-white border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] rounded-2xl p-5 relative">
-                      <div className="flex items-start gap-4">
-                        <div
-                          className="w-10 h-10 rounded-[14px] text-white flex items-center justify-center font-bold shadow-sm"
-                          style={{ backgroundColor: brandColor }}
-                        >
-                          {reply.repliedBy.name[0]?.toUpperCase()}
+              <div className="flex-1 overflow-y-auto px-7 py-5 space-y-3"
+                style={{ backgroundColor: `rgba(${rgb},0.015)` }}>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                  {selectedQ.replies?.length || 0} Repl{selectedQ.replies?.length !== 1 ? "ies" : "y"}
+                </p>
+
+                {!selectedQ.replies?.length ? (
+                  <div className="text-center py-12 rounded-2xl border-2 border-dashed"
+                    style={{ borderColor: `rgba(${rgb},0.15)` }}>
+                    <FiMessageSquare className="w-8 h-8 mx-auto mb-2" style={{ color: `rgba(${rgb},0.3)` }} />
+                    <p className="text-[13px] font-semibold text-gray-600">No replies yet</p>
+                    <p className="text-[12px] text-gray-400 mt-0.5">Awaiting response from the institution.</p>
+                  </div>
+                ) : (
+                  selectedQ.replies.map(reply => (
+                    <div key={reply._id} className="bg-white rounded-2xl border border-gray-100 p-5">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-[11px] font-extrabold flex-shrink-0"
+                          style={{ backgroundColor: brand }}>
+                          {reply.repliedBy?.name?.charAt(0).toUpperCase() || "?"}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-[13px] text-gray-900">{reply.repliedBy.name}</span>
-                            <span className="text-[11px] text-gray-400 font-medium">
-                              {formatDate(reply.repliedAt)}
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="text-[13px] font-extrabold text-gray-800">{reply.repliedBy?.name}</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize"
+                              style={{ backgroundColor: `rgba(${rgb},0.08)`, color: brand }}>
+                              {reply.repliedBy?.userType || "member"}
                             </span>
+                            <span className="text-[11px] text-gray-400 ml-auto flex-shrink-0">{timeAgo(reply.repliedAt)}</span>
                           </div>
-                          <p className="text-[13px] text-gray-600 leading-relaxed mt-1">{reply.text}</p>
+                          <p className="text-[13.5px] text-gray-600 leading-[1.7]">{reply.text}</p>
                         </div>
                       </div>
                     </div>
                   ))
-                ) : (
-                  <div className="text-center py-16 bg-gray-50/50 rounded-2xl border border-gray-100 border-dashed">
-                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100">
-                      <FiMessageSquare className="w-6 h-6 text-gray-300" />
-                    </div>
-                    <p className="text-gray-900 font-bold text-[15px] mb-1">No replies yet</p>
-                    <p className="text-[13px] text-gray-500 max-w-[200px] mx-auto">This query is currently awaiting a response from the team.</p>
-                  </div>
                 )}
               </div>
 
-              {/* Reply Input */}
-              {(user?.role === 'admin' || user?.role === 'teacher' || selectedQuery.createdBy.userId === user?._id) && (
-                <div className="p-6 border-t border-gray-100 bg-white shadow-[0_-10px_40px_rgba(0,0,0,0.02)]">
+              {/* Reply input */}
+              {(isStaff || selectedQ.createdBy?.userId === user?._id) && (
+                <div className="px-7 py-5 border-t flex-shrink-0"
+                  style={{ borderColor: `rgba(${rgb},0.08)`, backgroundColor: `rgba(${rgb},0.02)` }}>
+                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Reply</label>
                   <div className="flex gap-3">
-                    <input
-                      type="text"
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="Type your reply..."
-                      className="flex-1 px-4 py-3 bg-gray-50/50 border border-gray-200/80 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-[13px]"
-                      onKeyPress={(e) => e.key === 'Enter' && handleReply()}
+                    <input type="text" value={replyText}
+                      onChange={e => setReplyText(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleReply(); }}
+                      placeholder="Type your reply… (Enter to send)"
+                      className="flex-1 px-4 py-3 text-[13.5px] border-2 border-gray-100 rounded-xl bg-white outline-none transition-all placeholder:text-gray-300"
+                      onFocus={inputFocus(brand)} onBlur={inputBlur}
                     />
-                    <button
-                      onClick={handleReply}
-                      className="px-6 py-3 rounded-xl text-white font-semibold flex items-center gap-2 shadow-[0_4px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.35)] transition-all text-[13px]"
-                      style={{ backgroundColor: brandColor, boxShadow: `0 4px 12px ${brandColor}40` }}
-                    >
+                    <motion.button onClick={handleReply} disabled={!replyText.trim()}
+                      whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.95 }}
+                      className="w-11 h-11 rounded-xl flex items-center justify-center text-white flex-shrink-0 disabled:opacity-40 transition-all"
+                      style={{ backgroundColor: brand }}>
                       <FiSend className="w-4 h-4" />
-                      Send
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
               )}
