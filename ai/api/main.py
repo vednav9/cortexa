@@ -10,18 +10,7 @@ import shutil
 from pathlib import Path
 
 from config import DOCUMENTS_DIR, AUDIO_DIR, TRANSCRIPTS_DIR
-from vectordb.document_processor import DocumentProcessor
-from vectordb.json_store import get_json_store
-from rag.retriever import get_retriever
-from rag.generator import get_generator
-from mcq.generator import get_mcq_generator
-from mcq.validator import MCQValidator
-from hybrid.assistant import get_hybrid_assistant
-
-# NEW: Import speech modules
-from speech.transcriber import get_transcriber
-from speech.formatter import TextFormatter
-from speech.audio_handler import AudioHandler
+# Heavy ML imports are deferred inside getter functions so uvicorn binds the port immediately
 
 
 app = FastAPI(title="Cortexa RAG API", version="2.0.0")
@@ -128,6 +117,7 @@ _text_formatter = None
 def get_doc_processor():
     global _doc_processor
     if _doc_processor is None:
+        from vectordb.document_processor import DocumentProcessor
         _doc_processor = DocumentProcessor()
     return _doc_processor
 
@@ -135,6 +125,7 @@ def get_doc_processor():
 def get_vector_store():
     global _vector_store
     if _vector_store is None:
+        from vectordb.json_store import get_json_store
         _vector_store = get_json_store()
     return _vector_store
 
@@ -142,6 +133,7 @@ def get_vector_store():
 def get_retriever_instance():
     global _retriever
     if _retriever is None:
+        from rag.retriever import get_retriever
         _retriever = get_retriever()
     return _retriever
 
@@ -149,6 +141,7 @@ def get_retriever_instance():
 def get_generator_instance():
     global _generator
     if _generator is None:
+        from rag.generator import get_generator
         _generator = get_generator()
     return _generator
 
@@ -156,6 +149,7 @@ def get_generator_instance():
 def get_mcq_generator_instance():
     global _mcq_generator
     if _mcq_generator is None:
+        from mcq.generator import get_mcq_generator
         _mcq_generator = get_mcq_generator()
     return _mcq_generator
 
@@ -163,6 +157,7 @@ def get_mcq_generator_instance():
 def get_mcq_validator_instance():
     global _mcq_validator
     if _mcq_validator is None:
+        from mcq.validator import MCQValidator
         _mcq_validator = MCQValidator()
     return _mcq_validator
 
@@ -170,14 +165,15 @@ def get_mcq_validator_instance():
 def get_hybrid_assistant_instance():
     global _hybrid_assistant
     if _hybrid_assistant is None:
+        from hybrid.assistant import get_hybrid_assistant
         _hybrid_assistant = get_hybrid_assistant()
     return _hybrid_assistant
 
 
-# NEW: Speech module getters
 def get_transcriber_instance():
     global _transcriber
     if _transcriber is None:
+        from speech.transcriber import get_transcriber
         _transcriber = get_transcriber()
     return _transcriber
 
@@ -185,6 +181,7 @@ def get_transcriber_instance():
 def get_audio_handler():
     global _audio_handler
     if _audio_handler is None:
+        from speech.audio_handler import AudioHandler
         _audio_handler = AudioHandler()
     return _audio_handler
 
@@ -192,6 +189,7 @@ def get_audio_handler():
 def get_text_formatter():
     global _text_formatter
     if _text_formatter is None:
+        from speech.formatter import TextFormatter
         _text_formatter = TextFormatter()
     return _text_formatter
 
