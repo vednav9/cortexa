@@ -33,6 +33,7 @@ const LectureRecorder = () => {
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
   const [transcription, setTranscription] = useState(null);
   const [formattedText, setFormattedText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -114,6 +115,7 @@ const LectureRecorder = () => {
     }
 
     setIsProcessing(true);
+    setProcessingStatus('Waking up AI server...');
 
     try {
       // Create FormData
@@ -128,14 +130,27 @@ const LectureRecorder = () => {
       formData.append('institution_id', institution._id);
       if (courseId) formData.append('course_id', courseId);
 
+      // Status update progression
+      const t1 = setTimeout(() => setProcessingStatus('Uploading audio...'), 5000);
+      const t2 = setTimeout(() => setProcessingStatus('Transcribing speech to text...'), 15000);
+      const t3 = setTimeout(() => setProcessingStatus('Formatting lecture notes...'), 60000);
+
+      // 10-minute timeout for cold start + transcription
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600000);
+
       // Call AI server directly (long-running operation, bypasses Vercel 10s timeout)
       const response = await fetch(`${AI_URL}/speech/transcribe-and-upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
 
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error('Transcription failed');
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'Transcription failed');
       }
 
       const result = await response.json();
@@ -147,9 +162,14 @@ const LectureRecorder = () => {
       
     } catch (error) {
       console.error('Transcription error:', error);
-      toast.error(error.message || 'Failed to transcribe lecture');
+      if (error.name === 'AbortError') {
+        toast.error('Request timed out. The AI server may be overloaded — please try again.');
+      } else {
+        toast.error(error.message || 'Failed to transcribe lecture');
+      }
     } finally {
       setIsProcessing(false);
+      setProcessingStatus('');
     }
   };
 
@@ -344,7 +364,7 @@ const LectureRecorder = () => {
                     {isProcessing ? (
                       <>
                         <FiLoader className="w-5 h-5 animate-spin" />
-                        Processing...
+                        {processingStatus || 'Processing...'}
                       </>
                     ) : (
                       <>

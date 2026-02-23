@@ -24,7 +24,7 @@ EMBEDDINGS_JSON = PROCESSED_DIR / "embeddings_store.json"
 # Model configurations
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-MiniLM-L3-v2"  # 120 MB
 LLM_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 1.1 GB
-WHISPER_MODEL = "base"  # Options: tiny, base, small, medium, large
+WHISPER_MODEL = "tiny"  # Options: tiny, base, small, medium, large (tiny=75MB fits Render free 512MB)
 
 # Alternative faster models (uncomment to use):
 # LLM_MODEL = "distilgpt2"  # 350 MB - RECOMMENDED: 3-5x faster!
