@@ -4,7 +4,8 @@ import { FiMenu, FiX, FiUser, FiSettings, FiLogOut, FiChevronDown } from "react-
 import { HiSparkles } from "react-icons/hi";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/authcontext";
-import { authAPI } from "../services/api";
+import axios from "axios";
+import { API_BASE_URL } from "../config/api";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -66,10 +67,12 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      await authAPI.logout();
-    } catch (err) {
-      console.error("Logout failed", err);
-    }
+      await axios.post(
+        `${API_BASE_URL}/auth/logout`,
+        {},
+        { withCredentials: true }
+      );
+    } catch (_) {}
     setUser(null);
     localStorage.removeItem("auth");
     navigate("/login", { replace: true });

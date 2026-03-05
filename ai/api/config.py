@@ -1,7 +1,6 @@
 """
 Configuration file for RAG system
 """
-import torch
 from pathlib import Path
 
 # Base paths
@@ -62,7 +61,7 @@ SUPPORTED_AUDIO_FORMATS = ['.wav', '.mp3', '.m4a', '.ogg', '.flac']
 WHISPER_LANGUAGE = "en"  # English only as per requirement
 
 # Device settings
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cpu"  # Render free tier has no GPU
 
 # Performance settings
 USE_FAST_TOKENIZER = True

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AI_URL } from '../../../config/api';
 import {
   FiMic,
   FiStopCircle,
@@ -32,6 +33,9 @@ const LectureRecorder = () => {
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
+  const [serverReady, setServerReady] = useState(false);
+  const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'ready' | 'waking'
   const [transcription, setTranscription] = useState(null);
   const [formattedText, setFormattedText] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -44,6 +48,27 @@ const LectureRecorder = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
+
+  // Ping AI server on mount to wake it up
+  useEffect(() => {
+    const warmUp = async () => {
+      setServerStatus('waking');
+      try {
+        const res = await fetch(`${AI_URL}/health`, { signal: AbortSignal.timeout(60000) });
+        if (res.ok) {
+          setServerReady(true);
+          setServerStatus('ready');
+        } else {
+          setServerStatus('waking');
+          setTimeout(warmUp, 5000);
+        }
+      } catch {
+        setServerStatus('waking');
+        setTimeout(warmUp, 5000);
+      }
+    };
+    warmUp();
+  }, []);
 
   // Format time display
   const formatTime = (seconds) => {
@@ -113,6 +138,7 @@ const LectureRecorder = () => {
     }
 
     setIsProcessing(true);
+    setProcessingStatus('Waking up AI server...');
 
     try {
       // Create FormData
@@ -127,14 +153,27 @@ const LectureRecorder = () => {
       formData.append('institution_id', institution._id);
       if (courseId) formData.append('course_id', courseId);
 
-      // Call AI API
-      const response = await fetch('http://localhost:8000/speech/transcribe-and-upload', {
+      // Status update progression
+      const t1 = setTimeout(() => setProcessingStatus('Uploading audio...'), 5000);
+      const t2 = setTimeout(() => setProcessingStatus('Transcribing speech to text...'), 15000);
+      const t3 = setTimeout(() => setProcessingStatus('Formatting lecture notes...'), 60000);
+
+      // 10-minute timeout for cold start + transcription
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 600000);
+
+      // Call AI server directly (long-running operation, bypasses Vercel 10s timeout)
+      const response = await fetch(`${AI_URL}/speech/transcribe-and-upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
 
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(timeoutId);
+
       if (!response.ok) {
-        throw new Error('Transcription failed');
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || 'Transcription failed');
       }
 
       const result = await response.json();
@@ -146,9 +185,14 @@ const LectureRecorder = () => {
       
     } catch (error) {
       console.error('Transcription error:', error);
-      toast.error(error.message || 'Failed to transcribe lecture');
+      if (error.name === 'AbortError') {
+        toast.error('Request timed out. The AI server may be overloaded — please try again.');
+      } else {
+        toast.error(error.message || 'Failed to transcribe lecture');
+      }
     } finally {
       setIsProcessing(false);
+      setProcessingStatus('');
     }
   };
 
@@ -165,7 +209,7 @@ const LectureRecorder = () => {
     try {
       const docxUrl = transcription.downloads?.docx;
       if (docxUrl) {
-        window.open(`http://localhost:8000${docxUrl}`, '_blank');
+        window.open(`${AI_URL}/speech/download/${docxUrl.split('/').pop()}`, '_blank');
         toast.success('Downloading document...');
       }
     } catch (error) {
@@ -245,6 +289,29 @@ const LectureRecorder = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* Server Status Banner */}
+      {serverStatus !== 'ready' && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 bg-amber-50 border-2 border-amber-200 rounded-xl px-5 py-3 text-amber-800 text-sm font-medium"
+        >
+          <FiLoader className="w-4 h-4 animate-spin text-amber-500 shrink-0" />
+          <span>AI server is waking up (free tier cold start ~30s). Please wait before transcribing...</span>
+        </motion.div>
+      )}
+      {serverStatus === 'ready' && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="flex items-center gap-3 bg-green-50 border-2 border-green-200 rounded-xl px-5 py-3 text-green-800 text-sm font-medium"
+        >
+          <FiCheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+          <span>AI server is ready. You can now transcribe.</span>
+        </motion.div>
+      )}
 
       {/* Recording Controls */}
       <motion.div
@@ -337,13 +404,13 @@ const LectureRecorder = () => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleTranscribe}
-                    disabled={isProcessing}
+                    disabled={isProcessing || !serverReady}
                     className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
                   >
                     {isProcessing ? (
                       <>
                         <FiLoader className="w-5 h-5 animate-spin" />
-                        Processing...
+                        {processingStatus || 'Processing...'}
                       </>
                     ) : (
                       <>
