@@ -83,7 +83,7 @@ const Navbar = () => {
         : "border-b border-transparent bg-transparent"
         }`}
     >
-      <div className="mx-auto flex h-[68px] max-w-7xl items-center justify-between px-6">
+      <div className="relative mx-auto flex h-[68px] max-w-7xl items-center justify-between px-6">
 
         {/* ── Logo ── */}
         <button
@@ -99,7 +99,7 @@ const Navbar = () => {
         </button>
 
         {/* ── Desktop nav links ── */}
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-1 md:flex">
           {navItems.map(item => (
             <button
               key={item.path}

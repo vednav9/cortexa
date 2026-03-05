@@ -21,7 +21,7 @@ const Footer = () => {
         className="pointer-events-none absolute inset-0 flex items-end justify-center overflow-hidden pb-4 select-none"
       >
         <span
-          className="text-[clamp(5rem,20vw,18rem)] font-extrabold leading-none tracking-tighter text-white/[0.025]"
+          className="text-[clamp(5rem,20vw,18rem)] font-extrabold leading-none tracking-tighter text-white/10"
           style={{ letterSpacing: '-0.04em' }}
         >
           CORTEXA

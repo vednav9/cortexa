@@ -95,12 +95,12 @@ const Hero = () => {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-auto max-w-4xl text-[3.25rem] font-extrabold leading-[1.08] tracking-tight sm:text-[4rem] md:text-[5rem] lg:text-[5.75rem]"
+          className="mx-auto max-w-4xl text-[3.25rem] font-extrabold leading-[1.08] tracking-tight sm:text-[4rem] md:text-[5rem] lg:text-[6.50rem]"
         >
-          <span className="text-white">The smarter way</span>
+          <span className="text-white">Unify Education</span>
           <br />
           <span className="bg-gradient-to-r from-emerald-400 via-green-300 to-teal-400 bg-clip-text text-transparent">
-            to run education.
+            with Cortexa
           </span>
         </motion.h1>
 
@@ -111,7 +111,7 @@ const Hero = () => {
           transition={{ duration: 0.65, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
           className="mx-auto mt-7 max-w-lg text-[1.0625rem] leading-relaxed text-gray-400"
         >
-          Centralise institutional knowledge, power classrooms with AI, and give
+          Centralise institutional knowledge, power classrooms with AI, give
           every student citation-backed answers — all from one platform.
         </motion.p>
 
@@ -139,24 +139,7 @@ const Hero = () => {
         </motion.div>
 
         {/* Social proof */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.5 }}
-          className="mt-12 flex items-center justify-center gap-3 text-xs text-gray-600"
-        >
-          <div className="flex -space-x-2">
-            {['SJ', 'MC', 'ER', 'AR'].map((init, i) => (
-              <div
-                key={i}
-                className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#080808] bg-gradient-to-br from-emerald-500 to-teal-600 text-[9px] font-bold text-white"
-              >
-                {init}
-              </div>
-            ))}
-          </div>
-          <span>Trusted by <span className="font-medium text-gray-400">100+ institutions</span></span>
-        </motion.div>
+
       </div>
 
       {/* Bottom gradient fade */}
@@ -313,44 +296,44 @@ const Reviews = () => {
     { name: 'Dr. Emily Rodriguez', role: 'Dean of Students', avatar: 'ER', color: 'from-green-500 to-teal-600', review: 'We finally have complete visibility and control over our institutional data. Deploying Cortexa was the best decision we made this year.' },
   ];
 
-  return (
-    <section id="reviews" className="bg-[#080808] py-24 md:py-32">
-      <div className="mx-auto max-w-7xl px-6">
-        <motion.div {...fadeUp()} className="mb-14 text-center">
-          <Label>Testimonials</Label>
-          <h2 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl lg:text-5xl">
-            Loved by educators worldwide.
-          </h2>
-        </motion.div>
+  // return (
+  //   // <section id="reviews" className="bg-[#080808] py-24 md:py-32">
+  //   //   <div className="mx-auto max-w-7xl px-6">
+  //   //     <motion.div {...fadeUp()} className="mb-14 text-center">
+  //   //       <Label>Testimonials</Label>
+  //   //       <h2 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl lg:text-5xl">
+  //   //         Loved by educators worldwide.
+  //   //       </h2>
+  //   //     </motion.div>
 
-        <div className="grid gap-5 md:grid-cols-3">
-          {testimonials.map((t, i) => (
-            <motion.div
-              key={i}
-              {...fadeUp(i * 0.1)}
-              className="flex flex-col gap-6 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-7 transition-all duration-300 hover:border-white/10 hover:bg-white/[0.04]"
-            >
-              <div className="flex gap-0.5">
-                {[...Array(t.rating ?? 5)].map((_, k) => (
-                  <FiStar key={k} className="h-3.5 w-3.5 fill-emerald-400 text-emerald-400" />
-                ))}
-              </div>
-              <p className="flex-1 text-sm leading-relaxed text-gray-400">&ldquo;{t.review}&rdquo;</p>
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${t.color} text-xs font-bold text-white`}>
-                  {t.avatar}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">{t.name}</p>
-                  <p className="text-xs text-gray-500">{t.role}</p>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+  //   //     <div className="grid gap-5 md:grid-cols-3">
+  //   //       {testimonials.map((t, i) => (
+  //   //         <motion.div
+  //   //           key={i}
+  //   //           {...fadeUp(i * 0.1)}
+  //   //           className="flex flex-col gap-6 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-7 transition-all duration-300 hover:border-white/10 hover:bg-white/[0.04]"
+  //   //         >
+  //   //           <div className="flex gap-0.5">
+  //   //             {[...Array(t.rating ?? 5)].map((_, k) => (
+  //   //               <FiStar key={k} className="h-3.5 w-3.5 fill-emerald-400 text-emerald-400" />
+  //   //             ))}
+  //   //           </div>
+  //   //           <p className="flex-1 text-sm leading-relaxed text-gray-400">&ldquo;{t.review}&rdquo;</p>
+  //   //           <div className="flex items-center gap-3">
+  //   //             <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${t.color} text-xs font-bold text-white`}>
+  //   //               {t.avatar}
+  //   //             </div>
+  //   //             <div>
+  //   //               <p className="text-sm font-semibold text-white">{t.name}</p>
+  //   //               <p className="text-xs text-gray-500">{t.role}</p>
+  //   //             </div>
+  //   //           </div>
+  //   //         </motion.div>
+  //   //       ))}
+  //   //     </div>
+  //   //   </div>
+  //   // </section>
+  // );
 };
 
 // ─── CONTACT ─────────────────────────────────────────────────────────────────
