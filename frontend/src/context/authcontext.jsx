@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import axios from "axios";
+import { io } from "socket.io-client";
+import { API_BASE_URL } from "../config/api";
 
 const AuthContext = createContext(null);
 
@@ -31,7 +33,7 @@ export const AuthProvider = ({ children }) => {
     const refreshUser = async () => {
         try {
             const { data } = await axios.get(
-                "http://localhost:5000/api/auth/me",
+                `${API_BASE_URL}/auth/me`,
                 { withCredentials: true }
             );
             setUser(data.user);
@@ -43,7 +45,7 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         // Silent background validation — don't block UI
         axios
-            .get("http://localhost:5000/api/auth/me", { withCredentials: true })
+            .get(`${API_BASE_URL}/auth/me`, { withCredentials: true })
             .then(res => {
                 setUser(res.data.user);
             })

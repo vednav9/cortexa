@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import axios from "axios";
+import { API_BASE_URL } from "../config/api";
 import { FiMail, FiLock, FiEye, FiEyeOff, FiArrowRight } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../context/authcontext";
@@ -42,7 +43,7 @@ const Login = () => {
     setSubmitting(true);
 
     try {
-      const apiEndpoint = `http://localhost:5000/api/${formData.userType}/login`;
+      const apiEndpoint = `${API_BASE_URL}/${formData.userType}/login`;
 
       const res = await axios.post(
         apiEndpoint,

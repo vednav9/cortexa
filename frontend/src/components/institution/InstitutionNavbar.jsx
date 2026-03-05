@@ -6,18 +6,16 @@ import {
 } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/authcontext";
-import { authAPI } from "../../services/api";
+import axios from "axios";
+import { API_BASE_URL } from "../../config/api";
 
-// Convert hex to "R, G, B" for rgba() usage
-const hexToRgb = (hex) => {
-  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return r ? `${parseInt(r[1], 16)}, ${parseInt(r[2], 16)}, ${parseInt(r[3], 16)}` : "16, 185, 129";
-};
-
-export default function InstitutionNavbar({ institution, onBackToDashboard, brandColor = "#10b981" }) {
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const profileRef = useRef(null);
+export default function InstitutionNavbar({
+  institution,
+  onBackToDashboard,
+  brandColor = "#10b981",
+}) {
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef(null);
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
   const rgb = hexToRgb(brandColor);
@@ -33,7 +31,13 @@ export default function InstitutionNavbar({ institution, onBackToDashboard, bran
   }, []);
 
   const handleLogout = async () => {
-    try { await authAPI.logout(); } catch { }
+    try {
+      await axios.post(
+        `${API_BASE_URL}/auth/logout`,
+        {},
+        { withCredentials: true }
+      );
+    } catch (_) {}
     setUser(null);
     localStorage.removeItem("auth");
     navigate("/login", { replace: true });

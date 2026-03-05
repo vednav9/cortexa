@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { API_BASE_URL } from "../config/api";
 import {
   FiMail,
   FiLock,
@@ -58,9 +59,9 @@ const SignUp = () => {
     try {
       let apiUrl = "";
       if (formData.userType === "student") {
-        apiUrl = "http://localhost:5000/api/student/register";
+        apiUrl = `${API_BASE_URL}/student/register`;
       } else if (formData.userType === "teacher") {
-        apiUrl = "http://localhost:5000/api/teacher/register";
+        apiUrl = `${API_BASE_URL}/teacher/register`;
       } else {
         toast.error("Please select a valid user type.");
         setLoading(false);
