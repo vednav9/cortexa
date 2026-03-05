@@ -15,6 +15,13 @@ import {
     FiAlertCircle
 } from "react-icons/fi";
 
+const hexToRgb = (hex) => {
+    const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return r
+        ? `${parseInt(r[1], 16)}, ${parseInt(r[2], 16)}, ${parseInt(r[3], 16)}`
+        : '16, 185, 129';
+};
+
 export default function SeeStudents() {
     const { user } = useAuth();
     const { currentInstitution } = useOutletContext();
@@ -25,6 +32,9 @@ export default function SeeStudents() {
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCourse, setSelectedCourse] = useState("");
     const [selectedDepartment, setSelectedDepartment] = useState("");
+
+    const brandColor = currentInstitution?.branding?.primaryColor || '#10b981';
+    const rgb = hexToRgb(brandColor);
 
     useEffect(() => {
         if (currentInstitution?._id && user?.role === 'teacher') {
@@ -41,14 +51,10 @@ export default function SeeStudents() {
     const fetchCourses = async () => {
         try {
             setLoadingCourses(true);
-            console.log('📚 Fetching authorized courses...');
-            
             const response = await api.get('/teacher/authorized-courses');
-            console.log('📚 Authorized courses response:', response.data);
-            
             const coursesData = response.data.courses || [];
             setCourses(coursesData);
-            
+
             if (coursesData.length === 0) {
                 toast.error('No authorized courses found. Contact your admin.');
             }
@@ -63,17 +69,11 @@ export default function SeeStudents() {
     const fetchStudents = async () => {
         try {
             setLoading(true);
-            console.log('👥 Fetching students...');
-            console.log('Selected Course:', selectedCourse);
-            console.log('Selected Department:', selectedDepartment);
-            
             const params = new URLSearchParams();
             if (selectedCourse) params.append('courseId', selectedCourse);
             if (selectedDepartment) params.append('departmentId', selectedDepartment);
 
             const response = await api.get(`/teacher/students?${params.toString()}`);
-            console.log('👥 Students response:', response.data);
-            
             setStudents(response.data.students || []);
         } catch (error) {
             console.error("❌ Fetch students error:", error);
@@ -98,7 +98,7 @@ export default function SeeStudents() {
     ).values()];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/20 to-purple-50/20 p-4 md:p-8">
+        <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: `rgba(${rgb},0.02)` }}>
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <motion.div
@@ -106,15 +106,18 @@ export default function SeeStudents() {
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-                            <FiUsers className="text-2xl text-white" />
+                    <div className="flex items-center gap-4 mb-2">
+                        <div
+                            className="p-3.5 rounded-2xl flex items-center justify-center shrink-0 border"
+                            style={{ backgroundColor: `rgba(${rgb},0.1)`, borderColor: `rgba(${rgb},0.2)` }}
+                        >
+                            <FiUsers className="text-2xl" style={{ color: brandColor }} />
                         </div>
                         <div>
-                            <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
                                 My Students
                             </h1>
-                            <p className="text-gray-600 mt-1">
+                            <p className="text-gray-500 mt-1 font-medium">
                                 View students enrolled in your authorized courses
                             </p>
                         </div>
@@ -122,14 +125,19 @@ export default function SeeStudents() {
 
                     {/* Authorized Courses Info */}
                     {!loadingCourses && courses.length > 0 && (
-                        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                        <div
+                            className="mt-6 rounded-2xl p-5 border shadow-sm"
+                            style={{ backgroundColor: `rgba(${rgb},0.03)`, borderColor: `rgba(${rgb},0.15)` }}
+                        >
                             <div className="flex items-start gap-3">
-                                <FiBook className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                <div className="mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: `rgba(${rgb},0.15)` }}>
+                                    <FiBook className="w-3.5 h-3.5" style={{ color: brandColor }} />
+                                </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-blue-900">
+                                    <p className="text-sm font-bold text-gray-900">
                                         You have access to {courses.length} authorized course{courses.length !== 1 ? 's' : ''}
                                     </p>
-                                    <p className="text-xs text-blue-700 mt-1">
+                                    <p className="text-[13px] text-gray-600 mt-1 font-medium leading-relaxed">
                                         {courses.map(c => c.name).join(', ')}
                                     </p>
                                 </div>
@@ -142,26 +150,29 @@ export default function SeeStudents() {
                 {loadingCourses ? (
                     <div className="flex items-center justify-center py-20">
                         <div className="flex flex-col items-center gap-4">
-                            <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-gray-600">Loading your authorized courses...</p>
+                            <div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `rgba(${rgb}, 0.2)`, borderTopColor: brandColor }}></div>
+                            <p className="text-gray-500 font-medium tracking-wide">Loading authorized courses...</p>
                         </div>
                     </div>
                 ) : courses.length === 0 ? (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-white rounded-xl md:rounded-2xl shadow-md p-8 md:p-12 text-center"
+                        className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-10 md:p-16 text-center max-w-2xl mx-auto mt-10"
                     >
-                        <FiAlertCircle className="text-6xl text-red-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                        <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-6">
+                            <FiAlertCircle className="text-4xl text-red-400" />
+                        </div>
+                        <h3 className="text-xl font-black text-gray-900 mb-2">
                             No Authorized Courses
                         </h3>
-                        <p className="text-gray-600 mb-4">
+                        <p className="text-gray-500 mb-8 max-w-md mx-auto">
                             You don't have access to any courses yet. Please contact your institution admin to assign courses to you.
                         </p>
                         <button
                             onClick={fetchCourses}
-                            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                            className="px-6 py-3 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+                            style={{ backgroundColor: brandColor, boxShadow: `0 4px 14px 0 rgba(${rgb}, 0.39)` }}
                         >
                             Refresh Courses
                         </button>
@@ -173,18 +184,19 @@ export default function SeeStudents() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.1 }}
-                            className="bg-white rounded-xl md:rounded-2xl shadow-md p-4 md:p-6 mb-6"
+                            className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-5 mb-6"
                         >
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {/* Search */}
                                 <div className="relative">
-                                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                                     <input
                                         type="text"
                                         placeholder="Search by name, email, or username..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[13px] transition-all"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                     />
                                 </div>
 
@@ -193,7 +205,8 @@ export default function SeeStudents() {
                                     <select
                                         value={selectedCourse}
                                         onChange={(e) => setSelectedCourse(e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[13px] transition-all"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                     >
                                         <option value="">All Courses</option>
                                         {courses.map(course => (
@@ -209,7 +222,8 @@ export default function SeeStudents() {
                                     <select
                                         value={selectedDepartment}
                                         onChange={(e) => setSelectedDepartment(e.target.value)}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[13px] transition-all"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                     >
                                         <option value="">All Departments</option>
                                         {departments.map(dept => (
@@ -223,90 +237,109 @@ export default function SeeStudents() {
                         </motion.div>
 
                         {/* Students Count */}
-                        <div className="mb-4 text-gray-600">
-                            <span className="font-semibold text-gray-900">{filteredStudents.length}</span> student{filteredStudents.length !== 1 ? 's' : ''} found
+                        <div className="mb-6 flex items-center justify-between">
+                            <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: brandColor }} />
+                                {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''} found
+                            </h2>
                         </div>
 
                         {/* Students Grid */}
                         {loading ? (
                             <div className="flex items-center justify-center py-20">
                                 <div className="flex flex-col items-center gap-4">
-                                    <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                                    <p className="text-gray-600">Loading students...</p>
+                                    <div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `rgba(${rgb}, 0.2)`, borderTopColor: brandColor }}></div>
+                                    <p className="text-gray-500 font-medium">Loading students...</p>
                                 </div>
                             </div>
                         ) : filteredStudents.length === 0 ? (
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                className="bg-white rounded-xl md:rounded-2xl shadow-md p-8 md:p-12 text-center"
+                                className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-12 text-center"
                             >
-                                <FiUsers className="text-6xl text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                <div className="w-20 h-20 rounded-full mb-6 mx-auto flex items-center justify-center border-dashed border-2" style={{ borderColor: `rgba(${rgb},0.2)`, backgroundColor: `rgba(${rgb},0.02)` }}>
+                                    <FiUsers className="text-2xl" style={{ color: brandColor }} />
+                                </div>
+                                <h3 className="text-lg font-black text-gray-900 mb-2">
                                     No Students Found
                                 </h3>
-                                <p className="text-gray-600">
+                                <p className="text-sm text-gray-500 max-w-md mx-auto">
                                     {searchTerm || selectedCourse || selectedDepartment
                                         ? "Try adjusting your filters"
                                         : "No students are enrolled in your authorized courses yet"}
                                 </p>
                             </motion.div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                 {filteredStudents.map((student, index) => (
                                     <motion.div
                                         key={student._id}
                                         initial={{ opacity: 0, y: 20 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: index * 0.05 }}
-                                        className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6"
+                                        className="bg-white rounded-2xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg transition-all duration-300 p-6 group cursor-pointer hover:border-transparent"
+                                        style={{
+                                            hover: {
+                                                boxShadow: `0 10px 40px -10px rgba(${rgb},0.15)`,
+                                                borderColor: brandColor
+                                            }
+                                        }}
                                     >
                                         {/* Student Avatar */}
-                                        <div className="flex items-start gap-4 mb-4">
-                                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <FiUser className="text-white text-xl" />
+                                        <div className="flex items-start gap-4 mb-5">
+                                            <div
+                                                className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 border transition-transform group-hover:scale-110"
+                                                style={{ backgroundColor: `rgba(${rgb},0.08)`, borderColor: `rgba(${rgb},0.2)` }}
+                                            >
+                                                <FiUser className="text-[18px]" style={{ color: brandColor }} />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <h3 className="text-lg font-semibold text-gray-900 truncate">
+                                                <h3 className="text-[15px] font-bold text-gray-900 truncate group-hover:text-[var(--brandColor)]" style={{ '--brandColor': brandColor }}>
                                                     {student.fullName}
                                                 </h3>
-                                                <p className="text-sm text-gray-500 truncate">
+                                                <p className="text-[12px] font-bold text-gray-400 mt-0.5 truncate uppercase tracking-wider">
                                                     @{student.username}
                                                 </p>
                                             </div>
                                         </div>
 
                                         {/* Student Info */}
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                <FiMail className="flex-shrink-0" />
+                                        <div className="space-y-3 p-4 rounded-xl bg-gray-50/50 group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-50">
+                                            <div className="flex items-center gap-3 text-[13px] text-gray-600 font-medium">
+                                                <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ backgroundColor: `rgba(${rgb},0.05)` }}>
+                                                    <FiMail className="w-3 h-3" style={{ color: brandColor }} />
+                                                </div>
                                                 <span className="truncate">{student.email}</span>
                                             </div>
                                             {student.phone && (
-                                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                    <FiPhone className="flex-shrink-0" />
+                                                <div className="flex items-center gap-3 text-[13px] text-gray-600 font-medium">
+                                                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ backgroundColor: `rgba(${rgb},0.05)` }}>
+                                                        <FiPhone className="w-3 h-3" style={{ color: brandColor }} />
+                                                    </div>
                                                     <span>{student.phone}</span>
                                                 </div>
                                             )}
                                             {student.department && (
-                                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                    <FiBook className="flex-shrink-0" />
+                                                <div className="flex items-center gap-3 text-[13px] text-gray-600 font-medium">
+                                                    <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ backgroundColor: `rgba(${rgb},0.05)` }}>
+                                                        <FiBook className="w-3 h-3" style={{ color: brandColor }} />
+                                                    </div>
                                                     <span className="truncate">{student.department.name}</span>
-                                                </div>
-                                            )}
-                                            {student.semester && (
-                                                <div className="text-sm text-gray-600">
-                                                    <span className="font-medium">Semester:</span> {student.semester.name}
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Enrolled Courses Count */}
-                                        <div className="mt-4 pt-4 border-t border-gray-100">
-                                            <div className="text-sm text-gray-600">
-                                                <span className="font-semibold text-purple-600">
-                                                    {student.enrolledCourses?.length || 0}
-                                                </span> courses enrolled
+                                        <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
+                                            <div className="text-[12px] font-bold text-gray-500 uppercase tracking-wider">
+                                                Enrollment
+                                            </div>
+                                            <div
+                                                className="text-[12px] font-bold px-2.5 py-1 rounded-md"
+                                                style={{ backgroundColor: `rgba(${rgb},0.08)`, color: brandColor }}
+                                            >
+                                                {student.enrolledCourses?.length || 0} Courses
                                             </div>
                                         </div>
                                     </motion.div>
