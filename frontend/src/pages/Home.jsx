@@ -2,34 +2,47 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, useInView } from 'framer-motion';
 import {
   FiArrowRight, FiCpu, FiZap, FiShield, FiUsers,
-  FiBookOpen, FiStar, FiMail, FiPhone, FiMapPin
+  FiBookOpen, FiMail, FiCheckCircle, FiAlertCircle, FiLoader, FiStar
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import GreenParticles from '../ui/GreenParticles';
+import { contactAPI } from '../services/api';
 
-// ===========================
-// HOME WRAPPER
-// ===========================
+// ─── Shared micro-components ────────────────────────────────────────────────
+
+const Label = ({ children }) => (
+  <p className="text-xs font-semibold tracking-[0.18em] uppercase text-emerald-500 mb-4">
+    {children}
+  </p>
+);
+
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 22 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, margin: '-80px' },
+  transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] },
+});
+
+// ─── HOME ───────────────────────────────────────────────────────────────────
+
 const Home = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (location.state?.scrollTo) {
-      const sectionId = location.state.scrollTo;
-      const element = document.getElementById(sectionId);
-      if (element) {
-        const offset = 80;
-        const pos = element.getBoundingClientRect().top + window.pageYOffset - offset;
-        setTimeout(() => window.scrollTo({ top: pos, behavior: "smooth" }), 300);
+      const el = document.getElementById(location.state.scrollTo);
+      if (el) {
+        const pos = el.getBoundingClientRect().top + window.pageYOffset - 80;
+        setTimeout(() => window.scrollTo({ top: pos, behavior: 'smooth' }), 300);
       }
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location, navigate]);
 
   return (
-    <div className="bg-black">
+    <div className="bg-[#080808] text-white antialiased">
       <Hero />
       <About />
       <Features />
@@ -39,222 +52,187 @@ const Home = () => {
   );
 };
 
-// ===========================
-// HERO SECTION
-// ===========================
+// ─── HERO ────────────────────────────────────────────────────────────────────
+
 const Hero = () => {
   const navigate = useNavigate();
 
-  const scrollToSection = (sectionId) => {
-    const element = document.getElementById(sectionId);
-    if (!element) return;
-    const offset = 80;
-    const pos = element.getBoundingClientRect().top + window.pageYOffset - offset;
-    window.scrollTo({ top: pos, behavior: 'smooth' });
+  const scrollTo = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset - 80, behavior: 'smooth' });
   };
 
   return (
     <section
       id="hero"
-      className="relative overflow-hidden min-h-screen flex items-center justify-center bg-black"
+      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#080808]"
     >
       <GreenParticles />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-20 z-10">
+      {/* Aura */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_50%_0%,rgba(52,211,153,0.09),transparent)]" />
+
+      {/* Faint grid */}
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[length:72px_72px]" />
+
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-6 py-32 text-center">
+        {/* Eyebrow */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="text-center space-y-8"
+          transition={{ duration: 0.5 }}
+          className="mb-8 inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 backdrop-blur-md"
         >
-          {/* Badge */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 backdrop-blur-sm"
-          >
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
-            </span>
-            <span className="text-sm font-medium text-emerald-300">
-              AI-Powered Educational Platform
-            </span>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-tight"
-          >
-            <span className="block text-white mb-2">Unify Education</span>
-            <span className="block bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">
-              with Cortexa
-            </span>
-          </motion.h1>
-
-          {/* Subheadline */}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="max-w-2xl mx-auto text-lg sm:text-xl text-gray-400 leading-relaxed"
-          >
-            Centralize institutional resources with AI-powered RAG assistants, citation-backed answers, and seamless collaboration.
-          </motion.p>
-
-          {/* CTA Buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6"
-          >
-            <button
-              onClick={() => navigate('/signup')}
-              className="group px-8 py-4 rounded-xl font-semibold text-black bg-gradient-to-r from-emerald-400 to-green-500 shadow-lg hover:shadow-emerald-500/50 transition-all"
-            >
-              <span className="flex items-center space-x-2">
-                <span>Get Started</span>
-                <FiArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </span>
-            </button>
-
-            <button
-              onClick={() => scrollToSection('about')}
-              className="px-8 py-4 rounded-xl font-medium text-gray-300 border border-gray-700 hover:border-emerald-400/50 hover:text-emerald-400 transition-all"
-            >
-              Learn More
-            </button>
-          </motion.div>
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <span className="text-xs font-medium tracking-wide text-gray-400">
+            AI-Powered Educational Platform
+          </span>
         </motion.div>
+
+        {/* Headline */}
+        <motion.h1
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          className="mx-auto max-w-4xl text-[3.25rem] font-extrabold leading-[1.08] tracking-tight sm:text-[4rem] md:text-[5rem] lg:text-[6.50rem]"
+        >
+          <span className="text-white">Unify Education</span>
+          <br />
+          <span className="bg-gradient-to-r from-emerald-400 via-green-300 to-teal-400 bg-clip-text text-transparent">
+            with Cortexa
+          </span>
+        </motion.h1>
+
+        {/* Sub */}
+        <motion.p
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.65, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          className="mx-auto mt-7 max-w-lg text-[1.0625rem] leading-relaxed text-gray-400"
+        >
+          Centralise institutional knowledge, power classrooms with AI, give
+          every student citation-backed answers — all from one platform.
+        </motion.p>
+
+        {/* CTAs */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.34, ease: [0.22, 1, 0.36, 1] }}
+          className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
+        >
+          <button
+            onClick={() => navigate('/signup')}
+            className="group flex items-center gap-2 rounded-xl bg-emerald-500 px-7 py-3.5 text-sm font-semibold text-black shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:bg-emerald-400 hover:shadow-emerald-500/40 active:scale-95"
+          >
+            Get Started Free
+            <FiArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+          </button>
+
+          <button
+            onClick={() => scrollTo('about')}
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-7 py-3.5 text-sm font-semibold text-gray-300 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:text-white active:scale-95"
+          >
+            See How It Works
+          </button>
+        </motion.div>
+
+        {/* Social proof */}
+
       </div>
 
-      {/* Scroll Indicator */}
-      <motion.div
-        animate={{ y: [0, 8, 0] }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute bottom-10 left-1/2 -translate-x-1/2 cursor-pointer z-10 opacity-40 hover:opacity-100 transition-opacity"
-        onClick={() => scrollToSection('about')}
-      >
-        <div className="w-6 h-10 rounded-full border-2 border-emerald-400/40 flex justify-center pt-2">
-          <div className="w-1 h-2 rounded-full bg-emerald-400" />
-        </div>
-      </motion.div>
+      {/* Bottom gradient fade */}
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#080808] to-transparent" />
     </section>
   );
 };
 
-// ===========================
-// ABOUT SECTION
-// ===========================
+// ─── ABOUT ───────────────────────────────────────────────────────────────────
+
 const About = () => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const stats = [
+    { value: '3', label: 'User roles', sub: 'Student · Teacher · Admin' },
+    { value: '100%', label: 'Citation-backed', sub: 'Every AI answer' },
+    { value: '1', label: 'Unified platform', sub: 'All resources' },
+    { value: '∞', label: 'Scalable', sub: 'Multi-tenant ready' },
+  ];
 
   return (
-    <section
-      id="about"
-      className="relative overflow-hidden py-24 md:py-32 bg-black"
-    >
-      <div className="absolute inset-0 bg-gradient-to-b from-black via-gray-950/50 to-black"></div>
+    <section id="about" className="relative overflow-hidden bg-[#080808] py-28 md:py-36">
+      {/* Subtle dot grid */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(rgba(52,211,153,0.07)_1px,transparent_1px)] bg-[length:28px_28px]" />
 
-      <div ref={ref} className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-16 md:mb-20"
-        >
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">
-            About Cortexa
+      <div className="relative z-10 mx-auto max-w-7xl px-6">
+        {/* Header */}
+        <motion.div {...fadeUp()} className="max-w-2xl">
+          <Label>Discover Cortexa</Label>
+          <h2 className="text-4xl font-extrabold tracking-tight text-white md:text-5xl lg:text-[3.25rem]">
+            Why institutions
+            <br />
+            <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+              choose Cortexa.
+            </span>
           </h2>
-          <p className="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto">
-            Solving educational fragmentation by unifying institutional resources into one intelligent platform.
+          <p className="mt-5 text-[1.0625rem] leading-relaxed text-gray-400">
+            Education is fragmented across dozens of tools. Cortexa unifies everything — from AI-powered Q&amp;A to real-time collaboration — into one secure, institutional platform.
           </p>
         </motion.div>
 
-        {/* Problem + Solution */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16 md:mb-20">
+        {/* Cards */}
+        <div className="mt-16 grid gap-5 lg:grid-cols-2">
           {/* Problem */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={isInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-red-500/10 hover:border-red-500/30 transition-all"
-          >
-            <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 mb-6">
-              <span className="text-red-400 font-medium text-sm">The Problem</span>
+          <motion.div {...fadeUp(0.05)} className="group rounded-3xl border border-white/[0.06] bg-white/[0.03] p-8 md:p-10 transition-all duration-500 hover:border-red-500/20 hover:bg-red-500/[0.03]">
+            <div className="mb-6 inline-flex items-center rounded-full border border-red-500/20 bg-red-500/10 px-3.5 py-1">
+              <span className="text-xs font-semibold uppercase tracking-widest text-red-400">The Problem</span>
             </div>
-            <h3 className="text-2xl md:text-3xl font-bold text-white mb-6">Educational Fragmentation</h3>
-            <ul className="space-y-4 text-gray-400 leading-relaxed">
-              <li className="flex gap-3">
-                <div className="w-1.5 h-1.5 bg-red-400 rounded-full mt-2 flex-shrink-0" />
-                <span>Students juggle multiple platforms for notes, assignments, and communication</span>
-              </li>
-              <li className="flex gap-3">
-                <div className="w-1.5 h-1.5 bg-red-400 rounded-full mt-2 flex-shrink-0" />
-                <span>Generic content fails to address individual learning needs</span>
-              </li>
-              <li className="flex gap-3">
-                <div className="w-1.5 h-1.5 bg-red-400 rounded-full mt-2 flex-shrink-0" />
-                <span>Institutions lack control over their educational ecosystem</span>
-              </li>
+            <h3 className="mb-6 text-2xl font-bold text-white">Fragmented education</h3>
+            <ul className="space-y-4">
+              {[
+                'Students juggle multiple disconnected platforms every day.',
+                'Generic AI gives unverified answers with no academic backing.',
+                'Institutions lose oversight and control of their learning data.',
+              ].map((t, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-gray-400">
+                  <FiAlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-400" />
+                  {t}
+                </li>
+              ))}
             </ul>
           </motion.div>
 
           {/* Solution */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={isInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-emerald-500/10 hover:border-emerald-500/30 transition-all"
-          >
-            <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-6">
-              <span className="text-emerald-400 font-medium text-sm">Our Solution</span>
+          <motion.div {...fadeUp(0.1)} className="group rounded-3xl border border-emerald-500/20 bg-emerald-500/[0.04] p-8 md:p-10 shadow-[0_0_60px_-12px_rgba(52,211,153,0.15)] transition-all duration-500 hover:border-emerald-500/30 hover:shadow-[0_0_80px_-12px_rgba(52,211,153,0.25)]">
+            <div className="mb-6 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1">
+              <span className="text-xs font-semibold uppercase tracking-widest text-emerald-400">Our Solution</span>
             </div>
-            <h3 className="text-2xl md:text-3xl font-bold text-white mb-6">Unified AI Platform</h3>
-            <ul className="space-y-4 text-gray-400 leading-relaxed">
-              <li className="flex gap-3">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full mt-2 flex-shrink-0" />
-                <span>Centralized dashboard for all academic resources</span>
-              </li>
-              <li className="flex gap-3">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full mt-2 flex-shrink-0" />
-                <span>AI-powered RAG assistant with citation-backed answers</span>
-              </li>
-              <li className="flex gap-3">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full mt-2 flex-shrink-0" />
-                <span>Multi-tenant architecture with complete control</span>
-              </li>
+            <h3 className="mb-6 text-2xl font-bold text-white">One unified AI platform</h3>
+            <ul className="space-y-4">
+              {[
+                'A single dashboard for all courses, notes, and assignments.',
+                'RAG-powered AI that only answers with verified academic citations.',
+                'Fully isolated multi-tenant architecture — your data, your rules.',
+              ].map((t, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
+                  <FiCheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-400" />
+                  {t}
+                </li>
+              ))}
             </ul>
           </motion.div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {[
-            { number: "3", label: "User Roles", sublabel: "Student · Teacher · Admin" },
-            { number: "100%", label: "Citation-Backed", sublabel: "Every AI answer" },
-            { number: "1", label: "Unified Platform", sublabel: "All resources" },
-            { number: "∞", label: "Institutions", sublabel: "Multi-tenant ready" }
-          ].map((item, i) => (
+        {/* Stats strip */}
+        <div className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.06] lg:grid-cols-4">
+          {stats.map((s, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: 0.3 + (i * 0.1) }}
-              className="p-6 text-center rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-emerald-500/10 hover:border-emerald-500/30 transition-all"
+              {...fadeUp(0.06 * i)}
+              className="bg-[#080808] px-8 py-8 text-center"
             >
-              <div className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-emerald-400 to-green-400 bg-clip-text text-transparent mb-2">
-                {item.number}
-              </div>
-              <div className="text-base md:text-lg text-white font-medium mb-1">{item.label}</div>
-              <div className="text-xs md:text-sm text-gray-500">{item.sublabel}</div>
+              <p className="text-4xl font-extrabold text-emerald-400">{s.value}</p>
+              <p className="mt-1.5 text-sm font-semibold text-white">{s.label}</p>
+              <p className="mt-0.5 text-xs text-gray-600">{s.sub}</p>
             </motion.div>
           ))}
         </div>
@@ -263,251 +241,262 @@ const About = () => {
   );
 };
 
-// ===========================
-// FEATURES SECTION
-// ===========================
+// ─── FEATURES ────────────────────────────────────────────────────────────────
+
 const Features = () => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
-
   const features = [
-    { icon: FiCpu, title: "RAG Assistant", description: "Citation-backed answers from teacher notes and institutional resources.", color: "from-emerald-400 to-green-500" },
-    { icon: FiZap, title: "AI Content Generation", description: "Generate MCQs, videos, and convert voice notes instantly.", color: "from-green-400 to-teal-500" },
-    { icon: FiShield, title: "Multi-Tenant Security", description: "Complete branding and permissions for each institution.", color: "from-teal-400 to-emerald-500" },
-    { icon: FiUsers, title: "Collaborative Learning", description: "Query desk and real-time note sharing for students.", color: "from-emerald-400 to-green-500" },
-    { icon: FiBookOpen, title: "Unified Dashboard", description: "All courses and resources accessible in one place.", color: "from-green-400 to-teal-500" },
-    { icon: HiSparkles, title: "Personalized Learning", description: "Adaptive AI feedback tailored to each student.", color: "from-teal-400 to-emerald-500" }
+    { icon: FiCpu, title: 'RAG Assistant', desc: 'Answers backed exclusively by uploaded teacher notes and institutional documents.' },
+    { icon: FiZap, title: 'AI Content Tools', desc: 'Auto-generate MCQs, convert voice notes, and produce study material at scale.' },
+    { icon: FiShield, title: 'Multi-Tenant Security', desc: 'Every institution gets a fully isolated environment with custom branding.' },
+    { icon: FiUsers, title: 'Collaborative Learning', desc: 'A shared query desk and real-time note library for every course.' },
+    { icon: FiBookOpen, title: 'Unified Dashboard', desc: 'All your courses, assignments, and resources—one clean interface.' },
+    { icon: HiSparkles, title: 'Personalised AI', desc: "Adaptive feedback and recommendations based on each student's progress." },
   ];
 
   return (
-    <section
-      id="features"
-      className="relative overflow-hidden py-24 md:py-32 bg-gradient-to-b from-black via-gray-950/50 to-black"
-    >
-      <div ref={ref} className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-16 md:mb-20"
-        >
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">
-            Powerful Features
+    <section id="features" className="bg-[#080808] py-24 md:py-32">
+      <div className="mx-auto max-w-7xl px-6">
+        {/* Header */}
+        <motion.div {...fadeUp()} className="mb-14 max-w-xl">
+          <Label>Platform Features</Label>
+          <h2 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl lg:text-5xl">
+            Built for every role in your institution.
           </h2>
-          <p className="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto">
-            Everything you need to transform your educational institution.
-          </p>
-        </motion.div>
-
-        {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-          {features.map((f, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: i * 0.1 }}
-              className="group p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-gray-800 hover:border-emerald-500/30 transition-all"
-            >
-              <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-                <f.icon className="text-white text-2xl" />
-              </div>
-              <h3 className="text-xl md:text-2xl font-bold text-white mb-3">{f.title}</h3>
-              <p className="text-gray-400 leading-relaxed">{f.description}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
-
-// ===========================
-// REVIEWS SECTION
-// ===========================
-const Reviews = () => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
-
-  const testimonials = [
-    { name: "Sarah Johnson", role: "Computer Science Student", avatar: "SJ", rating: 5, review: "Cortexa transformed how I study. The AI assistant provides instant answers with citations from professor notes.", color: "from-emerald-400 to-green-500" },
-    { name: "Prof. Michael Chen", role: "Mathematics Teacher", avatar: "MC", rating: 5, review: "Query desk helps my students even when I'm offline. The MCQ generator saves me hours every week!", color: "from-green-400 to-teal-500" },
-    { name: "Dr. Emily Rodriguez", role: "Dean of Students", avatar: "ER", rating: 5, review: "Complete data control with powerful tools for our institution. Cortexa is a true game changer.", color: "from-teal-400 to-emerald-500" }
-  ];
-
-  return (
-    <section
-      id="reviews"
-      className="relative overflow-hidden py-24 md:py-32 bg-black"
-    >
-      <div ref={ref} className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-16 md:mb-20"
-        >
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">
-            What Users Say
-          </h2>
-          <p className="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto">
-            Trusted by students, teachers, and institutions worldwide.
-          </p>
-        </motion.div>
-
-        {/* Reviews Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-          {testimonials.map((t, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: i * 0.15 }}
-              className="p-8 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-gray-800 hover:border-emerald-500/30 transition-all"
-            >
-              <div className="flex space-x-1 mb-4">
-                {[...Array(t.rating)].map((_, idx) => (
-                  <FiStar key={idx} className="text-emerald-400 fill-emerald-400 w-4 h-4" />
-                ))}
-              </div>
-              <p className="text-gray-300 leading-relaxed mb-6">{t.review}</p>
-              <div className="flex items-center space-x-4">
-                <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${t.color} flex items-center justify-center text-base text-white font-bold flex-shrink-0`}>
-                  {t.avatar}
-                </div>
-                <div>
-                  <div className="text-white font-semibold">{t.name}</div>
-                  <div className="text-emerald-400 text-sm">{t.role}</div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
-
-// ===========================
-// CONTACT SECTION
-// ===========================
-const ContactUs = () => {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
-  const [formData, setFormData] = useState({ name: "", email: "", message: "" });
-
-  const contactInfo = [
-    { icon: FiMail, label: "Email", value: "contact@cortexa.com", link: "mailto:contact@cortexa.com" },
-    { icon: FiPhone, label: "Phone", value: "+1 (555) 123-4567", link: "tel:+15551234567" },
-    { icon: FiMapPin, label: "Address", value: "123 Education Street, Learning City", link: null }
-  ];
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Form submitted:', formData);
-  };
-
-  return (
-    <section
-      id="contact"
-      className="relative overflow-hidden py-24 md:py-32 bg-gradient-to-b from-black via-gray-950/50 to-black"
-    >
-      <div ref={ref} className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-16 md:mb-20"
-        >
-          <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">
-            Get in Touch
-          </h2>
-          <p className="text-lg md:text-xl text-gray-400 max-w-3xl mx-auto">
-            Have questions? We'd love to hear from you.
-          </p>
         </motion.div>
 
         {/* Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* FORM */}
-          <motion.form
-            initial={{ opacity: 0, x: -20 }}
-            animate={isInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            onSubmit={handleSubmit}
-            className="space-y-6"
-          >
-            <div>
-              <label className="text-gray-300 text-sm font-medium mb-2 block">Name</label>
-              <input
-                required
-                className="w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                placeholder="Your name"
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="text-gray-300 text-sm font-medium mb-2 block">Email</label>
-              <input
-                type="email"
-                required
-                className="w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={e => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="text-gray-300 text-sm font-medium mb-2 block">Message</label>
-              <textarea
-                required
-                rows="5"
-                className="w-full px-4 py-3.5 rounded-xl bg-gray-900/50 border border-gray-800 text-white placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/50 transition-colors resize-none"
-                placeholder="Tell us about your institution..."
-                value={formData.message}
-                onChange={e => setFormData({ ...formData, message: e.target.value })}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-400 to-green-500 text-black font-semibold hover:shadow-lg hover:shadow-emerald-500/50 transition-all"
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((f, i) => (
+            <motion.div
+              key={i}
+              {...fadeUp(i * 0.06)}
+              className="group flex gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-6 transition-all duration-300 hover:border-emerald-500/25 hover:bg-white/[0.04]"
             >
-              Send Message
-            </button>
-          </motion.form>
-
-          {/* CONTACT INFO */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={isInView ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="space-y-6"
-          >
-            {contactInfo.map((c, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-4 p-6 rounded-2xl bg-gray-900/40 backdrop-blur-sm border border-gray-800 hover:border-emerald-500/30 transition-all"
-              >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center text-white flex-shrink-0">
-                  <c.icon className="text-lg" />
-                </div>
-                <div>
-                  <h3 className="text-white font-semibold mb-1">{c.label}</h3>
-                  {c.link ? (
-                    <a href={c.link} className="text-gray-400 hover:text-emerald-400 transition-colors text-sm">{c.value}</a>
-                  ) : (
-                    <p className="text-gray-400 text-sm">{c.value}</p>
-                  )}
-                </div>
+              <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 transition-transform duration-300 group-hover:scale-110">
+                <f.icon className="h-5 w-5" />
               </div>
-            ))}
+              <div>
+                <h3 className="mb-1.5 text-sm font-bold text-white group-hover:text-emerald-300 transition-colors duration-200">{f.title}</h3>
+                <p className="text-sm leading-relaxed text-gray-500">{f.desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// ─── REVIEWS ─────────────────────────────────────────────────────────────────
+
+const Reviews = () => {
+  const testimonials = [
+    { name: 'Sarah Johnson', role: 'CS Student', avatar: 'SJ', color: 'from-emerald-500 to-green-600', review: "The AI assistant gives me instant answers with real citations from my professor's notes. It actually helps me learn instead of just giving me shortcuts." },
+    { name: 'Prof. Michael Chen', role: 'Mathematics', avatar: 'MC', color: 'from-teal-500 to-emerald-600', review: "The MCQ generator alone saves me three hours a week. And the query desk means students still get help even when I'm offline." },
+    { name: 'Dr. Emily Rodriguez', role: 'Dean of Students', avatar: 'ER', color: 'from-green-500 to-teal-600', review: 'We finally have complete visibility and control over our institutional data. Deploying Cortexa was the best decision we made this year.' },
+  ];
+
+  // return (
+  //   // <section id="reviews" className="bg-[#080808] py-24 md:py-32">
+  //   //   <div className="mx-auto max-w-7xl px-6">
+  //   //     <motion.div {...fadeUp()} className="mb-14 text-center">
+  //   //       <Label>Testimonials</Label>
+  //   //       <h2 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl lg:text-5xl">
+  //   //         Loved by educators worldwide.
+  //   //       </h2>
+  //   //     </motion.div>
+
+  //   //     <div className="grid gap-5 md:grid-cols-3">
+  //   //       {testimonials.map((t, i) => (
+  //   //         <motion.div
+  //   //           key={i}
+  //   //           {...fadeUp(i * 0.1)}
+  //   //           className="flex flex-col gap-6 rounded-2xl border border-white/[0.06] bg-white/[0.025] p-7 transition-all duration-300 hover:border-white/10 hover:bg-white/[0.04]"
+  //   //         >
+  //   //           <div className="flex gap-0.5">
+  //   //             {[...Array(t.rating ?? 5)].map((_, k) => (
+  //   //               <FiStar key={k} className="h-3.5 w-3.5 fill-emerald-400 text-emerald-400" />
+  //   //             ))}
+  //   //           </div>
+  //   //           <p className="flex-1 text-sm leading-relaxed text-gray-400">&ldquo;{t.review}&rdquo;</p>
+  //   //           <div className="flex items-center gap-3">
+  //   //             <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${t.color} text-xs font-bold text-white`}>
+  //   //               {t.avatar}
+  //   //             </div>
+  //   //             <div>
+  //   //               <p className="text-sm font-semibold text-white">{t.name}</p>
+  //   //               <p className="text-xs text-gray-500">{t.role}</p>
+  //   //             </div>
+  //   //           </div>
+  //   //         </motion.div>
+  //   //       ))}
+  //   //     </div>
+  //   //   </div>
+  //   // </section>
+  // );
+};
+
+// ─── CONTACT ─────────────────────────────────────────────────────────────────
+
+const ContactUs = () => {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-100px' });
+  const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+  const [status, setStatus] = useState({ state: 'idle', message: '' });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setStatus({ state: 'submitting', message: '' });
+    try {
+      const res = await contactAPI.submit(formData);
+      if (res.data.success) {
+        setStatus({ state: 'success', message: "Message sent! We'll be in touch within 24 hours." });
+        setFormData({ name: '', email: '', message: '' });
+        setTimeout(() => setStatus({ state: 'idle', message: '' }), 10000);
+      } else {
+        setStatus({ state: 'error', message: res.data.message || 'Something went wrong.' });
+      }
+    } catch (err) {
+      setStatus({ state: 'error', message: err.response?.data?.message || 'Failed to send. Please try again.' });
+    }
+  };
+
+  const field = 'w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3.5 text-sm text-white placeholder:text-gray-700 outline-none ring-0 transition-all duration-200 focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50';
+
+  return (
+    <section id="contact" className="relative overflow-hidden bg-[#080808] py-24 md:py-32">
+      {/* Corner glows */}
+      <div className="pointer-events-none absolute -left-64 -top-64 h-[500px] w-[500px] rounded-full bg-emerald-500/5 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-64 -right-64 h-[500px] w-[500px] rounded-full bg-teal-500/5 blur-3xl" />
+
+      <div ref={ref} className="relative z-10 mx-auto max-w-7xl px-6">
+        <div className="grid items-start gap-16 lg:grid-cols-2 lg:gap-24">
+
+          {/* Left — CTA copy */}
+          <motion.div
+            initial={{ opacity: 0, x: -24 }}
+            animate={isInView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="space-y-8 lg:sticky lg:top-32"
+          >
+            <div>
+              <Label>Contact</Label>
+              <h2 className="text-4xl font-extrabold tracking-tight text-white md:text-5xl lg:text-[3.25rem] leading-[1.1]">
+                Let&apos;s build something
+                <br />
+                <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                  remarkable.
+                </span>
+              </h2>
+              <p className="mt-5 max-w-sm text-[1.0625rem] leading-relaxed text-gray-400">
+                Whether you&apos;re ready to onboard your institution or just want to learn more, our team is happy to help.
+              </p>
+            </div>
+
+            {/* Email row */}
+            <a
+              href="mailto:contact@cortexa.com"
+              className="group flex w-fit items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-4 transition-all duration-300 hover:border-emerald-500/30 hover:bg-emerald-500/[0.04]"
+            >
+              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 transition-transform duration-300 group-hover:scale-105">
+                <FiMail className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">Email us</p>
+                <p className="text-sm font-semibold text-emerald-400 group-hover:text-emerald-300 transition-colors">contact@cortexa.com</p>
+              </div>
+              <FiArrowRight className="ml-3 h-4 w-4 text-gray-700 transition-all duration-200 group-hover:translate-x-1 group-hover:text-emerald-400" />
+            </a>
+
+            {/* Stats */}
+            <div className="flex gap-8">
+              {[['< 24h', 'Response time'], ['100+', 'Institutions'], ['99%', 'Satisfaction']].map(([v, l], i) => (
+                <div key={i}>
+                  <p className="text-2xl font-extrabold text-emerald-400">{v}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{l}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Right — Form */}
+          <motion.div
+            initial={{ opacity: 0, x: 24 }}
+            animate={isInView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <form
+              onSubmit={handleSubmit}
+              className="relative overflow-hidden rounded-3xl border border-white/[0.07] bg-white/[0.03] p-8 shadow-2xl shadow-black/60 backdrop-blur-xl md:p-10"
+            >
+              {/* Shimmer top-line */}
+              <div className="absolute left-1/2 top-0 h-px w-3/4 -translate-x-1/2 bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+
+              <div className="space-y-5">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label htmlFor="c-name" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500">Full Name</label>
+                    <input
+                      id="c-name" required
+                      disabled={status.state === 'submitting'}
+                      className={field} placeholder="John Doe"
+                      value={formData.name}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="c-email" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500">Email</label>
+                    <input
+                      id="c-email" type="email" required
+                      disabled={status.state === 'submitting'}
+                      className={field} placeholder="john@example.com"
+                      value={formData.email}
+                      onChange={e => setFormData({ ...formData, email: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="c-msg" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500">Message</label>
+                  <textarea
+                    id="c-msg" required rows={5}
+                    disabled={status.state === 'submitting'}
+                    className={`${field} resize-none`}
+                    placeholder="Tell us about your institution or ask us anything…"
+                    value={formData.message}
+                    onChange={e => setFormData({ ...formData, message: e.target.value })}
+                  />
+                </div>
+
+                {status.state === 'success' && (
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                    <FiCheckCircle className="h-4 w-4 flex-shrink-0 text-emerald-400" />
+                    <p className="text-sm text-emerald-300">{status.message}</p>
+                  </motion.div>
+                )}
+
+                {status.state === 'error' && (
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+                    <FiAlertCircle className="h-4 w-4 flex-shrink-0 text-red-400" />
+                    <p className="text-sm text-red-300">{status.message}</p>
+                  </motion.div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={status.state === 'submitting'}
+                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-sm font-semibold text-black shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:bg-emerald-400 hover:shadow-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98]"
+                >
+                  {status.state === 'submitting' ? (
+                    <><FiLoader className="h-4 w-4 animate-spin" /><span>Sending…</span></>
+                  ) : (
+                    <><span>Send Message</span><FiArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" /></>
+                  )}
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       </div>

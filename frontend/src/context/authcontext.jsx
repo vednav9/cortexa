@@ -5,9 +5,30 @@ import { API_BASE_URL } from "../config/api";
 
 const AuthContext = createContext(null);
 
+// Read cached user from localStorage for instant startup
+const getCachedUser = () => {
+    try {
+        const raw = localStorage.getItem("auth_user");
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+};
+
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const cached = getCachedUser();
+    const [user, setUserState] = useState(cached);
+    // If we have a cached user, skip the loading screen entirely
+    const [loading, setLoading] = useState(!cached);
+
+    const setUser = (u) => {
+        setUserState(u);
+        if (u) {
+            localStorage.setItem("auth_user", JSON.stringify(u));
+        } else {
+            localStorage.removeItem("auth_user");
+        }
+    };
 
     const refreshUser = async () => {
         try {
@@ -15,23 +36,23 @@ export const AuthProvider = ({ children }) => {
                 `${API_BASE_URL}/auth/me`,
                 { withCredentials: true }
             );
-
             setUser(data.user);
         } catch (err) {
             console.error("Failed to refresh user", err);
         }
     };
 
-
     useEffect(() => {
+        // Silent background validation — don't block UI
         axios
             .get(`${API_BASE_URL}/auth/me`, { withCredentials: true })
             .then(res => {
                 setUser(res.data.user);
-                // socket.connect();
             })
             .catch(() => {
-                setUser(null);
+                // Server rejected session — clear cached state
+                setUserState(null);
+                localStorage.removeItem("auth_user");
             })
             .finally(() => {
                 setLoading(false);
