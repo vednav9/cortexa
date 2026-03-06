@@ -9,6 +9,11 @@ import { useAuth } from "../../context/authcontext";
 import axios from "axios";
 import { API_BASE_URL } from "../../config/api";
 
+const hexToRgb = (hex) => {
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r ? `${parseInt(r[1],16)}, ${parseInt(r[2],16)}, ${parseInt(r[3],16)}` : '16, 185, 129';
+};
+
 export default function InstitutionNavbar({
   institution,
   onBackToDashboard,
