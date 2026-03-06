@@ -12,9 +12,13 @@ class ApiConfig {
     try {
       final secrets =
           await _channel.invokeMapMethod<String, String>('getSecrets');
-      _productionUrl  = secrets?['API_BASE_URL']   ?? '';
-      _productionAiUrl = secrets?['AI_BASE_URL']    ?? '';
-      geminiApiKey     = secrets?['GEMINI_API_KEY'] ?? '';
+      _productionUrl       = secrets?['API_BASE_URL']        ?? '';
+      _productionAiUrl     = secrets?['AI_BASE_URL']         ?? '';
+      geminiApiKey         = secrets?['GEMINI_API_KEY']      ?? '';
+      r2AccountId          = secrets?['R2_ACCOUNT_ID']       ?? '';
+      r2AccessKeyId        = secrets?['R2_ACCESS_KEY_ID']    ?? '';
+      r2SecretAccessKey    = secrets?['R2_SECRET_ACCESS_KEY'] ?? '';
+      r2BucketName         = secrets?['R2_BUCKET_NAME']      ?? '';
     } catch (_) {
       // Running on a non-Android platform or channel not available →
       // keep empty strings, getters will fall back to local dev URLs.
@@ -179,6 +183,23 @@ class ApiConfig {
   // NEVER hardcode the key here.
   // Obtain a key at: https://aistudio.google.com/app/apikey
   static String geminiApiKey = '';
+
+  /* ===========================
+     CLOUDFLARE R2 CONFIGURATION
+  =========================== */
+
+  // R2 credentials — populated from android/local.properties via MethodChannel.
+  // Leave all empty to disable cloud backup (recordings still saved locally).
+  static String r2AccountId        = '';
+  static String r2AccessKeyId      = '';
+  static String r2SecretAccessKey  = '';
+  static String r2BucketName       = '';
+
+  static bool get r2IsConfigured =>
+      r2AccountId.isNotEmpty &&
+      r2AccessKeyId.isNotEmpty &&
+      r2SecretAccessKey.isNotEmpty &&
+      r2BucketName.isNotEmpty;
 
   /* ===========================
      AI SERVICE ENDPOINTS

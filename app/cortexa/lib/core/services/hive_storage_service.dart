@@ -24,6 +24,7 @@ class HiveStorageService {
   static const String _settingsKey = 'settings';
   static const String _metadataKey = 'metadata';
   static const String _ragChatHistoryKey = 'rag_chat_history';
+  static const String _voiceRecordingsKey = 'voice_recordings';
   static const String _mcqSetsKey = 'mcq_sets';
   static const String _mcqAttemptsKey = 'mcq_attempts';
   static const String _uploadedDocumentsKey = 'uploaded_documents';
@@ -68,6 +69,7 @@ class HiveStorageService {
     _appBox.put(_settingsKey, _appBox.get(_settingsKey, defaultValue: <String, dynamic>{}));
     _appBox.put(_metadataKey, _appBox.get(_metadataKey, defaultValue: <String, dynamic>{}));
     _appBox.put(_ragChatHistoryKey, _appBox.get(_ragChatHistoryKey, defaultValue: <dynamic>[]));
+    _appBox.put(_voiceRecordingsKey, _appBox.get(_voiceRecordingsKey, defaultValue: <dynamic>[]));
     _appBox.put(_mcqSetsKey, _appBox.get(_mcqSetsKey, defaultValue: <String, dynamic>{}));
     _appBox.put(_mcqAttemptsKey, _appBox.get(_mcqAttemptsKey, defaultValue: <String, dynamic>{}));
     _appBox.put(_uploadedDocumentsKey, _appBox.get(_uploadedDocumentsKey, defaultValue: <String, dynamic>{}));
@@ -190,6 +192,38 @@ class HiveStorageService {
   /// Close all boxes (call when app closes)
   Future<void> closeBoxes() async {
     await _appBox.close();
+  }
+
+  // ===== Voice Recordings Methods =====
+
+  /// Returns all saved voice recordings, newest first.
+  List<Map<String, dynamic>> getVoiceRecordings() {
+    final raw = _appBox.get(_voiceRecordingsKey, defaultValue: <dynamic>[]) as List;
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Inserts a new recording at the front of the list (newest first).
+  Future<void> saveVoiceRecording(Map<String, dynamic> recording) async {
+    final list = getVoiceRecordings();
+    list.insert(0, recording);
+    await _appBox.put(_voiceRecordingsKey, list);
+  }
+
+  /// Merges [updates] into the recording with the given [id].
+  Future<void> updateVoiceRecording(String id, Map<String, dynamic> updates) async {
+    final list = getVoiceRecordings();
+    final idx = list.indexWhere((r) => r['id'] == id);
+    if (idx != -1) {
+      list[idx] = {...list[idx], ...updates};
+      await _appBox.put(_voiceRecordingsKey, list);
+    }
+  }
+
+  /// Removes the recording with the given [id].
+  Future<void> deleteVoiceRecording(String id) async {
+    final list = getVoiceRecordings();
+    list.removeWhere((r) => r['id'] == id);
+    await _appBox.put(_voiceRecordingsKey, list);
   }
 
   // ===== Registered Users Methods (for MockAuthRepository persistence) =====

@@ -20,6 +20,9 @@ dependencies:
   get_it: ^8.2.0
   injectable: ^2.5.2
   
+  # Cryptography (required for Cloudflare R2 SigV4 signing)
+  crypto: ^3.0.3
+
   # API & Network
   http: ^1.2.2
   dio: ^5.9.0
