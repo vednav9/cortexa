@@ -333,7 +333,7 @@ class _InstitutionAdminDashboardPageState
       case InstitutionAdminTab.academicStructure:
         return const AcademicStructureTab();
       case InstitutionAdminTab.queryDesk:
-        return const QueryDeskPage();
+        return QueryDeskPage(institutionId: widget.institution.id);
     }
   }
 

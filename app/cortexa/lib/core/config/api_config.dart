@@ -67,6 +67,10 @@ class ApiConfig {
   static const String studentLogin = '/student/login';
   static const String studentLogout = '/student/logout';
   static const String studentMyInstitution = '/student/my-institution';
+
+  // Student MCQ
+  static const String studentGetAssignedMCQs = '/student/mcq/assigned';
+  static String studentSubmitMCQ(String mcqSetId) => '/student/mcq/$mcqSetId/submit';
   
   // Teacher Auth
   static const String teacherRegister = '/teacher/register';

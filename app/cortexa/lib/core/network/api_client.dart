@@ -70,6 +70,51 @@ class ApiClient {
     }
   }
 
+  /// Direct POST to the AI service (bypasses backend proxy).
+  /// Uses [ApiConfig.aiBaseUrl] with no auth header and a 3-minute timeout
+  /// to accommodate cold-starts on the Render free tier.
+  Future<Map<String, dynamic>> aiPost(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) async {
+    final url = Uri.parse('${ApiConfig.aiBaseUrl}$endpoint');
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    print('🤖 AI POST Request: $url');
+    print('📦 Body: ${body != null ? jsonEncode(body) : "null"}');
+
+    try {
+      final response = await _client
+          .post(
+            url,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(const Duration(minutes: 3));
+
+      print('📡 AI Response Status: ${response.statusCode}');
+      print('📄 AI Response Body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
+
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'AI request timed out. The AI service may be starting up — please try again in a moment.',
+        statusCode: 408,
+        technicalMessage: 'AI request timed out after 3 minutes. AI URL: ${ApiConfig.aiBaseUrl}',
+      );
+    } catch (e) {
+      print('❌ Error in AI POST request: $e');
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Could not reach the AI service. Please check your connection and try again.',
+        technicalMessage: 'AI network error: $e',
+      );
+    }
+  }
+
   /// Like [post], but also returns response headers/status.
   /// Useful when the backend sets auth tokens in `Set-Cookie`.
   Future<ApiRawResponse> postRaw(

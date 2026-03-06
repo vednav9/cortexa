@@ -6,7 +6,9 @@ import '../../data/models/query_model.dart';
 import '../../data/repositories/query_repository.dart';
 
 class QueryDeskPage extends StatefulWidget {
-  const QueryDeskPage({super.key});
+  final String? institutionId;
+
+  const QueryDeskPage({super.key, this.institutionId});
 
   @override
   State<QueryDeskPage> createState() => _QueryDeskPageState();
@@ -50,8 +52,24 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
 
   Future<void> _initializeData() async {
     final currentUser = _storage.getCurrentUser();
-    _institutionId = currentUser?.institutionId;
     _userRole = currentUser?.role;
+
+    // Resolve institutionId: explicit param → stored user model → saved current institution
+    final candidateId = widget.institutionId ??
+        currentUser?.institutionId ??
+        (_storage.getCurrentInstitution()?['id'] as String?);
+    _institutionId = (candidateId != null && candidateId.isNotEmpty) ? candidateId : null;
+
+    // If still null, update the stored user model with the current institution data so
+    // subsequent navigations don't hit the same gap.
+    if (_institutionId != null &&
+        (currentUser?.institutionId == null ||
+            currentUser!.institutionId!.isEmpty) &&
+        currentUser != null) {
+      await _storage.saveUser(
+        currentUser.copyWith(institutionId: _institutionId),
+      );
+    }
 
     if (_institutionId != null) {
       await _loadQueries();
@@ -63,7 +81,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Institution not found'),
+            content: Text('Institution not found. Please re-login and try again.'),
             backgroundColor: AppColors.error,
           ),
         );

@@ -22,14 +22,13 @@ class AiRepository {
     try {
       print('🤖 Querying RAG: "$query"');
       
-      final response = await _apiClient.post(
-        '/ai/query',
+      final response = await _apiClient.aiPost(
+        '/query',
         body: RagQueryRequest(
           query: query,
           topK: topK,
           institutionId: institutionId,
         ).toJson(),
-        requiresAuth: true,
       );
 
       final ragResponse = RagResponse.fromJson(response);
@@ -72,13 +71,12 @@ class AiRepository {
     try {
       print('🌐 Querying Hybrid Assistant: "$query"');
       
-      final response = await _apiClient.post(
-        '/ai/assistant',
+      final response = await _apiClient.aiPost(
+        '/assistant',
         body: {
           'query': query,
           'use_web_fallback': useWebFallback,
         },
-        requiresAuth: true,
       );
 
       final ragResponse = RagResponse.fromJson(response);

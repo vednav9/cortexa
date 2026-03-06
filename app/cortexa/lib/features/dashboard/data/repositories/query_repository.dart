@@ -141,7 +141,7 @@ class QueryRepository {
       };
 
       final response = await _dio.post(
-        ApiConfig.queriesByInstitution(institutionId),
+        '${ApiConfig.baseUrl}${ApiConfig.queriesByInstitution(institutionId)}',
         data: requestData,
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
