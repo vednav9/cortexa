@@ -341,7 +341,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       case StudentTab.aiChatbot:
         return const StudentAIChatbotTab();
       case StudentTab.queryDesk:
-        return const QueryDeskPage();
+        return QueryDeskPage(institutionId: widget.institution.id);
     }
   }
 }

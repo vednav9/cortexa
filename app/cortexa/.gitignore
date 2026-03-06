@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Secrets — android/local.properties holds secrets and is already
+# gitignored by android/.gitignore. See android/local.properties.example.
+
 # Symbolication related
 app.*.symbols
 

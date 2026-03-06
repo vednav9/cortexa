@@ -10,7 +10,7 @@ import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../data/models/institution_display_model.dart';
-import '../../data/repositories/mock_dashboard_repository.dart';
+import '../../data/repositories/dashboard_repository.dart';
 import '../widgets/dashboard_drawer.dart';
 import '../widgets/institution_tab_view.dart';
 import '../widgets/search_filter_modal.dart';
@@ -26,7 +26,7 @@ class AdminDashboardPage extends StatefulWidget {
 }
 
 class _AdminDashboardPageState extends State<AdminDashboardPage> {
-  final _repository = MockDashboardRepository();
+  final _repository = getIt<DashboardRepository>();
   final _searchController = TextEditingController();
 
   List<InstitutionDisplayModel> _institutions = [];
@@ -108,49 +108,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _loadInstitutions() async {
     setState(() => _isLoading = true);
     try {
-      // Load institutions from mock repository
-      final mockInstitutions = await _repository.getInstitutions();
-      
-      // Load institutions from Hive storage
-      final storage = getIt<HiveStorageService>();
-      final storedInstitutions = storage.getAllInstitutions();
-      
-      // Convert stored institutions to InstitutionDisplayModel
-      final savedInstitutions = <InstitutionDisplayModel>[];
-      for (var data in storedInstitutions) {
-        try {
-          final institution = InstitutionDisplayModel(
-            id: (data['id'] as String?) ?? '',
-            name: (data['institution_name'] as String?) ?? 'Unknown Institution',
-            description: (data['short_description'] as String?) ?? '',
-            logoUrl: data['logo_path'] as String?,
-            bannerImageUrl: data['banner_image_path'] as String?,
-            type: (data['institution_type'] as String?) ?? 'Institute',
-            city: (data['city'] as String?) ?? 'Unknown',
-            country: (data['country'] as String?) ?? 'Unknown',
-            studentCount: 0,
-            customUrlSlug: (data['custom_url_slug'] as String?) ?? 'institution',
-            primaryBrandColor: (data['primary_brand_color'] as String?) ?? '#34d399',
-            createdAt: DateTime.now(),
-          );
-          savedInstitutions.add(institution);
-        } catch (e) {
-          print('⚠️ Error converting institution data: $e');
-          print('📋 Data that caused error: $data');
-        }
-      }
-      
-      // Combine mock and saved institutions (avoid duplicates by ID)
-      final allInstitutions = <String, InstitutionDisplayModel>{};
-      for (final inst in mockInstitutions) {
-        allInstitutions[inst.id] = inst;
-      }
-      for (final inst in savedInstitutions) {
-        allInstitutions[inst.id] = inst; // Saved institutions override mock ones
-      }
+      // Fetch institutions from API (force refresh to bypass potentially stale cache)
+      final apiInstitutions = await _repository.getInstitutions(forceRefresh: true);
       
       setState(() {
-        _institutions = allInstitutions.values.toList();
+        _institutions = apiInstitutions;
         _filteredInstitutions = _institutions;
         _isLoading = false;
       });
@@ -248,43 +210,48 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => SearchFilterModal(
-        searchController: _searchController,
-        selectedType: _selectedType,
-        selectedState: _selectedState,
-        selectedAffiliation: _selectedAffiliation,
-        selectedBoard: _selectedBoard,
-        selectedStrength: _selectedStrength,
-        onTypeChanged: (value) {
-          setState(() => _selectedType = value);
-        },
-        onStateChanged: (value) {
-          setState(() => _selectedState = value);
-        },
-        onAffiliationChanged: (value) {
-          setState(() => _selectedAffiliation = value);
-        },
-        onBoardChanged: (value) {
-          setState(() => _selectedBoard = value);
-        },
-        onStrengthChanged: (value) {
-          setState(() => _selectedStrength = value);
-        },
-        onClearFilters: _clearFilters,
-        onApplyFilters: _applyFilters,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: SearchFilterModal(
+            searchController: _searchController,
+            selectedType: _selectedType,
+            selectedState: _selectedState,
+            selectedAffiliation: _selectedAffiliation,
+            selectedBoard: _selectedBoard,
+            selectedStrength: _selectedStrength,
+            onTypeChanged: (value) {
+              setState(() => _selectedType = value);
+            },
+            onStateChanged: (value) {
+              setState(() => _selectedState = value);
+            },
+            onAffiliationChanged: (value) {
+              setState(() => _selectedAffiliation = value);
+            },
+            onBoardChanged: (value) {
+              setState(() => _selectedBoard = value);
+            },
+            onStrengthChanged: (value) {
+              setState(() => _selectedStrength = value);
+            },
+            onClearFilters: _clearFilters,
+            onApplyFilters: _applyFilters,
+          ),
+        ),
       ),
     );
   }
 
   void _navigateToInstitutionDetail(InstitutionDisplayModel institution, bool isFromMyInstitutionsTab) {
-    // Only navigate to admin dashboard if:
-    // 1. It's the admin's own institution AND
-    // 2. Clicked from "My Institutions" tab (not from "Browse Institutions")
     final storage = getIt<HiveStorageService>();
     final currentUser = storage.getCurrentUser();
     final isOwnInstitution = currentUser?.institutionId == institution.id;
 
-    if (isOwnInstitution && isFromMyInstitutionsTab) {
+    // If clicked from "My Institutions" tab, navigate to Institution Admin Dashboard
+    // If clicked from "Browse Institutions" tab, show public detail view
+    if (isFromMyInstitutionsTab && isOwnInstitution) {
       // Navigate to Institution Admin Dashboard (full environment)
       Navigator.push(
         context,

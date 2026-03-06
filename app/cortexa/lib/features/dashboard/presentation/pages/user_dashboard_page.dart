@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/bloc/terminology/terminology_bloc.dart';
@@ -12,7 +13,7 @@ import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../teacher/presentation/pages/teacher_dashboard_page.dart';
 import '../../../student/presentation/pages/student_dashboard_page.dart';
 import '../../data/models/institution_display_model.dart';
-import '../../data/repositories/mock_dashboard_repository.dart';
+import '../../data/repositories/dashboard_repository.dart';
 import '../widgets/dashboard_drawer.dart';
 import '../widgets/institution_tab_view.dart';
 import '../widgets/search_filter_modal.dart';
@@ -27,7 +28,7 @@ class UserDashboardPage extends StatefulWidget {
 }
 
 class _UserDashboardPageState extends State<UserDashboardPage> {
-  final _repository = MockDashboardRepository();
+  final _repository = getIt<DashboardRepository>();
   final _searchController = TextEditingController();
 
   List<InstitutionDisplayModel> _institutions = [];
@@ -108,49 +109,11 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   Future<void> _loadInstitutions() async {
     setState(() => _isLoadingInstitutions = true);
     try {
-      // Load institutions from mock repository
-      final mockInstitutions = await _repository.getInstitutions();
-      
-      // Load institutions from Hive storage
-      final storage = getIt<HiveStorageService>();
-      final storedInstitutions = storage.getAllInstitutions();
-      
-      // Convert stored institutions to InstitutionDisplayModel
-      final savedInstitutions = <InstitutionDisplayModel>[];
-      for (var data in storedInstitutions) {
-        try {
-          final institution = InstitutionDisplayModel(
-            id: (data['id'] as String?) ?? '',
-            name: (data['institution_name'] as String?) ?? 'Unknown Institution',
-            description: (data['short_description'] as String?) ?? '',
-            logoUrl: data['logo_path'] as String?,
-            bannerImageUrl: data['banner_image_path'] as String?,
-            type: (data['institution_type'] as String?) ?? 'Institute',
-            city: (data['city'] as String?) ?? 'Unknown',
-            country: (data['country'] as String?) ?? 'Unknown',
-            studentCount: 0,
-            customUrlSlug: (data['custom_url_slug'] as String?) ?? 'institution',
-            primaryBrandColor: (data['primary_brand_color'] as String?) ?? '#34d399',
-            createdAt: DateTime.now(),
-          );
-          savedInstitutions.add(institution);
-        } catch (e) {
-          print('⚠️ Error converting institution data: $e');
-          print('📋 Data that caused error: $data');
-        }
-      }
-      
-      // Combine mock and saved institutions (avoid duplicates by ID)
-      final allInstitutions = <String, InstitutionDisplayModel>{};
-      for (final inst in mockInstitutions) {
-        allInstitutions[inst.id] = inst;
-      }
-      for (final inst in savedInstitutions) {
-        allInstitutions[inst.id] = inst; // Saved institutions override mock ones
-      }
+      // Fetch institutions from API (force refresh to bypass potentially stale cache)
+      final apiInstitutions = await _repository.getInstitutions(forceRefresh: true);
       
       setState(() {
-        _institutions = allInstitutions.values.toList();
+        _institutions = apiInstitutions;
         _filteredInstitutions = _institutions;
         _isLoadingInstitutions = false;
       });
@@ -160,9 +123,10 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     } catch (e) {
       setState(() => _isLoadingInstitutions = false);
       if (mounted) {
+        final errorMessage = e is ApiException ? e.message : 'Failed to load institutions. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load institutions: $e'),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
           ),
         );
@@ -247,30 +211,36 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => SearchFilterModal(
-        searchController: _searchController,
-        selectedType: _selectedType,
-        selectedState: _selectedState,
-        selectedAffiliation: _selectedAffiliation,
-        selectedBoard: _selectedBoard,
-        selectedStrength: _selectedStrength,
-        onTypeChanged: (value) {
-          setState(() => _selectedType = value);
-        },
-        onStateChanged: (value) {
-          setState(() => _selectedState = value);
-        },
-        onAffiliationChanged: (value) {
-          setState(() => _selectedAffiliation = value);
-        },
-        onBoardChanged: (value) {
-          setState(() => _selectedBoard = value);
-        },
-        onStrengthChanged: (value) {
-          setState(() => _selectedStrength = value);
-        },
-        onClearFilters: _clearInstitutionFilters,
-        onApplyFilters: _applyInstitutionFilters,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: SearchFilterModal(
+            searchController: _searchController,
+            selectedType: _selectedType,
+            selectedState: _selectedState,
+            selectedAffiliation: _selectedAffiliation,
+            selectedBoard: _selectedBoard,
+            selectedStrength: _selectedStrength,
+            onTypeChanged: (value) {
+              setState(() => _selectedType = value);
+            },
+            onStateChanged: (value) {
+              setState(() => _selectedState = value);
+            },
+            onAffiliationChanged: (value) {
+              setState(() => _selectedAffiliation = value);
+            },
+            onBoardChanged: (value) {
+              setState(() => _selectedBoard = value);
+            },
+            onStrengthChanged: (value) {
+              setState(() => _selectedStrength = value);
+            },
+            onClearFilters: _clearInstitutionFilters,
+            onApplyFilters: _applyInstitutionFilters,
+          ),
+        ),
       ),
     );
   }
@@ -280,9 +250,9 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     final currentUser = storage.getCurrentUser();
     final isOwnInstitution = currentUser?.institutionId == institution.id;
     
-    // If it's from My Institutions tab and it's the user's own institution,
-    // navigate to role-specific dashboard (teacher or student environment)
-    if (isOwnInstitution && isFromMyInstitutionsTab) {
+    // If clicked from "My Institutions" tab, navigate to role-specific dashboard
+    // If clicked from "Browse Institutions" tab, show public detail view
+    if (isFromMyInstitutionsTab && isOwnInstitution) {
       final userRole = currentUser!.role.toLowerCase();
       
       if (userRole == 'teacher') {

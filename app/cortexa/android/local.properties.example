@@ -1,0 +1,9 @@
+flutter.sdk=/path/to/your/flutter/sdk
+sdk.dir=/path/to/your/android/sdk
+
+# ─── App Secrets ────────────────────────────────────────────────────────────────
+# Copy this file to local.properties and fill in your actual values.
+# local.properties is gitignored — NEVER commit the real file.
+GEMINI_API_KEY=your-gemini-api-key-from-aistudio.google.com
+API_BASE_URL=https://your-backend-url.com/api
+AI_BASE_URL=https://your-backend-url.com/api/ai
