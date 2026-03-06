@@ -567,7 +567,6 @@ const LectureRecorder = () => {
         )}
       </AnimatePresence>
     </div>
-    </div>
   );
 };
 
