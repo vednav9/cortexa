@@ -19,8 +19,9 @@ export default function InstitutionNavbar({
   onBackToDashboard,
   brandColor = "#10b981",
 }) {
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const profileMenuRef = useRef(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const profileRef = useRef(null);
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
   const rgb = hexToRgb(brandColor);
@@ -29,6 +30,7 @@ export default function InstitutionNavbar({
     const handler = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setProfileOpen(false);
+        setMobileOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
