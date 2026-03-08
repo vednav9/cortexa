@@ -52,8 +52,18 @@ export const uploadToR2 = async (fileBuffer, fileName, folder = "images", conten
  */
 export const deleteFromR2 = async (fileUrl) => {
     try {
-        // Extract key from URL
-        const key = fileUrl.replace(`${process.env.CLOUDFLARE_R2_PUBLIC_DEVELOPMENT_URL}/`, "");
+        if (!fileUrl || typeof fileUrl !== "string") {
+            throw new Error("Invalid file URL");
+        }
+
+        // Extract object key from URL path so deletion works even if
+        // domain/protocol/trailing slash configuration changes.
+        const parsed = new URL(fileUrl);
+        const key = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+
+        if (!key) {
+            throw new Error("Unable to extract R2 object key from URL");
+        }
 
         const command = new DeleteObjectCommand({
             Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,

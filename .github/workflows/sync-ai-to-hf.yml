@@ -4,21 +4,31 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "ai/**"
+  workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Push ai/ contents to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -euo pipefail
+
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "HF_TOKEN secret is missing. Configure repository secret HF_TOKEN."
+            exit 1
+          fi
+
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
 

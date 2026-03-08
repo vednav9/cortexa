@@ -230,8 +230,8 @@ def health_check():
 @app.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    institution_id: Optional[str] = None,
-    course_id: Optional[str] = None
+    institution_id: Optional[str] = Form(None),
+    course_id: Optional[str] = Form(None),
 ):
     """Upload and process document for RAG system"""
     try:
