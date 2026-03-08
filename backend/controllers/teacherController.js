@@ -524,15 +524,19 @@ export const deleteDocument = async (req, res) => {
             });
         }
 
-        // Delete from MongoDB
-        await Document.findByIdAndDelete(documentId);
-
-        // Delete from R2 storage (non-fatal — MongoDB record is already gone)
+        // Delete from R2 first so we do not orphan storage objects.
         if (document.fileUrl) {
-            deleteFromR2(document.fileUrl).catch(err =>
-                console.error("R2 delete error:", err.message)
-            );
+            const r2Deleted = await deleteFromR2(document.fileUrl);
+            if (!r2Deleted) {
+                return res.status(502).json({
+                    success: false,
+                    message: "Failed to delete file from storage. Please retry."
+                });
+            }
         }
+
+        // Delete from MongoDB only after storage deletion succeeds
+        await Document.findByIdAndDelete(documentId);
 
         res.status(200).json({
             success: true,
@@ -594,6 +598,54 @@ export const markDocumentProcessed = async (req, res) => {
             success: false,
             message: "Failed to update document",
             error: error.message
+        });
+    }
+};
+
+/* =========================
+   MARK DOCUMENT FAILED
+========================= */
+export const markDocumentFailed = async (req, res) => {
+    try {
+        const { documentId } = req.params;
+        const { error } = req.body || {};
+        const teacherId = req.user.id;
+
+        const document = await Document.findById(documentId);
+
+        if (!document) {
+            return res.status(404).json({
+                success: false,
+                message: "Document not found"
+            });
+        }
+
+        if (document.uploadedBy.toString() !== teacherId) {
+            return res.status(403).json({
+                success: false,
+                message: "Not authorized"
+            });
+        }
+
+        const message = typeof error === "string" && error.trim().length > 0
+            ? error.trim().slice(0, 500)
+            : "AI indexing failed";
+
+        await Document.findByIdAndUpdate(documentId, {
+            isProcessed: false,
+            processingError: message,
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Document marked as failed"
+        });
+    } catch (err) {
+        console.error("Mark failed error:", err);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update document",
+            error: err.message
         });
     }
 };

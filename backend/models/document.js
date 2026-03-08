@@ -37,12 +37,7 @@ const documentSchema = new mongoose.Schema({
         ref: "Teacher",
         required: true
     },
-    // Vector DB information
-    chunks: [{
-        text: String,
-        embedding: [Number],
-        metadata: mongoose.Schema.Types.Mixed
-    }],
+    // Processing status mirrored from HF indexing workflow
     isProcessed: {
         type: Boolean,
         default: false
