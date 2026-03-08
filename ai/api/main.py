@@ -230,8 +230,8 @@ def health_check():
 @app.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    institution_id: Optional[str] = None,
-    course_id: Optional[str] = None
+    institution_id: Optional[str] = Form(None),
+    course_id: Optional[str] = Form(None),
 ):
     """Upload and process document for RAG system"""
     try:
@@ -260,6 +260,60 @@ async def upload_document(
             chunks_added=len(chunks),
             status="success"
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/rag/ingest-text")
+async def ingest_text_to_rag(
+    text: str = Form(...),
+    lecture_title: str = Form("Transcript"),
+    institution_id: Optional[str] = Form(None),
+    course_id: Optional[str] = Form(None),
+    teacher_id: Optional[str] = Form(None),
+    recording_id: Optional[str] = Form(None),
+):
+    """Ingest edited plain text directly into the RAG knowledge base.
+
+    Used when a teacher corrects a lecture transcript in the app after the
+    initial auto-transcription — ensures the corrected text is what students
+    search against, not the original version.
+    """
+    import tempfile
+    import time as _time
+
+    try:
+        doc_processor = get_doc_processor()
+        vector_store = get_vector_store()
+
+        # Write the text to a temporary file so doc_processor can chunk it
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8"
+        )
+        tmp.write(text)
+        tmp.close()
+
+        metadata = {
+            "institution_id": institution_id,
+            "course_id": course_id,
+            "lecture_title": lecture_title,
+            "teacher_id": teacher_id,
+            "content_type": "lecture_transcript",
+            "recording_id": recording_id,
+        }
+
+        try:
+            chunks = doc_processor.process_document(tmp.name, metadata)
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+        texts = [c.text for c in chunks]
+        metadatas = [c.metadata for c in chunks]
+        doc_id = recording_id or f"text_{int(_time.time())}"
+        ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
+
+        vector_store.add_documents(texts, metadatas, ids)
+        return {"status": "success", "chunks_added": len(chunks)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

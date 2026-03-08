@@ -44,9 +44,13 @@ android {
         versionName = flutter.versionName
 
         // Secrets read from android/local.properties at build time — never in source control.
-        buildConfigField("String", "GEMINI_API_KEY", "\"${localProps["GEMINI_API_KEY"] ?: ""}\"")
-        buildConfigField("String", "API_BASE_URL",   "\"${localProps["API_BASE_URL"]   ?: ""}\"")
-        buildConfigField("String", "AI_BASE_URL",    "\"${localProps["AI_BASE_URL"]    ?: ""}\"")
+        buildConfigField("String", "GEMINI_API_KEY",         "\"${localProps["GEMINI_API_KEY"]         ?: ""}\"")
+        buildConfigField("String", "API_BASE_URL",          "\"${localProps["API_BASE_URL"]          ?: ""}\"")
+        buildConfigField("String", "AI_BASE_URL",           "\"${localProps["AI_BASE_URL"]           ?: ""}\"")
+        buildConfigField("String", "R2_ACCOUNT_ID",         "\"${localProps["R2_ACCOUNT_ID"]         ?: ""}\"")
+        buildConfigField("String", "R2_ACCESS_KEY_ID",      "\"${localProps["R2_ACCESS_KEY_ID"]      ?: ""}\"")
+        buildConfigField("String", "R2_SECRET_ACCESS_KEY",  "\"${localProps["R2_SECRET_ACCESS_KEY"]  ?: ""}\"")
+        buildConfigField("String", "R2_BUCKET_NAME",        "\"${localProps["R2_BUCKET_NAME"]        ?: ""}\"")
     }
 
     buildTypes {
