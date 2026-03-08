@@ -240,7 +240,14 @@ class TeacherAiRepository {
       }
     } catch (e) {
       aiError = e.toString();
-      // File is safely stored in R2 + MongoDB. Teacher sees orange snackbar.
+      // Persist the failure reason when backend supports status sync.
+      if (statusSyncSupported && documentId.isNotEmpty) {
+        try {
+          await _markDocumentFailed(documentId, aiError);
+        } catch (_) {
+          // Non-fatal: file remains uploaded and retry can happen later.
+        }
+      }
     }
 
     return {
@@ -264,6 +271,14 @@ class TeacherAiRepository {
     );
   }
 
+  Future<void> _markDocumentFailed(String documentId, String errorMessage) async {
+    await _apiClient.patch(
+      '/teacher/notes/$documentId/mark-failed',
+      body: {'error': errorMessage},
+      requiresAuth: true,
+    );
+  }
+
   /// POST the file bytes directly to the HF Space /upload endpoint.
   /// Throws on any HTTP error so the caller can surface it.
   Future<int?> _indexInAi({
@@ -273,7 +288,7 @@ class TeacherAiRepository {
     required String courseId,
     required String institutionId,
   }) async {
-    final base = ApiConfig.aiBaseUrl; // e.g. https://jay-10020-cortexa-ai.hf.space/api
+    final base = ApiConfig.aiBaseUrl; 
     final aiRoot =
         base.endsWith('/api') ? base.substring(0, base.length - 4) : base;
 
