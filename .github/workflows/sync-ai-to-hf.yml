@@ -1,0 +1,36 @@
+name: Sync AI folder to Hugging Face Spaces
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ai/**"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Push ai/ contents to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+          # Clone the HF Space into a temp directory
+          git clone https://jay-10020:$HF_TOKEN@huggingface.co/spaces/jay-10020/cortexa-ai hf_space
+
+          # Sync ai/ contents into the clone, delete files removed from ai/
+          rsync -av --delete --exclude='.git' ai/ hf_space/
+
+          # Commit only if something changed, then push
+          cd hf_space
+          git add -A
+          git diff --cached --quiet && echo "No changes to sync." && exit 0
+          git commit -m "sync: from GitHub commit ${{ github.sha }}"
+          git push

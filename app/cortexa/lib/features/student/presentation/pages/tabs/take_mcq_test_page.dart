@@ -1,14 +1,20 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../../../../../core/constants/app_colors.dart';
+import '../../../../teacher/data/models/mcq_model.dart';
+import '../../../data/repositories/student_mcq_repository.dart';
 
 class TakeMCQTestPage extends StatefulWidget {
-  final Map<String, dynamic> test;
+  final MCQSetModel mcqSet;
   final bool isReviewMode;
+  final Map<int, int>? previousAnswers;
+  final int? previousScore;
 
   const TakeMCQTestPage({
     super.key,
-    required this.test,
+    required this.mcqSet,
     this.isReviewMode = false,
+    this.previousAnswers,
+    this.previousScore,
   });
 
   @override
@@ -16,59 +22,30 @@ class TakeMCQTestPage extends StatefulWidget {
 }
 
 class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
-  late List<Map<String, dynamic>> _questions;
+  late final List<MCQModel> _questions;
   final Map<int, int> _selectedAnswers = {};
   int _currentQuestionIndex = 0;
   bool _isTestCompleted = false;
   int? _score;
+  bool _isSubmitting = false;
+  final _startTime = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _loadQuestions();
-    
-    // If in review mode, set up as completed
+    _questions = widget.mcqSet.questions;
+
     if (widget.isReviewMode) {
       _isTestCompleted = true;
-      _score = widget.test['score'];
-      // Generate mock selections for completed test
-      _generateReviewAnswers();
-    }
-  }
-
-  void _generateReviewAnswers() {
-    // Generate mock selected answers based on the score
-    final correctCount = (_score! * _questions.length / 100).round();
-    for (int i = 0; i < _questions.length; i++) {
-      if (i < correctCount) {
-        // Correct answer
-        _selectedAnswers[i] = _questions[i]['correctAnswer'];
-      } else {
-        // Wrong answer
-        final correctAnswer = _questions[i]['correctAnswer'] as int;
-        _selectedAnswers[i] = (correctAnswer + 1) % 4;
+      _score = widget.previousScore;
+      if (widget.previousAnswers != null) {
+        _selectedAnswers.addAll(widget.previousAnswers!);
       }
     }
   }
 
-  void _loadQuestions() {
-    // Generate mock questions based on test data
-    final questionCount = widget.test['questions'] as int;
-    _questions = List.generate(questionCount, (index) {
-      return {
-        'question': 'Question ${index + 1}: What is the correct answer for this ${widget.test['title']} question?',
-        'options': [
-          'Option A: First possible answer',
-          'Option B: Second possible answer',
-          'Option C: Third possible answer',
-          'Option D: Fourth possible answer',
-        ],
-        'correctAnswer': index % 4, // Mock correct answer
-      };
-    });
-  }
-
   void _selectAnswer(int questionIndex, int answerIndex) {
+    if (_isTestCompleted) return;
     setState(() {
       _selectedAnswers[questionIndex] = answerIndex;
     });
@@ -76,41 +53,64 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
 
   void _nextQuestion() {
     if (_currentQuestionIndex < _questions.length - 1) {
-      setState(() {
-        _currentQuestionIndex++;
-      });
+      setState(() => _currentQuestionIndex++);
     }
   }
 
   void _previousQuestion() {
     if (_currentQuestionIndex > 0) {
-      setState(() {
-        _currentQuestionIndex--;
-      });
+      setState(() => _currentQuestionIndex--);
     }
   }
 
-  void _submitTest() {
-    // Calculate score
+  Future<void> _submitTest() async {
     int correctAnswers = 0;
     for (int i = 0; i < _questions.length; i++) {
-      if (_selectedAnswers[i] == _questions[i]['correctAnswer']) {
+      if (_selectedAnswers[i] == _questions[i].correctAnswer) {
         correctAnswers++;
       }
     }
+    final score = ((_questions.isEmpty
+            ? 0.0
+            : correctAnswers / _questions.length) *
+        100)
+        .round();
+    final timeTaken = DateTime.now().difference(_startTime).inSeconds;
+    final percentage = _questions.isEmpty
+        ? 0.0
+        : (correctAnswers / _questions.length) * 100;
 
     setState(() {
-      _score = ((correctAnswers / _questions.length) * 100).round();
+      _score = score;
       _isTestCompleted = true;
+      _isSubmitting = true;
     });
 
-    // Show results dialog
+    // Submit to backend (fire and forget â€” non-fatal)
+    final repo = StudentMcqRepository();
+    await repo.submitAttempt(
+      mcqSetId: widget.mcqSet.id,
+      answers: Map<int, int>.from(_selectedAnswers),
+      timeTaken: timeTaken,
+      score: score,
+      totalQuestions: _questions.length,
+      percentage: percentage,
+    );
+
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+      _showResultDialog(correctAnswers, score);
+    }
+  }
+
+  void _showResultDialog(int correctAnswers, int score) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
             Icon(Icons.celebration, color: AppColors.primary, size: 28),
@@ -137,7 +137,7 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
               child: Column(
                 children: [
                   Text(
-                    '$_score%',
+                    '$score%',
                     style: const TextStyle(
                       fontSize: 48,
                       fontWeight: FontWeight.bold,
@@ -161,8 +161,11 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context, _score); // Return to test list with score
+              Navigator.pop(context);
+              Navigator.pop(context, {
+                'score': score,
+                'answers': Map<int, int>.from(_selectedAnswers),
+              });
             },
             child: const Text(
               'Exit',
@@ -173,17 +176,14 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
             ),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              // Stay on results page - results are already visible
-            },
+            onPressed: () => Navigator.pop(context),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 12),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('View Answers'),
           ),
@@ -194,6 +194,50 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_questions.isEmpty) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          elevation: 0,
+          leading: IconButton(
+            icon:
+                const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            widget.mcqSet.title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.quiz_outlined,
+                    size: 64, color: AppColors.textTertiary),
+                SizedBox(height: 16),
+                Text(
+                  'No questions in this test.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final currentQuestion = _questions[_currentQuestionIndex];
     final progress = (_currentQuestionIndex + 1) / _questions.length;
 
@@ -204,61 +248,36 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
         elevation: 0,
         leading: _isTestCompleted
             ? IconButton(
-                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                onPressed: () => Navigator.pop(context, _score),
+                icon: const Icon(Icons.arrow_back,
+                    color: AppColors.textPrimary),
+                onPressed: () => Navigator.pop(context,
+                    widget.isReviewMode
+                        ? null
+                        : {
+                            'score': _score,
+                            'answers':
+                                Map<int, int>.from(_selectedAnswers),
+                          }),
               )
             : IconButton(
                 icon: const Icon(Icons.close, color: AppColors.textPrimary),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      backgroundColor: AppColors.surface,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: const Text(
-                        'Exit Test?',
-                        style: TextStyle(color: AppColors.textPrimary),
-                      ),
-                      content: const Text(
-                        'Your progress will be lost if you exit now.',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancel'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            Navigator.pop(context);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Exit'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                onPressed: _confirmExit,
               ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.test['title'],
+              widget.mcqSet.title,
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               _isTestCompleted
-                  ? 'Test Completed - Score: $_score%'
+                  ? 'Score: $_score%'
                   : 'Question ${_currentQuestionIndex + 1} of ${_questions.length}',
               style: TextStyle(
                 fontSize: 12,
@@ -273,17 +292,73 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                 preferredSize: const Size.fromHeight(4),
                 child: LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: AppColors.textTertiary.withValues(alpha: 0.2),
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  backgroundColor:
+                      AppColors.textTertiary.withValues(alpha: 0.2),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.primary),
                 ),
               ),
       ),
-      body: _isTestCompleted ? _buildResultsView() : _buildQuestionView(currentQuestion),
-      bottomNavigationBar: _isTestCompleted ? null : _buildNavigationBar(),
+      body: _isSubmitting
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: AppColors.primary),
+                  SizedBox(height: 16),
+                  Text(
+                    'Submitting your answers...',
+                    style: TextStyle(
+                        color: AppColors.textSecondary, fontSize: 14),
+                  ),
+                ],
+              ),
+            )
+          : _isTestCompleted
+              ? _buildResultsView()
+              : _buildQuestionView(currentQuestion),
+      bottomNavigationBar:
+          (_isTestCompleted || _isSubmitting) ? null : _buildNavigationBar(),
     );
   }
 
-  Widget _buildQuestionView(Map<String, dynamic> question) {
+  void _confirmExit() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Exit Test?',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Your progress will be lost if you exit now.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuestionView(MCQModel question) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -299,7 +374,7 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
               ),
             ),
             child: Text(
-              question['question'],
+              question.question,
               style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
@@ -318,72 +393,70 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
             ),
           ),
           const SizedBox(height: 16),
-          ...List.generate(
-            question['options'].length,
-            (index) {
-              final isSelected = _selectedAnswers[_currentQuestionIndex] == index;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  onTap: () => _selectAnswer(_currentQuestionIndex, index),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
+          ...List.generate(question.options.length, (index) {
+            final isSelected =
+                _selectedAnswers[_currentQuestionIndex] == index;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
+                onTap: () => _selectAnswer(_currentQuestionIndex, index),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primary.withValues(alpha: 0.1)
+                        : AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
                       color: isSelected
-                          ? AppColors.primary.withValues(alpha: 0.1)
-                          : AppColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.textTertiary.withValues(alpha: 0.2),
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primary
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : AppColors.textTertiary.withValues(alpha: 0.3),
-                              width: 2,
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: isSelected
-                              ? const Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: Colors.white,
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            question['options'][index],
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: AppColors.textPrimary,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      ],
+                          ? AppColors.primary
+                          : AppColors.textTertiary.withValues(alpha: 0.2),
+                      width: isSelected ? 2 : 1,
                     ),
                   ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primary
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.textTertiary
+                                    .withValues(alpha: 0.3),
+                            width: 2,
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: isSelected
+                            ? const Icon(Icons.check,
+                                size: 16, color: Colors.white)
+                            : null,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          question.options[index],
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: AppColors.textPrimary,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -401,18 +474,15 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
               gradient: LinearGradient(
                 colors: [
                   AppColors.primary.withValues(alpha: 0.1),
-                  AppColors.primary.withValues(alpha: 0.05),
+                  AppColors.primary.withValues(alpha: 0.04),
                 ],
               ),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
               children: [
-                const Icon(
-                  Icons.emoji_events,
-                  size: 64,
-                  color: AppColors.primary,
-                ),
+                const Icon(Icons.emoji_events,
+                    size: 64, color: AppColors.primary),
                 const SizedBox(height: 16),
                 Text(
                   'Your Score: $_score%',
@@ -424,7 +494,7 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _score! >= 70 ? 'Great job!' : 'Keep practicing!',
+                  (_score ?? 0) >= 70 ? 'Great job! ðŸŽ‰' : 'Keep practicing!',
                   style: const TextStyle(
                     fontSize: 16,
                     color: AppColors.textSecondary,
@@ -447,11 +517,11 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _questions.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 16),
+            separatorBuilder: (_, __) => const SizedBox(height: 16),
             itemBuilder: (context, index) {
               final question = _questions[index];
               final selectedAnswer = _selectedAnswers[index];
-              final correctAnswer = question['correctAnswer'];
+              final correctAnswer = question.correctAnswer;
               final isCorrect = selectedAnswer == correctAnswer;
 
               return Container(
@@ -472,7 +542,8 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: isCorrect
                                 ? AppColors.primary.withValues(alpha: 0.1)
@@ -483,9 +554,12 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                isCorrect ? Icons.check_circle : Icons.cancel,
+                                isCorrect
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
                                 size: 16,
-                                color: isCorrect ? AppColors.primary : Colors.red,
+                                color:
+                                    isCorrect ? AppColors.primary : Colors.red,
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -493,7 +567,9 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: isCorrect ? AppColors.primary : Colors.red,
+                                  color: isCorrect
+                                      ? AppColors.primary
+                                      : Colors.red,
                                 ),
                               ),
                             ],
@@ -512,7 +588,7 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      question['question'],
+                      question.question,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -539,13 +615,34 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Your answer: ${question['options'][selectedAnswer]}',
+                                'Your answer: ${question.options[selectedAnswer]}',
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: isCorrect ? AppColors.primary : Colors.red,
+                                  color:
+                                      isCorrect ? AppColors.primary : Colors.red,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.remove_circle_outline,
+                                size: 18, color: Colors.orange),
+                            SizedBox(width: 8),
+                            Text(
+                              'Not answered',
+                              style: TextStyle(
+                                  fontSize: 13, color: Colors.orange),
                             ),
                           ],
                         ),
@@ -560,19 +657,48 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.lightbulb,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
+                            const Icon(Icons.lightbulb,
+                                size: 18, color: AppColors.primary),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Correct answer: ${question['options'][correctAnswer]}',
+                                'Correct answer: ${question.options[correctAnswer]}',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: AppColors.primary,
                                   fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (question.explanation != null &&
+                        question.explanation!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.textTertiary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.textTertiary
+                                  .withValues(alpha: 0.15)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline,
+                                size: 16, color: AppColors.textTertiary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                question.explanation!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                  height: 1.4,
                                 ),
                               ),
                             ),
@@ -601,8 +727,7 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
         color: AppColors.surface,
         border: Border(
           top: BorderSide(
-            color: AppColors.textTertiary.withValues(alpha: 0.2),
-          ),
+              color: AppColors.textTertiary.withValues(alpha: 0.2)),
         ),
       ),
       child: Row(
@@ -614,18 +739,14 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.textPrimary,
                   side: BorderSide(
-                    color: AppColors.textTertiary.withValues(alpha: 0.3),
-                  ),
+                      color: AppColors.textTertiary.withValues(alpha: 0.3)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.arrow_back, size: 20),
-                label: const Text(
-                  'Previous',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
+                label: const Text('Previous',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ),
           if (_currentQuestionIndex > 0) const SizedBox(width: 12),
@@ -638,12 +759,12 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: AppColors.textTertiary.withValues(alpha: 0.2),
+                disabledBackgroundColor:
+                    AppColors.textTertiary.withValues(alpha: 0.2),
                 disabledForegroundColor: AppColors.textSecondary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                    borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
               icon: Icon(
@@ -653,9 +774,7 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
               label: Text(
                 isLastQuestion ? 'Submit Test' : 'Next',
                 style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+                    fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
           ),

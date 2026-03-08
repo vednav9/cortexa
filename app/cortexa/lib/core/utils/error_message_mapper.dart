@@ -153,13 +153,35 @@ class ErrorMessageMapper {
     }
   }
   
+  /// Check if message is already user-friendly (not technical)
+  static bool _isUserFriendlyMessage(String message) {
+    final technical = message.toLowerCase();
+    
+    // Check if it's a technical/internal error message
+    final isTechnical = technical.contains('exception') ||
+                       technical.contains('stack trace') ||
+                       technical.contains('null') ||
+                       technical.contains('undefined') ||
+                       technical.contains('error:') ||
+                       technical.startsWith('failed to parse') ||
+                       technical.startsWith('server returned');
+    
+    return !isTechnical && message.length > 10;
+  }
+  
   /// Combine status code and error message intelligently
   static String getCombinedMessage(int? statusCode, String? errorMessage) {
-    // If we have both, use the error message but fall back to status code message
+    // If we have a backend message and it's already user-friendly, use it as-is
     if (errorMessage != null && errorMessage.isNotEmpty) {
+      // If the message is already user-friendly, return it directly
+      if (_isUserFriendlyMessage(errorMessage)) {
+        return errorMessage;
+      }
+      // Otherwise, try to convert it to user-friendly format
       return getUserFriendlyMessage(errorMessage);
     }
     
+    // Fall back to status code message
     if (statusCode != null) {
       return getMessageForStatusCode(statusCode);
     }

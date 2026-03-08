@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../data/models/invitation_model.dart';
-import '../../data/repositories/mock_dashboard_repository.dart';
+import '../../data/repositories/dashboard_repository.dart';
 import '../widgets/invitation_card.dart';
 
 class NotificationsPage extends StatefulWidget {
@@ -22,7 +23,7 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
-  final _repository = MockDashboardRepository();
+  final _repository = getIt<DashboardRepository>();
   final _storage = getIt<HiveStorageService>();
   List<InvitationModel> _invitations = [];
   bool _isLoading = true;
@@ -39,54 +40,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
     try {
       if (widget.isAdmin) {
         // For admin: Show sent invitations from their institution
-        final currentUser = _storage.getCurrentUser();
-        final institutionId = currentUser?.institutionId;
-        
-        if (institutionId != null) {
-          final allInvitations = _storage.getAllInvitations();
-          final sentInvitations = allInvitations
-              .where((inv) => inv['institution_id'] == institutionId)
-              .map((inv) {
-                // Get invited user's details from invitation data
-                String invitedUserName = 'Unknown';
-                String invitedUserEmail = inv['invited_user_email']?.toString() ?? 'Unknown';
-                
-                // Check if full name is available in the user data from the invite
-                if (inv['invited_user_full_name'] != null && inv['invited_user_full_name'].toString().isNotEmpty) {
-                  invitedUserName = inv['invited_user_full_name'].toString();
-                } else if (inv['invited_user_username'] != null && inv['invited_user_username'].toString().isNotEmpty) {
-                  invitedUserName = inv['invited_user_username'].toString();
-                } else {
-                  // Use email as fallback
-                  invitedUserName = invitedUserEmail.split('@').first;
-                }
-                
-                return InvitationModel(
-                  id: inv['id']?.toString() ?? '',
-                  institutionId: institutionId,
-                  institutionName: inv['institution_name']?.toString() ?? 'Unknown',
-                  institutionLogoUrl: inv['institution_logo']?.toString() ?? '',
-                  institutionType: inv['institution_type']?.toString() ?? 'Institute',
-                  role: inv['role']?.toString() ?? 'student',
-                  invitedByName: invitedUserName,
-                  invitedByEmail: invitedUserEmail,
-                  invitedAt: DateTime.tryParse(inv['invited_at']?.toString() ?? '') ?? DateTime.now(),
-                  status: _parseStatus(inv['status']?.toString() ?? 'pending'),
-                  message: inv['message']?.toString(),
-                );
-              })
-              .toList();
-          
-          setState(() {
-            _invitations = sentInvitations;
-            _isLoading = false;
-          });
-        } else {
-          setState(() {
-            _invitations = [];
-            _isLoading = false;
-          });
-        }
+        final invitations = await _repository.getAdminInvitations();
+        setState(() {
+          _invitations = invitations;
+          _isLoading = false;
+        });
       } else {
         // For users: Show received invitations
         final invitations = await _repository.getInvitations();
@@ -98,25 +56,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
+        final errorMessage = e is ApiException ? e.message : 'Failed to load notifications. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load notifications: $e'),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
           ),
         );
       }
-    }
-  }
-  
-  InvitationStatus _parseStatus(String status) {
-    switch (status.toLowerCase()) {
-      case 'accepted':
-        return InvitationStatus.accepted;
-      case 'rejected':
-      case 'denied':
-        return InvitationStatus.rejected;
-      default:
-        return InvitationStatus.pending;
     }
   }
 
@@ -318,9 +265,10 @@ class _NotificationsPageState extends State<NotificationsPage> {
       _loadInvitations();
     } catch (e) {
       if (mounted) {
+        final errorMessage = e is ApiException ? e.message : e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
             duration: const Duration(seconds: 4),
           ),

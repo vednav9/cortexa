@@ -136,7 +136,18 @@ class _InstitutionTabViewState extends State<InstitutionTabView> {
         : widget.myInstitutions;
 
     if (institutions.isEmpty) {
-      return _buildEmptyState();
+      // Wrap empty state in scrollable view so pull-to-refresh works
+      return RefreshIndicator(
+        onRefresh: () async => widget.onRefresh(),
+        color: AppColors.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: _buildEmptyState(),
+          ),
+        ),
+      );
     }
 
     return RefreshIndicator(
