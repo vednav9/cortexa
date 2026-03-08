@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' as http_parser;
 import '../config/api_config.dart';
@@ -564,6 +565,57 @@ class ApiClient {
       throw ApiException(
         'Failed to upload file. Please try again.',
         technicalMessage: 'Upload error: $e',
+      );
+    }
+  }
+
+  /// Upload raw bytes to [endpoint].
+  ///
+  /// Equivalent to [uploadFile] but works on Android/iOS when the picked file
+  /// only has bytes available (no guaranteed local path).
+  Future<Map<String, dynamic>> uploadFileBytes(
+    String endpoint, {
+    required Uint8List fileBytes,
+    required String fileName,
+    required String fieldName,
+    required String mimeType,
+    Map<String, String>? additionalFields,
+    bool requiresAuth = true,
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final headers = await _buildHeaders(requiresAuth);
+    headers.remove('Content-Type');
+
+    final request = http.MultipartRequest('POST', url);
+    request.headers.addAll(headers);
+    request.files.add(http.MultipartFile.fromBytes(
+      fieldName,
+      fileBytes,
+      filename: fileName,
+      contentType: http_parser.MediaType.parse(mimeType),
+    ));
+    if (additionalFields != null) request.fields.addAll(additionalFields);
+
+    print('📤 Upload Bytes Request: $url ($fileName, ${fileBytes.length} bytes)');
+
+    try {
+      final streamed = await request.send().timeout(timeout);
+      final response = await http.Response.fromStream(streamed);
+      print('📡 Upload Bytes Response Status: ${response.statusCode}');
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'Upload timed out. Please try again.',
+        statusCode: 408,
+        technicalMessage: 'File bytes upload timed out after ${timeout.inSeconds}s',
+      );
+    } catch (e) {
+      print('❌ Error uploading file bytes: $e');
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Failed to upload file. Please try again.',
+        technicalMessage: 'Upload bytes error: $e',
       );
     }
   }

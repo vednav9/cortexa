@@ -9,6 +9,7 @@ import MCQAttempt from "../models/mcqAttempt.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
+import { uploadToR2, deleteFromR2 } from "../services/cloudflareR2.js";
 
 
 
@@ -364,20 +365,20 @@ export const getStudentsInAuthorizedCourses = async (req, res) => {
 ========================= */
 export const uploadNotes = async (req, res) => {
     try {
-        const { courseId, title, description } = req.body;
+        const { courseId, fileName } = req.body;
         const file = req.file;
         const teacherId = req.user.id;
 
         if (!file || !courseId) {
             return res.status(400).json({
                 success: false,
-                message: "File and course are required"
+                message: "File and course ID are required"
             });
         }
 
         // Verify teacher is authorized for this course
         const teacher = await Teacher.findById(teacherId).select('authorizedCourses institution');
-        
+
         if (!teacher) {
             return res.status(404).json({
                 success: false,
@@ -396,14 +397,32 @@ export const uploadNotes = async (req, res) => {
             });
         }
 
+        // Upload to Cloudflare R2
+        let fileUrl;
+        try {
+            fileUrl = await uploadToR2(file.buffer, file.originalname, 'docs', file.mimetype);
+        } catch (r2Err) {
+            console.error("R2 upload error:", r2Err);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to store file. Please try again."
+            });
+        }
+
+        // Determine canonical file type for the Document schema enum
+        const mime = file.mimetype;
+        const fileType = mime.includes('pdf') ? 'pdf'
+            : mime.includes('word') ? 'docx'
+            : mime.includes('text') ? 'txt'
+            : 'pptx';
+
         // Create document record
+        const displayName = fileName || file.originalname.replace(/\.[^.]+$/, '');
         const document = await Document.create({
-            fileName: title || file.originalname,
+            fileName: displayName,
             originalName: file.originalname,
-            fileUrl: `/uploads/${file.filename}`, // TODO: Replace with actual storage URL
-            fileType: file.mimetype.includes('pdf') ? 'pdf' : 
-                     file.mimetype.includes('word') ? 'docx' : 
-                     file.mimetype.includes('text') ? 'txt' : 'pptx',
+            fileUrl,
+            fileType,
             fileSize: file.size,
             course: courseId,
             institution: teacher.institution,
@@ -411,10 +430,14 @@ export const uploadNotes = async (req, res) => {
             isProcessed: false
         });
 
+        // Respond immediately — AI indexing is handled by the Flutter app
+        // to avoid Vercel's serverless function timeout (HF cold-start alone
+        // can exceed 60 s, the maximum Vercel allows).
         res.status(201).json({
             success: true,
             message: "Document uploaded successfully",
-            document
+            document: document.toObject(),
+            statusSyncSupported: true
         });
     } catch (error) {
         console.error("Upload notes error:", error);
@@ -501,10 +524,15 @@ export const deleteDocument = async (req, res) => {
             });
         }
 
-        // Delete document
+        // Delete from MongoDB
         await Document.findByIdAndDelete(documentId);
 
-        // TODO: Delete file from storage
+        // Delete from R2 storage (non-fatal — MongoDB record is already gone)
+        if (document.fileUrl) {
+            deleteFromR2(document.fileUrl).catch(err =>
+                console.error("R2 delete error:", err.message)
+            );
+        }
 
         res.status(200).json({
             success: true,
@@ -515,6 +543,56 @@ export const deleteDocument = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Failed to delete document",
+            error: error.message
+        });
+    }
+};
+
+/* =========================
+   MARK DOCUMENT PROCESSED
+========================= */
+export const markDocumentProcessed = async (req, res) => {
+    try {
+        const { documentId } = req.params;
+        const { chunksCount } = req.body || {};
+        const teacherId = req.user.id;
+
+        const document = await Document.findById(documentId);
+
+        if (!document) {
+            return res.status(404).json({
+                success: false,
+                message: "Document not found"
+            });
+        }
+
+        if (document.uploadedBy.toString() !== teacherId) {
+            return res.status(403).json({
+                success: false,
+                message: "Not authorized"
+            });
+        }
+
+        const update = {
+            isProcessed: true,
+            processingError: null,
+        };
+
+        if (typeof chunksCount === "number" && Number.isFinite(chunksCount) && chunksCount >= 0) {
+            update.chunksCount = Math.floor(chunksCount);
+        }
+
+        await Document.findByIdAndUpdate(documentId, update);
+
+        res.status(200).json({
+            success: true,
+            message: "Document marked as processed"
+        });
+    } catch (error) {
+        console.error("Mark processed error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update document",
             error: error.message
         });
     }

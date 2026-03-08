@@ -47,6 +47,10 @@ const documentSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    chunksCount: {
+        type: Number,
+        default: 0
+    },
     processingError: String,
     // Stats
     downloadCount: {

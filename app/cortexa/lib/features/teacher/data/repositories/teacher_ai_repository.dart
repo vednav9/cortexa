@@ -1,4 +1,9 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart' as http_parser;
 import '../../../../core/network/api_client.dart';
+import '../../../../core/config/api_config.dart';
 import '../../../rag_assistant/data/models/mcq_model.dart';
 
 /// Repository for teacher-specific AI operations
@@ -170,44 +175,167 @@ class TeacherAiRepository {
     }
   }
 
-  /// Upload document/notes for a course
-  /// 
-  /// [filePath] - Local file path
-  /// [fileName] - Display name for the file
-  /// [courseId] - Course ID
-  /// 
-  /// Returns: Upload response with document ID
+  /// Upload document bytes for a course.
+  ///
+  /// Step 1 → Backend  (/teacher/notes/upload): R2 storage + MongoDB record.
+  ///           Responds immediately — no HF round-trip inside Vercel.
+  /// Step 2 → Flutter calls HF Space (/upload) directly with the file bytes.
+  ///           Flutter has no serverless timeout, so it can handle HF cold-starts.
   Future<Map<String, dynamic>> uploadDocument({
-    required String filePath,
+    required Uint8List fileBytes,
+    required String fileExtension,
     required String fileName,
     required String courseId,
   }) async {
-    try {
-      final response = await _apiClient.uploadFile(
-        '/teacher/notes/upload',
-        filePath: filePath,
-        fieldName: 'file',
-        additionalFields: {
-          'courseId': courseId,
-          'fileName': fileName,
-        },
-        requiresAuth: true,
-      );
+    final mime = _mimeForExtension(fileExtension);
+    final fullFileName = '$fileName.$fileExtension';
 
-      if (response['success'] == true) {
-        return response;
-      } else {
-        throw Exception(response['message'] ?? 'Failed to upload document');
+    // ── Step 1: backend (R2 + MongoDB) ────────────────────────────────────
+    final response = await _apiClient.uploadFileBytes(
+      '/teacher/notes/upload',
+      fileBytes: fileBytes,
+      fileName: fullFileName,
+      fieldName: 'file',
+      mimeType: mime,
+      additionalFields: {
+        'courseId': courseId,
+        'fileName': fileName,
+      },
+      requiresAuth: true,
+    );
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to upload document');
+    }
+
+    // Extract institutionId and documentId from the document the backend created.
+    final doc = response['document'] as Map<String, dynamic>?;
+    final institutionId = (doc?['institution'] ?? '').toString();
+    final documentId   = (doc?['_id']         ?? '').toString();
+    final statusSyncSupported = response['statusSyncSupported'] == true;
+
+    // ── Step 2: HF Space AI indexing (directly from Flutter) ──────────────
+    bool aiIndexed = false;
+    bool statusSynced = false;
+    int chunksAdded = 0;
+    String? aiError;
+    try {
+      final parsedChunks = await _indexInAi(
+        fileBytes: fileBytes,
+        fileExtension: fileExtension,
+        fileName: fullFileName,
+        courseId: courseId,
+        institutionId: institutionId,
+      );
+      chunksAdded = parsedChunks ?? 0;
+      aiIndexed = true;
+      // ── Step 3: flip isProcessed:true in MongoDB (if backend supports it) ─
+      if (statusSyncSupported && documentId.isNotEmpty) {
+        try {
+          await _markDocumentProcessed(documentId, chunksCount: chunksAdded);
+          statusSynced = true;
+        } catch (_) {
+          // Non-fatal: HF indexing succeeded; DB status sync can lag/fail.
+          statusSynced = false;
+        }
       }
     } catch (e) {
-      throw Exception('Document upload failed: ${e.toString()}');
+      aiError = e.toString();
+      // File is safely stored in R2 + MongoDB. Teacher sees orange snackbar.
+    }
+
+    return {
+      ...response,
+      'aiIndexed': aiIndexed,
+      'statusSynced': statusSynced,
+      'chunksAdded': chunksAdded,
+      if (aiError != null) 'aiError': aiError,
+    };
+  }
+
+  /// Tells the backend that HF indexing succeeded -> sets isProcessed: true.
+  Future<void> _markDocumentProcessed(
+    String documentId, {
+    required int chunksCount,
+  }) async {
+    await _apiClient.patch(
+      '/teacher/notes/$documentId/mark-processed',
+      body: {'chunksCount': chunksCount},
+      requiresAuth: true,
+    );
+  }
+
+  /// POST the file bytes directly to the HF Space /upload endpoint.
+  /// Throws on any HTTP error so the caller can surface it.
+  Future<int?> _indexInAi({
+    required Uint8List fileBytes,
+    required String fileExtension,
+    required String fileName,
+    required String courseId,
+    required String institutionId,
+  }) async {
+    final base = ApiConfig.aiBaseUrl; // e.g. https://jay-10020-cortexa-ai.hf.space/api
+    final aiRoot =
+        base.endsWith('/api') ? base.substring(0, base.length - 4) : base;
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$aiRoot/upload'),
+    );
+    // institution_id and course_id are Form(None) params in the FastAPI endpoint
+    if (institutionId.isNotEmpty) request.fields['institution_id'] = institutionId;
+    if (courseId.isNotEmpty) request.fields['course_id'] = courseId;
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      fileBytes,
+      filename: fileName,
+      contentType: http_parser.MediaType.parse(_mimeForExtension(fileExtension)),
+    ));
+
+    final streamed = await request.send().timeout(const Duration(minutes: 5));
+    final aiResponse = await http.Response.fromStream(streamed);
+
+    if (aiResponse.statusCode < 200 || aiResponse.statusCode >= 300) {
+      final body = aiResponse.body.length > 200
+          ? aiResponse.body.substring(0, 200)
+          : aiResponse.body;
+      throw Exception('AI service HTTP ${aiResponse.statusCode}: $body');
+    }
+
+    try {
+      final decoded = jsonDecode(aiResponse.body);
+      if (decoded is Map<String, dynamic>) {
+        final chunks = decoded['chunks_added'];
+        if (chunks is num) return chunks.toInt();
+      }
+    } catch (_) {
+      // Response may not be JSON in edge cases; ignore and continue.
+    }
+    return null;
+  }
+
+  String _mimeForExtension(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'doc':
+        return 'application/msword';
+      case 'txt':
+        return 'text/plain';
+      case 'pptx':
+        return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      case 'ppt':
+        return 'application/vnd.ms-powerpoint';
+      default:
+        return 'application/octet-stream';
     }
   }
 
   /// Get documents for a course
-  /// 
+  ///
   /// [courseId] - Course ID
-  /// 
+  ///
   /// Returns: List of uploaded documents
   Future<List<Map<String, dynamic>>> getDocuments(String courseId) async {
     try {

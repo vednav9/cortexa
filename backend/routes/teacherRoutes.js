@@ -9,6 +9,7 @@ import {
   uploadNotes,
   getDocuments,
   deleteDocument,
+  markDocumentProcessed,
   generateMCQs,
   saveMCQSet,
   addToMCQSet,
@@ -49,6 +50,7 @@ router.get("/students", authenticate, getStudentsInAuthorizedCourses);
 // ===============================
 router.post("/notes/upload", authenticate, upload.single("file"), uploadNotes);
 router.get("/notes/:courseId", authenticate, getDocuments);
+router.patch("/notes/:documentId/mark-processed", authenticate, markDocumentProcessed);
 router.delete("/notes/:documentId", authenticate, deleteDocument);
 
 // ===============================

@@ -353,34 +353,67 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
       return;
     }
 
+    // Bytes are always present when withData: true is set in _pickDocument.
+    // Path may be null on Android, so we never rely on it.
+    final bytes = _selectedFile!.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Row(children: [
+            Icon(Icons.error_outline, color: Colors.white, size: 20),
+            SizedBox(width: 12),
+            Expanded(child: Text('Could not read file data. Please try again.',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
+          ]),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          margin: const EdgeInsets.all(16),
+        ));
+      }
+      return;
+    }
+
     setState(() => _isUploading = true);
 
     try {
-      await _aiRepository.uploadDocument(
-        filePath: _selectedFile!.path!,
+      final result = await _aiRepository.uploadDocument(
+        fileBytes: bytes,
+        fileExtension: _selectedFile!.extension ?? 'pdf',
         fileName: _displayFileName!,
         courseId: _selectedCourse!.id,
       );
+
+      final aiIndexed = result['aiIndexed'] as bool? ?? false;
+      final statusSynced = result['statusSynced'] as bool? ?? false;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                Icon(
+                  aiIndexed ? Icons.check_circle_outline : Icons.cloud_upload_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Upload Successful!',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      Text(
+                        aiIndexed ? 'Upload Successful!' : 'Saved (AI sync pending)',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Document "$_displayFileName" is now available to students',
+                        aiIndexed
+                          ? (statusSynced
+                            ? 'Document "$_displayFileName" is available and indexed for AI search'
+                            : 'Indexed in AI, but status sync is pending. Pull-to-refresh in a few seconds.')
+                          : 'Document saved. AI indexing will retry automatically — students may not see it in AI search yet.',
                         style: const TextStyle(fontSize: 12),
                       ),
                     ],
@@ -388,11 +421,13 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
                 ),
               ],
             ),
-            backgroundColor: Colors.green.shade600,
+            backgroundColor: (aiIndexed && statusSynced)
+              ? Colors.green.shade600
+              : Colors.orange.shade700,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -871,12 +906,21 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
             CircularProgressIndicator(color: AppColors.primary),
             SizedBox(height: 16),
             Text(
-              'Uploading document...',
+              'Uploading & indexing for AI...',
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'This may take up to a minute on first upload',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
