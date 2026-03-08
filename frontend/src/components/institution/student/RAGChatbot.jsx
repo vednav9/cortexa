@@ -124,7 +124,7 @@ export default function RAGChatbot() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef(null);
+  const chatScrollRef = useRef(null);
   const inputRef = useRef(null);
 
   /* Upload panel state */
@@ -135,7 +135,11 @@ export default function RAGChatbot() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!chatScrollRef.current || (!loading && messages.length === 0)) return;
+    // Keep scrolling inside chat panel only, avoiding full-page jump on tab open.
+    requestAnimationFrame(() => {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    });
   }, [messages, loading]);
 
   /* ── Send message ── */
@@ -251,7 +255,10 @@ export default function RAGChatbot() {
             style={{ background: `linear-gradient(90deg,${brand},rgba(${rgb},0.25))` }} />
 
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 min-h-[400px] max-h-[calc(100vh-300px)]">
+          <div
+            ref={chatScrollRef}
+            className="flex-1 overflow-y-auto px-5 py-5 space-y-4 min-h-[400px] max-h-[calc(100vh-300px)]"
+          >
 
             {/* Empty state */}
             {messages.length === 0 && (
@@ -301,7 +308,6 @@ export default function RAGChatbot() {
               </div>
             )}
 
-            <div ref={bottomRef} />
           </div>
 
           {/* Input bar */}
