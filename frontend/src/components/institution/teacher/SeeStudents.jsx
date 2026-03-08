@@ -24,7 +24,8 @@ const hexToRgb = (hex) => {
 
 export default function SeeStudents() {
     const { user } = useAuth();
-    const { currentInstitution } = useOutletContext();
+    const outletContext = useOutletContext();
+    const activeInstitution = outletContext?.currentInstitution || outletContext?.institution;
     const [students, setStudents] = useState([]);
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -33,14 +34,14 @@ export default function SeeStudents() {
     const [selectedCourse, setSelectedCourse] = useState("");
     const [selectedDepartment, setSelectedDepartment] = useState("");
 
-    const brandColor = currentInstitution?.branding?.primaryColor || '#10b981';
+    const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
     const rgb = hexToRgb(brandColor);
 
     useEffect(() => {
-        if (currentInstitution?._id && user?.role === 'teacher') {
+        if (user?.role === 'teacher') {
             fetchCourses();
         }
-    }, [currentInstitution, user]);
+    }, [user]);
 
     useEffect(() => {
         if (courses.length > 0) {

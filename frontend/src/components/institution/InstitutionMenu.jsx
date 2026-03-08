@@ -65,7 +65,6 @@ export default function InstitutionMenu({ userRole, hasAccess, brandColor = "#10
         { id: "generate-mcq", label: "Generate MCQ", icon: FiCheckSquare, items: [] },
         { id: "voice-to-text", label: "Voice to Text", icon: FiMic, items: [] },
         { id: "qa-section", label: "Q&A", icon: FiMessageSquare, items: [] },
-        { id: "assessment", label: "Assessment", icon: FiClipboard, items: [] },
         { id: "rag-chatbot", label: "AI Assistant", icon: HiSparkles, items: [] },
         { id: "query-desk", label: "Query Desk", icon: FiHelpCircle, items: [] },
       ];
