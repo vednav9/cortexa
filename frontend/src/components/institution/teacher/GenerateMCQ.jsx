@@ -26,7 +26,8 @@ const hexToRgb = (hex) => {
 
 export default function GenerateMCQ() {
     const { user } = useAuth();
-    const { currentInstitution } = useOutletContext();
+    const outletContext = useOutletContext();
+    const activeInstitution = outletContext?.currentInstitution || outletContext?.institution;
     const [courses, setCourses] = useState([]);
     const [savedMCQSets, setSavedMCQSets] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -57,23 +58,32 @@ export default function GenerateMCQ() {
     const [dueDate, setDueDate] = useState("");
     const [duration, setDuration] = useState(30);
 
-    const brandColor = currentInstitution?.branding?.primaryColor || '#10b981';
+    const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
     const rgb = hexToRgb(brandColor);
 
     useEffect(() => {
-        if (currentInstitution?._id) {
+        if (user?.role === 'teacher') {
             fetchCourses();
             fetchSavedMCQSets();
         }
-    }, [currentInstitution]);
+    }, [user]);
 
     const fetchCourses = async () => {
         try {
             const response = await api.get('/teacher/authorized-courses');
-            setCourses(response.data.courses || []);
+            const coursesData = response.data.courses || [];
+            setCourses(coursesData);
+
+            if (!selectedCourse && coursesData.length > 0) {
+                setSelectedCourse(coursesData[0]._id);
+            }
+
+            if (coursesData.length === 0) {
+                toast.error('No authorized courses found. Contact your admin.');
+            }
         } catch (error) {
             console.error("Fetch courses error:", error);
-            toast.error("Failed to load courses");
+            toast.error(error.response?.data?.message || "Failed to load courses");
         }
     };
 
@@ -292,8 +302,8 @@ export default function GenerateMCQ() {
                                 </label>
                                 <div className="grid grid-cols-2 gap-3 p-1 rounded-xl bg-gray-50/80 border border-gray-100">
                                     {[
-                                        { value: "document", label: "📄 Document" },
-                                        { value: "topic", label: "🎯 Topic" }
+                                        { value: "document", label: "Document" },
+                                        { value: "topic", label: "Topic" }
                                     ].map((type) => (
                                         <button
                                             key={type.value}
@@ -505,7 +515,7 @@ export default function GenerateMCQ() {
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h2 className="text-xl font-black text-gray-900">
-                                Component Library
+                                Your Saved Question Sets
                             </h2>
                             <p className="text-gray-500 font-medium mt-1">
                                 Manage and assign your generated question sets
