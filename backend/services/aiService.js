@@ -98,6 +98,19 @@ class AIService {
     }
   }
 
+  // Get document chunks with embeddings
+  async getDocumentChunks(fileName) {
+    try {
+      const response = await axios.get(`${AI_API_URL}/documents/${encodeURIComponent(fileName)}/chunks`, {
+        timeout: LONG_TIMEOUT
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get chunks error:', error.response?.data || error.message);
+      throw new Error(`Failed to get document chunks: ${error.response?.data?.detail || error.message}`);
+    }
+  }
+
   // Health Check
   async checkHealth() {
     try {

@@ -61,6 +61,13 @@ class DocumentUploadResponse(BaseModel):
     status: str
 
 
+class DocumentChunksResponse(BaseModel):
+    filename: str
+    chunks: List[dict]
+    embedding_model: str
+    total_chunks: int
+
+
 class MCQGenerateRequest(BaseModel):
     source_type: str  # "text", "document", "topic"
     source: str  # text content, document name, or topic
@@ -260,6 +267,45 @@ async def upload_document(
             chunks_added=len(chunks),
             status="success"
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/documents/{filename}/chunks", response_model=DocumentChunksResponse)
+async def get_document_chunks(filename: str):
+    """Get all chunks and embeddings for a specific document"""
+    try:
+        vector_store = get_vector_store()
+        
+        # Get all documents from the vector store
+        all_docs = vector_store.data['documents']
+        
+        # Filter chunks for this filename
+        doc_chunks = [
+            doc for doc in all_docs 
+            if doc.get('id', '').startswith(f"{filename}_")
+        ]
+        
+        if not doc_chunks:
+            raise HTTPException(status_code=404, detail=f"No chunks found for {filename}")
+        
+        # Format chunks with embeddings
+        chunks = []
+        for doc in doc_chunks:
+            chunks.append({
+                'text': doc['text'],
+                'embedding': doc['embedding'].tolist() if hasattr(doc['embedding'], 'tolist') else doc['embedding'],
+                'metadata': doc.get('metadata', {})
+            })
+        
+        return DocumentChunksResponse(
+            filename=filename,
+            chunks=chunks,
+            embedding_model=vector_store.data['metadata'].get('embedding_model', 'unknown'),
+            total_chunks=len(chunks)
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

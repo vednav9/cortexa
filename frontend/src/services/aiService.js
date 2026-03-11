@@ -86,7 +86,7 @@ class AIService {
   }
 
   // Upload Document - Direct to AI server (for RAG chatbot)
-  async uploadDocument(file, institutionId = null, courseId = null) {
+  async uploadDocument(file, institutionId = null, courseId = null, uploadedBy = null) {
     try {
       // Validate file parameter
       if (!file) {
@@ -147,10 +147,14 @@ class AIService {
       if (courseId) {
         formData.append('course_id', String(courseId));
       }
+      if (uploadedBy) {
+        formData.append('uploaded_by', String(uploadedBy));
+      }
 
-      console.log('Sending upload request directly to AI server /upload...');
+      console.log('Sending upload request to backend /api/ai/upload...');
 
-      const response = await aiDirectAxios.post('/upload', formData, {
+      // Send through backend API to handle R2 + MongoDB + AI processing
+      const response = await apiAxios.post('/ai/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
