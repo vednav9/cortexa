@@ -10,12 +10,12 @@ import '../../../dashboard/presentation/pages/query_desk_page.dart';
 import '../../../institution/presentation/pages/tabs/institution_dashboard_tab.dart';
 import 'tabs/teacher_announcements_tab.dart';
 import 'tabs/see_students_tab.dart';
-import 'tabs/upload_notes_tab.dart';
-import 'tabs/generate_mcqs_tab.dart' as mcq;
-import 'tabs/voice_to_text_tab.dart';
 import 'tabs/teacher_qa_portal_tab.dart';
 import 'tabs/teacher_assessment_tab.dart';
 import 'tabs/ai_chatbot_personal_tab.dart';
+import 'tabs/generate_mcqs_tab.dart';
+import 'tabs/upload_notes_tab.dart';
+import 'tabs/voice_to_text_tab.dart';
 
 enum TeacherTab {
   dashboard,
@@ -221,13 +221,13 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.quiz_outlined,
-                    title: 'Generate MCQs',
+                    title: 'Generate MCQs (AI)',
                     tab: TeacherTab.generateMCQs,
                     context: context,
                   ),
                   _buildDrawerItem(
                     icon: Icons.mic_outlined,
-                    title: 'Voice-to-Text',
+                    title: 'Voice to Text',
                     tab: TeacherTab.voiceToText,
                     context: context,
                   ),
@@ -361,7 +361,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
       case TeacherTab.uploadNotes:
         return const UploadNotesTab();
       case TeacherTab.generateMCQs:
-        return const mcq.GenerateMCQsTab();
+        return const GenerateMCQsTab();
       case TeacherTab.voiceToText:
         return const VoiceToTextTab();
       case TeacherTab.qaPortal:
@@ -371,7 +371,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
       case TeacherTab.aiChatbot:
         return const AIChatbotPersonalTab();
       case TeacherTab.queryDesk:
-        return const QueryDeskPage();
+        return QueryDeskPage(institutionId: widget.institution.id);
     }
   }
 }

@@ -1,3 +1,14 @@
+---
+title: Cortexa AI
+emoji: 🧠
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: 'Cortexa: AI Powered Educational Platform'
+---
+
 # Cortexa RAG System
 
 Retrieval-Augmented Generation (RAG) system for educational content Q&A.

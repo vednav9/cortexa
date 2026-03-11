@@ -13,37 +13,6 @@ class AuthRepository {
 
   AuthRepository(this._storage, this._apiClient);
 
-  String _resolveEmailFromUsernameOrEmail(String usernameOrEmail) {
-    final value = usernameOrEmail.trim();
-    if (value.isEmpty) return value;
-
-    // Backend login endpoints accept only email.
-    if (value.contains('@')) return value;
-
-    final current = _storage.getCurrentUser();
-    if (current != null &&
-        current.username.trim().isNotEmpty &&
-        current.username.toLowerCase() == value.toLowerCase() &&
-        current.email.trim().isNotEmpty) {
-      return current.email;
-    }
-
-    final registered = _storage.getAllRegisteredUsers();
-    for (final user in registered) {
-      final username = user['username']?.toString() ?? '';
-      if (username.isNotEmpty && username.toLowerCase() == value.toLowerCase()) {
-        final email = user['email']?.toString() ?? '';
-        if (email.isNotEmpty) return email;
-      }
-    }
-
-    throw ServerException(
-      message:
-          'Login requires your email. Username login works only if that username was previously registered on this device.',
-      statusCode: 400,
-    );
-  }
-
   String _resolveUsernameForEmail(String email) {
     final normalizedEmail = email.trim().toLowerCase();
 
@@ -409,16 +378,16 @@ class AuthRepository {
     required String password,
     required String role,
   }) async {
-    // Backend accepts email only; resolve username locally if needed.
-    final email = _resolveEmailFromUsernameOrEmail(usernameOrEmail);
+    // Backend accepts both email and username, so pass it directly
+    final emailOrUsername = usernameOrEmail.trim();
 
     switch (role.toLowerCase()) {
       case 'student':
-        return await loginStudent(email: email, password: password);
+        return await loginStudent(email: emailOrUsername, password: password);
       case 'teacher':
-        return await loginTeacher(email: email, password: password);
+        return await loginTeacher(email: emailOrUsername, password: password);
       case 'admin':
-        return await loginAdmin(email: email, password: password);
+        return await loginAdmin(email: emailOrUsername, password: password);
       default:
         throw ServerException(
           message: 'Invalid role selected',
@@ -435,10 +404,15 @@ class AuthRepository {
     String? username,
   }) async {
     try {
+      final resolvedUsername = (username != null && username.trim().isNotEmpty)
+          ? username.trim()
+          : email.split('@').first;
+
       final request = SignupRequest(
         fullName: fullName,
         email: email,
         password: password,
+        username: resolvedUsername,
       );
 
       final raw = await _apiClient.postRaw(
@@ -463,10 +437,6 @@ class AuthRepository {
           statusCode: 500,
         );
       }
-
-      final resolvedUsername = (username != null && username.trim().isNotEmpty)
-          ? username.trim()
-          : authResponse.user!.email.split('@').first;
 
       final userModel = UserHiveModel(
         id: authResponse.user!.id,
@@ -511,10 +481,15 @@ class AuthRepository {
     String? username,
   }) async {
     try {
+      final resolvedUsername = (username != null && username.trim().isNotEmpty)
+          ? username.trim()
+          : email.split('@').first;
+
       final request = SignupRequest(
         fullName: fullName,
         email: email,
         password: password,
+        username: resolvedUsername,
       );
 
       final raw = await _apiClient.postRaw(
@@ -539,10 +514,6 @@ class AuthRepository {
           statusCode: 500,
         );
       }
-
-      final resolvedUsername = (username != null && username.trim().isNotEmpty)
-          ? username.trim()
-          : authResponse.user!.email.split('@').first;
 
       final userModel = UserHiveModel(
         id: authResponse.user!.id,
@@ -675,7 +646,7 @@ class AuthRepository {
         id: authResponse.user!.id,
         username: resolvedUsername,
         email: authResponse.user!.email,
-        fullName: authResponse.user!.name,
+        fullName: request.fullName, // Use fullName from request to ensure it's stored
         profileImage: null,
         role: authResponse.user!.role,
         createdAt: DateTime.now(),

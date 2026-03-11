@@ -85,14 +85,9 @@ class _InstitutionAdminDashboardPageState
             icon: const Icon(Icons.notifications_outlined,
                 color: AppColors.primary),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Notifications coming soon'),
-                  backgroundColor: AppColors.primary,
-                ),
-              );
+              setState(() => _currentTab = InstitutionAdminTab.announcements);
             },
-            tooltip: 'Notifications',
+            tooltip: 'Announcements',
           ),
           const SizedBox(width: 8),
         ],
@@ -338,7 +333,7 @@ class _InstitutionAdminDashboardPageState
       case InstitutionAdminTab.academicStructure:
         return const AcademicStructureTab();
       case InstitutionAdminTab.queryDesk:
-        return const QueryDeskPage();
+        return QueryDeskPage(institutionId: widget.institution.id);
     }
   }
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' as http_parser;
 import '../config/api_config.dart';
@@ -66,6 +67,51 @@ class ApiClient {
       throw ApiException(
         'Network error. Please check your internet connection and try again.',
         technicalMessage: 'Network error: $e',
+      );
+    }
+  }
+
+  /// Direct POST to the AI service (bypasses backend proxy).
+  /// Uses [ApiConfig.aiBaseUrl] with no auth header and a 3-minute timeout
+  /// to accommodate cold-starts on the Render free tier.
+  Future<Map<String, dynamic>> aiPost(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) async {
+    final url = Uri.parse('${ApiConfig.aiBaseUrl}$endpoint');
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    print('🤖 AI POST Request: $url');
+    print('📦 Body: ${body != null ? jsonEncode(body) : "null"}');
+
+    try {
+      final response = await _client
+          .post(
+            url,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(const Duration(minutes: 3));
+
+      print('📡 AI Response Status: ${response.statusCode}');
+      print('📄 AI Response Body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
+
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'AI request timed out. The AI service may be starting up — please try again in a moment.',
+        statusCode: 408,
+        technicalMessage: 'AI request timed out after 3 minutes. AI URL: ${ApiConfig.aiBaseUrl}',
+      );
+    } catch (e) {
+      print('❌ Error in AI POST request: $e');
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Could not reach the AI service. Please check your connection and try again.',
+        technicalMessage: 'AI network error: $e',
       );
     }
   }
@@ -141,7 +187,7 @@ class ApiClient {
         
         // Detect MIME type from file extension
         final mimeType = _getMimeType(f.path);
-        print('📎 Adding file: ${entry.key} = ${f.path.split('/').last} (${mimeType})');
+        print('📎 Adding file: ${entry.key} = ${f.path.split('/').last} ($mimeType)');
         
         request.files.add(
           await http.MultipartFile.fromPath(
@@ -153,7 +199,7 @@ class ApiClient {
       }
     } else if (file != null) {
       final mimeType = _getMimeType(file.path);
-      print('📎 Adding file: $fileFieldName = ${file.path.split('/').last} (${mimeType})');
+      print('📎 Adding file: $fileFieldName = ${file.path.split('/').last} ($mimeType)');
       
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -285,6 +331,38 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> patch(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    bool requiresAuth = false,
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final headers = await _buildHeaders(requiresAuth);
+
+    try {
+      final response = await _client
+          .patch(
+            url,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(ApiConfig.connectionTimeout);
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'Request timed out. Please check your internet connection and try again.',
+        statusCode: 408,
+        technicalMessage: 'PATCH request timed out after ${ApiConfig.connectionTimeout.inSeconds}s. Base URL: ${ApiConfig.baseUrl}',
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Network error. Please check your internet connection and try again.',
+        technicalMessage: 'Network error: $e',
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> delete(
     String endpoint, {
     bool requiresAuth = false,
@@ -325,8 +403,12 @@ class ApiClient {
 
     if (requiresAuth) {
       final token = _storage.getToken();
+      print('🔑 [ApiClient] Auth required - Token exists: ${token != null && token.isNotEmpty}');
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
+        print('✅ [ApiClient] Authorization header added (${token.substring(0, 20)}...)');
+      } else {
+        print('⚠️ [ApiClient] No token available for authenticated request!');
       }
     }
 
@@ -367,22 +449,173 @@ class ApiClient {
     if (statusCode >= 200 && statusCode < 300) {
       return data;
     } else {
-      // Get error message from response or status code
-      final technicalMessage = data['message'] as String?;
-      final userFriendlyMessage = ErrorMessageMapper.getCombinedMessage(
+      // Get error message from response - backend messages are already user-friendly
+      final backendMessage = data['message'] as String?;
+      final userMessage = ErrorMessageMapper.getCombinedMessage(
         statusCode, 
-        technicalMessage,
+        backendMessage,
       );
       
-      // Clear auth data on 401
-      if (statusCode == 401) {
-        _storage.clearAuthData();
+      print('❌ [ApiClient] Error Response:');
+      print('   Status Code: $statusCode');
+      print('   Backend Message: $backendMessage');
+      print('   User Message: $userMessage');
+      
+      // Only clear auth data on 401 if it's actually an authentication error
+      // Don't clear on "token missing" errors that might be temporary
+      if (statusCode == 401 && backendMessage != null) {
+        final shouldClearAuth = backendMessage.toLowerCase().contains('invalid') ||
+                               backendMessage.toLowerCase().contains('expired') ||
+                               backendMessage.toLowerCase().contains('unauthorized');
+        
+        if (shouldClearAuth) {
+          print('⚠️ [ApiClient] Clearing auth data due to invalid/expired token');
+          _storage.clearAuthData();
+        } else {
+          print('⚠️ [ApiClient] 401 error but not clearing auth - may be temporary issue');
+        }
       }
       
       throw ApiException(
-        userFriendlyMessage,
+        userMessage,
         statusCode: statusCode,
-        technicalMessage: technicalMessage,
+        technicalMessage: backendMessage,
+      );
+    }
+  }
+
+  /// Upload file to backend
+  Future<Map<String, dynamic>> uploadFile(
+    String endpoint, {
+    required String filePath,
+    required String fieldName,
+    Map<String, String>? additionalFields,
+    bool requiresAuth = true,
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final headers = await _buildHeaders(requiresAuth);
+    
+    // Remove Content-Type from headers as multipart will set it
+    headers.remove('Content-Type');
+
+    print('📤 Upload File Request: $url');
+    print('📁 File: $filePath');
+
+    try {
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(headers);
+
+      // Add file
+      final file = File(filePath);
+      if (!await file.exists()) {
+        throw ApiException('File not found: $filePath');
+      }
+
+      final fileStream = http.ByteStream(file.openRead());
+      final fileLength = await file.length();
+      final fileName = filePath.split('/').last;
+
+      // Determine content type based on file extension
+      String mimeType = 'application/octet-stream';
+      if (fileName.endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+      } else if (fileName.endsWith('.docx')) {
+        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      } else if (fileName.endsWith('.doc')) {
+        mimeType = 'application/msword';
+      } else if (fileName.endsWith('.txt')) {
+        mimeType = 'text/plain';
+      } else if (fileName.endsWith('.wav')) {
+        mimeType = 'audio/wav';
+      } else if (fileName.endsWith('.mp3')) {
+        mimeType = 'audio/mpeg';
+      }
+
+      final multipartFile = http.MultipartFile(
+        fieldName,
+        fileStream,
+        fileLength,
+        filename: fileName,
+        contentType: http_parser.MediaType.parse(mimeType),
+      );
+
+      request.files.add(multipartFile);
+
+      // Add additional fields
+      if (additionalFields != null) {
+        request.fields.addAll(additionalFields);
+      }
+
+      print('🚀 Uploading $fileName ($fileLength bytes)...');
+      final streamedResponse = await request.send().timeout(timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('📡 Upload Response Status: ${response.statusCode}');
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'Upload timed out. Please try again.',
+        statusCode: 408,
+        technicalMessage: 'File upload timed out after ${timeout.inSeconds}s',
+      );
+    } catch (e) {
+      print('❌ Error uploading file: $e');
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Failed to upload file. Please try again.',
+        technicalMessage: 'Upload error: $e',
+      );
+    }
+  }
+
+  /// Upload raw bytes to [endpoint].
+  ///
+  /// Equivalent to [uploadFile] but works on Android/iOS when the picked file
+  /// only has bytes available (no guaranteed local path).
+  Future<Map<String, dynamic>> uploadFileBytes(
+    String endpoint, {
+    required Uint8List fileBytes,
+    required String fileName,
+    required String fieldName,
+    required String mimeType,
+    Map<String, String>? additionalFields,
+    bool requiresAuth = true,
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final headers = await _buildHeaders(requiresAuth);
+    headers.remove('Content-Type');
+
+    final request = http.MultipartRequest('POST', url);
+    request.headers.addAll(headers);
+    request.files.add(http.MultipartFile.fromBytes(
+      fieldName,
+      fileBytes,
+      filename: fileName,
+      contentType: http_parser.MediaType.parse(mimeType),
+    ));
+    if (additionalFields != null) request.fields.addAll(additionalFields);
+
+    print('📤 Upload Bytes Request: $url ($fileName, ${fileBytes.length} bytes)');
+
+    try {
+      final streamed = await request.send().timeout(timeout);
+      final response = await http.Response.fromStream(streamed);
+      print('📡 Upload Bytes Response Status: ${response.statusCode}');
+      return _handleResponse(response);
+    } on TimeoutException {
+      throw ApiException(
+        'Upload timed out. Please try again.',
+        statusCode: 408,
+        technicalMessage: 'File bytes upload timed out after ${timeout.inSeconds}s',
+      );
+    } catch (e) {
+      print('❌ Error uploading file bytes: $e');
+      if (e is ApiException) rethrow;
+      throw ApiException(
+        'Failed to upload file. Please try again.',
+        technicalMessage: 'Upload bytes error: $e',
       );
     }
   }

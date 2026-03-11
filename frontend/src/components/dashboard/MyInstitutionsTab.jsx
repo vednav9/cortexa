@@ -10,8 +10,7 @@ export default function MyInstitutionsTab({ institutions = [] }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="text-center py-20 bg-white border-2 border-gray-100 rounded-2xl"
+        className="text-center py-20 bg-white border border-gray-200/60 rounded-2xl shadow-sm"
       >
         <div className="w-20 h-20 bg-gradient-to-br from-emerald-100 to-green-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
           <HiSparkles className="w-10 h-10 text-emerald-500" />
@@ -45,90 +44,94 @@ export default function MyInstitutionsTab({ institutions = [] }) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="relative overflow-hidden bg-white border-2 border-gray-100 rounded-2xl shadow-lg hover:shadow-xl hover:border-emerald-200 transition-all"
+      className="bg-white border border-gray-200/60 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-emerald-200/50 transition-all duration-300 group overflow-hidden"
     >
-      {/* Background Accent Circles */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50/50 rounded-full -mr-32 -mt-32"></div>
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50/50 rounded-full -ml-24 -mb-24"></div>
 
-      <div className="relative z-10 p-8">
-        {/* Main Content */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          {/* LEFT: Institution Identity */}
-          <div className="flex items-center gap-5">
-            {/* Logo */}
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg flex-shrink-0">
-              {institution.branding?.logo ? (
-                <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover rounded-lg" />
-              ) : (
-                institution.code || institution.name.substring(0, 2).toUpperCase()
-              )}
+      <div className="p-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+
+          {/* LEFT: Branding & Main Information */}
+          <div className="flex items-start gap-5 flex-1 w-full min-w-0">
+            {/* Logo Container */}
+            <div className="relative group-hover:scale-105 transition-transform duration-300">
+              <div className="absolute inset-0 bg-emerald-100 rounded-[18px] blur-md opacity-0 group-hover:opacity-50 transition-opacity"></div>
+              <div className="w-16 h-16 rounded-[18px] flex items-center justify-center text-emerald-600 bg-white border border-gray-200 font-bold text-xl shadow-sm flex-shrink-0 relative z-10 overflow-hidden">
+                {institution.branding?.logo ? (
+                  <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover" />
+                ) : (
+                  institution.code || institution.name.substring(0, 2).toUpperCase()
+                )}
+              </div>
             </div>
 
-            {/* Info */}
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-1 leading-tight">
-                {institution.name}
-              </h3>
-              <p className="text-sm text-gray-600 mb-3">
-                Your Role: <span className="font-semibold text-gray-800">{institution.role}</span>
-              </p>
-
-              {/* Status Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold text-green-700 capitalize">
-                  Active
-                </span>
+            {/* Institution Content Details */}
+            <div className="flex-1 min-w-0 pt-0.5">
+              <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                <h3 className="text-xl font-bold text-gray-900 tracking-tight leading-tight truncate max-w-full">
+                  {institution.name}
+                </h3>
+                {/* Micro Status Badge */}
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-100/80 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
+                  <span className="text-[10px] font-bold tracking-widest text-emerald-700 uppercase leading-none mt-px">
+                    Active
+                  </span>
+                </div>
               </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-[13px] text-gray-500 mb-5">
+                <div className="flex items-center gap-1.5">
+                  <FiUsers className="w-4 h-4 text-emerald-500" />
+                  <p>Role: <span className="font-semibold text-gray-800 capitalize">{institution.role}</span></p>
+                </div>
+                {institution.code && (
+                  <div className="flex items-center gap-2 ml-2">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                    <p>Code: <span className="font-semibold text-gray-800">{institution.code}</span></p>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
 
-          {/* RIGHT: Primary Action */}
-          <div className="flex items-center">
+          {/* RIGHT: Action & Access Area */}
+          <div className="flex flex-col md:items-end gap-3 self-center mt-2 md:mt-0 w-full md:w-auto">
             <motion.a
               href={`/${institution.slug}`}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="group inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+              className="group flex items-center justify-center gap-2 px-8 py-3.5 bg-emerald-500 text-white text-[14px] font-semibold rounded-xl shadow-md shadow-emerald-500/20 hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/30 transition-all focus:ring-2 focus:ring-emerald-500/20 w-full md:w-auto"
             >
-              Go to Dashboard
+              Access Dashboard
               <FiArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </motion.a>
+
           </div>
+
         </div>
 
-        {/* Optional: Quick Stats or Info */}
-        <div className="mt-6 pt-6 border-t-2 border-gray-100 grid grid-cols-3 gap-4">
+        {/* Info Stats separated by a line */}
+        <div className="mt-8 pt-6 border-t border-gray-100 grid grid-cols-3 gap-4">
           <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">
+            <p className="text-2xl font-bold text-gray-800">
               {institution.stats?.students ?? 0}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Total Students</p>
-
-
+            <p className="text-xs font-medium text-gray-500 mt-1">Total Students</p>
           </div>
-
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">
+          <div className="text-center border-l border-gray-100">
+            <p className="text-2xl font-bold text-gray-800">
               {institution.stats?.teachers ?? 0}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Total Teachers</p>
-
-
-
+            <p className="text-xs font-medium text-gray-500 mt-1">Total Teachers</p>
           </div>
-
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-900">
+          <div className="text-center border-l border-gray-100">
+            <p className="text-2xl font-bold text-gray-800">
               {institution.stats?.courses ?? 0}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Total Courses</p>
-
+            <p className="text-xs font-medium text-gray-500 mt-1">Total Courses</p>
           </div>
         </div>
-
       </div>
     </motion.div>
   );

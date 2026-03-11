@@ -10,18 +10,7 @@ import shutil
 from pathlib import Path
 
 from config import DOCUMENTS_DIR, AUDIO_DIR, TRANSCRIPTS_DIR
-from vectordb.document_processor import DocumentProcessor
-from vectordb.json_store import get_json_store
-from rag.retriever import get_retriever
-from rag.generator import get_generator
-from mcq.generator import get_mcq_generator
-from mcq.validator import MCQValidator
-from hybrid.assistant import get_hybrid_assistant
-
-# NEW: Import speech modules
-from speech.transcriber import get_transcriber
-from speech.formatter import TextFormatter
-from speech.audio_handler import AudioHandler
+# Heavy ML imports are deferred inside getter functions so uvicorn binds the port immediately
 
 
 app = FastAPI(title="Cortexa RAG API", version="2.0.0")
@@ -36,17 +25,17 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Pre-load models on startup"""
-    print("="*60)
-    print("🚀 Starting Cortexa AI Server...")
-    print("="*60)
-    print("📦 Loading AI models (this may take 30-60 seconds)...")
-    print("✅ Models loaded successfully!")
-    print("🌐 Server ready at http://localhost:8000")
-    print("📚 API docs at http://localhost:8000/docs")
-    print("="*60)
+# @app.on_event("startup")
+# async def startup_event():
+#     """Pre-load models on startup"""
+#     print("="*60)
+#     print("🚀 Starting Cortexa AI Server...")
+#     print("="*60)
+#     print("📦 Loading AI models (this may take 30-60 seconds)...")
+#     print("✅ Models loaded successfully!")
+#     print("🌐 Server ready at http://localhost:8000")
+#     print("📚 API docs at http://localhost:8000/docs")
+#     print("="*60)
 
 
 # ============================================================================
@@ -128,6 +117,7 @@ _text_formatter = None
 def get_doc_processor():
     global _doc_processor
     if _doc_processor is None:
+        from vectordb.document_processor import DocumentProcessor
         _doc_processor = DocumentProcessor()
     return _doc_processor
 
@@ -135,6 +125,7 @@ def get_doc_processor():
 def get_vector_store():
     global _vector_store
     if _vector_store is None:
+        from vectordb.json_store import get_json_store
         _vector_store = get_json_store()
     return _vector_store
 
@@ -142,6 +133,7 @@ def get_vector_store():
 def get_retriever_instance():
     global _retriever
     if _retriever is None:
+        from rag.retriever import get_retriever
         _retriever = get_retriever()
     return _retriever
 
@@ -149,6 +141,7 @@ def get_retriever_instance():
 def get_generator_instance():
     global _generator
     if _generator is None:
+        from rag.generator import get_generator
         _generator = get_generator()
     return _generator
 
@@ -156,6 +149,7 @@ def get_generator_instance():
 def get_mcq_generator_instance():
     global _mcq_generator
     if _mcq_generator is None:
+        from mcq.generator import get_mcq_generator
         _mcq_generator = get_mcq_generator()
     return _mcq_generator
 
@@ -163,6 +157,7 @@ def get_mcq_generator_instance():
 def get_mcq_validator_instance():
     global _mcq_validator
     if _mcq_validator is None:
+        from mcq.validator import MCQValidator
         _mcq_validator = MCQValidator()
     return _mcq_validator
 
@@ -170,14 +165,15 @@ def get_mcq_validator_instance():
 def get_hybrid_assistant_instance():
     global _hybrid_assistant
     if _hybrid_assistant is None:
+        from hybrid.assistant import get_hybrid_assistant
         _hybrid_assistant = get_hybrid_assistant()
     return _hybrid_assistant
 
 
-# NEW: Speech module getters
 def get_transcriber_instance():
     global _transcriber
     if _transcriber is None:
+        from speech.transcriber import get_transcriber
         _transcriber = get_transcriber()
     return _transcriber
 
@@ -185,6 +181,7 @@ def get_transcriber_instance():
 def get_audio_handler():
     global _audio_handler
     if _audio_handler is None:
+        from speech.audio_handler import AudioHandler
         _audio_handler = AudioHandler()
     return _audio_handler
 
@@ -192,6 +189,7 @@ def get_audio_handler():
 def get_text_formatter():
     global _text_formatter
     if _text_formatter is None:
+        from speech.formatter import TextFormatter
         _text_formatter = TextFormatter()
     return _text_formatter
 
@@ -232,8 +230,8 @@ def health_check():
 @app.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    institution_id: Optional[str] = None,
-    course_id: Optional[str] = None
+    institution_id: Optional[str] = Form(None),
+    course_id: Optional[str] = Form(None),
 ):
     """Upload and process document for RAG system"""
     try:
@@ -262,6 +260,60 @@ async def upload_document(
             chunks_added=len(chunks),
             status="success"
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/rag/ingest-text")
+async def ingest_text_to_rag(
+    text: str = Form(...),
+    lecture_title: str = Form("Transcript"),
+    institution_id: Optional[str] = Form(None),
+    course_id: Optional[str] = Form(None),
+    teacher_id: Optional[str] = Form(None),
+    recording_id: Optional[str] = Form(None),
+):
+    """Ingest edited plain text directly into the RAG knowledge base.
+
+    Used when a teacher corrects a lecture transcript in the app after the
+    initial auto-transcription — ensures the corrected text is what students
+    search against, not the original version.
+    """
+    import tempfile
+    import time as _time
+
+    try:
+        doc_processor = get_doc_processor()
+        vector_store = get_vector_store()
+
+        # Write the text to a temporary file so doc_processor can chunk it
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".txt", delete=False, encoding="utf-8"
+        )
+        tmp.write(text)
+        tmp.close()
+
+        metadata = {
+            "institution_id": institution_id,
+            "course_id": course_id,
+            "lecture_title": lecture_title,
+            "teacher_id": teacher_id,
+            "content_type": "lecture_transcript",
+            "recording_id": recording_id,
+        }
+
+        try:
+            chunks = doc_processor.process_document(tmp.name, metadata)
+        finally:
+            Path(tmp.name).unlink(missing_ok=True)
+
+        texts = [c.text for c in chunks]
+        metadatas = [c.metadata for c in chunks]
+        doc_id = recording_id or f"text_{int(_time.time())}"
+        ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
+
+        vector_store.add_documents(texts, metadatas, ids)
+        return {"status": "success", "chunks_added": len(chunks)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

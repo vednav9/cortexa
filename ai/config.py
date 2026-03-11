@@ -1,7 +1,6 @@
 """
 Configuration file for RAG system
 """
-import torch
 from pathlib import Path
 
 # Base paths
@@ -25,7 +24,7 @@ EMBEDDINGS_JSON = PROCESSED_DIR / "embeddings_store.json"
 # Model configurations
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-MiniLM-L3-v2"  # 120 MB
 LLM_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # 1.1 GB
-WHISPER_MODEL = "base"  # Options: tiny, base, small, medium, large
+WHISPER_MODEL = "tiny"  # Options: tiny, base, small, medium, large (tiny=75MB fits Render free 512MB)
 
 # Alternative faster models (uncomment to use):
 # LLM_MODEL = "distilgpt2"  # 350 MB - RECOMMENDED: 3-5x faster!
@@ -62,7 +61,7 @@ SUPPORTED_AUDIO_FORMATS = ['.wav', '.mp3', '.m4a', '.ogg', '.flac']
 WHISPER_LANGUAGE = "en"  # English only as per requirement
 
 # Device settings
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cpu"  # Render free tier has no GPU
 
 # Performance settings
 USE_FAST_TOKENIZER = True

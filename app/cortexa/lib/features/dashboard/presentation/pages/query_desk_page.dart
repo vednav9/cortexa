@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../data/models/query_model.dart';
+import '../../data/repositories/query_repository.dart';
 
 class QueryDeskPage extends StatefulWidget {
-  const QueryDeskPage({super.key});
+  final String? institutionId;
+
+  const QueryDeskPage({super.key, this.institutionId});
 
   @override
   State<QueryDeskPage> createState() => _QueryDeskPageState();
@@ -12,97 +16,119 @@ class QueryDeskPage extends StatefulWidget {
 
 class _QueryDeskPageState extends State<QueryDeskPage> {
   final _storage = getIt<HiveStorageService>();
+  final _queryRepository = QueryRepository();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  String _selectedCategory = 'General';
-  String _selectedPriority = 'Normal';
+  final _replyController = TextEditingController();
+  String _selectedCategory = 'general';
+  String _selectedPriority = 'normal';
+
+  final List<Map<String, String>> _categories = [
+    {'value': 'general', 'label': 'General'},
+    {'value': 'technical', 'label': 'Technical'},
+    {'value': 'academic', 'label': 'Academic'},
+    {'value': 'administrative', 'label': 'Administrative'},
+  ];
   
-  final List<String> _categories = ['General', 'Technical', 'Academic', 'Administrative'];
-  final List<String> _priorities = ['Low', 'Normal', 'High', 'Urgent'];
-  
-  List<Map<String, dynamic>> _queries = [];
-  String _filterStatus = 'All';
-  bool _isInstitutionContext = false;
-  String? _institutionName;
+  final List<Map<String, String>> _priorities = [
+    {'value': 'low', 'label': 'Low'},
+    {'value': 'normal', 'label': 'Normal'},
+    {'value': 'high', 'label': 'High'},
+    {'value': 'urgent', 'label': 'Urgent'},
+  ];
+
+  List<Query> _queries = [];
+  QueryStats? _stats;
+  String _filterStatus = 'all';
+  bool _isLoading = true;
+  String? _institutionId;
+  String? _userRole;
 
   @override
   void initState() {
     super.initState();
-    _determineContext();
-    _loadQueries();
+    _initializeData();
   }
-  
-  void _determineContext() {
+
+  Future<void> _initializeData() async {
     final currentUser = _storage.getCurrentUser();
-    final institutionId = currentUser?.institutionId;
-    
-    // Determine context based on query scope:
-    // - Cortexa-level: Queries submitted to Cortexa platform (for super admin/developers)
-    // - Environment-level: Queries within an institution (for institution admin)
-    
-    if (institutionId != null && institutionId.isNotEmpty) {
-      // User belongs to an institution - environment level
-      _isInstitutionContext = true;
-      
-      // Load institution name
-      final institution = _storage.findInstitutionById(institutionId);
-      _institutionName = institution?['institution_name']?.toString() ?? 
-                        institution?['name']?.toString() ?? 
-                        'Your Institution';
+    _userRole = currentUser?.role;
+
+    // Resolve institutionId: explicit param → stored user model → saved current institution
+    final candidateId = widget.institutionId ??
+        currentUser?.institutionId ??
+        (_storage.getCurrentInstitution()?['id'] as String?);
+    _institutionId = (candidateId != null && candidateId.isNotEmpty) ? candidateId : null;
+
+    // If still null, update the stored user model with the current institution data so
+    // subsequent navigations don't hit the same gap.
+    if (_institutionId != null &&
+        (currentUser?.institutionId == null ||
+            currentUser!.institutionId!.isEmpty) &&
+        currentUser != null) {
+      await _storage.saveUser(
+        currentUser.copyWith(institutionId: _institutionId),
+      );
+    }
+
+    if (_institutionId != null) {
+      await _loadQueries();
+      await _loadStats();
     } else {
-      // Cortexa-level queries (platform-wide support)
-      _isInstitutionContext = false;
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Institution not found. Please re-login and try again.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
-  void _loadQueries() {
+  Future<void> _loadQueries() async {
+    if (_institutionId == null) return;
+
     try {
-      final currentUser = _storage.getCurrentUser();
-      final userId = currentUser?.id;
-      final userRole = currentUser?.role.toLowerCase();
-      final institutionId = currentUser?.institutionId;
+      setState(() => _isLoading = true);
       
-      if (userId != null) {
-        List<Map<String, dynamic>> queries;
-        
-        if (_isInstitutionContext) {
-          // Environment-level: Queries within an institution
-          if (userRole == 'admin') {
-            // Institution admin sees all environment-level queries from their institution
-            queries = _storage.getAllQueries(userId: null)
-              .where((q) => 
-                q['institution_id'] == institutionId && 
-                q['query_level'] == 'environment'
-              )
-              .toList();
-          } else {
-            // Students/teachers see only their own environment-level queries
-            queries = _storage.getAllQueries(userId: userId)
-              .where((q) => q['query_level'] == 'environment')
-              .toList();
-          }
-        } else {
-          // Cortexa-level: Platform-wide queries (for super admin/developers)
-          // Users without institution can only submit Cortexa-level queries
-          // TODO: When super admin is implemented, they will see all Cortexa-level queries
-          queries = _storage.getAllQueries(userId: userId)
-            .where((q) => q['query_level'] == 'cortexa' || q['query_level'] == null)
-            .toList();
-        }
-        
+      final queries = await _queryRepository.getQueries(
+        institutionId: _institutionId!,
+        status: _filterStatus,
+      );
+
+      if (mounted) {
         setState(() {
           _queries = queries;
-        });
-      } else {
-        setState(() {
-          _queries = [];
+          _isLoading = false;
         });
       }
     } catch (e) {
-      print('Error loading queries: $e');
-      setState(() {
-        _queries = [];
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading queries: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadStats() async {
+    if (_institutionId == null) return;
+
+    try {
+      final stats = await _queryRepository.getQueryStats(_institutionId!);
+      if (mounted) {
+        setState(() => _stats = stats);
+      }
+    } catch (e) {
+      print('Error loading stats: $e');
     }
   }
 
@@ -110,10 +136,11 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _replyController.dispose();
     super.dispose();
   }
 
-  void _submitQuery() {
+  Future<void> _submitQuery() async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -134,45 +161,56 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
       return;
     }
 
-    final currentUser = _storage.getCurrentUser();
-    final institutionId = currentUser?.institutionId;
+    if (_institutionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Institution not found'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
-    final newQuery = {
-      'id': 'query_${DateTime.now().millisecondsSinceEpoch}',
-      'institution_id': institutionId,
-      'user_id': currentUser?.id ?? 'unknown',
-      'title': _titleController.text.trim(),
-      'description': _descriptionController.text.trim(),
-      'category': _selectedCategory,
-      'priority': _selectedPriority,
-      'status': 'Open',
-      'query_level': _isInstitutionContext ? 'environment' : 'cortexa',
-      'createdAt': DateTime.now().toIso8601String(),
-      'username': currentUser?.username ?? 'Unknown User',
-    };
+    try {
+      await _queryRepository.createQuery(
+        institutionId: _institutionId!,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        category: _selectedCategory,
+        priority: _selectedPriority,
+      );
 
-    _storage.saveQuery(newQuery);
+      // Clear form
+      _titleController.clear();
+      _descriptionController.clear();
+      setState(() {
+        _selectedCategory = 'general';
+        _selectedPriority = 'normal';
+      });
 
-    setState(() {
-      _queries.insert(0, newQuery);
-    });
-
-    // Clear form
-    _titleController.clear();
-    _descriptionController.clear();
-    setState(() {
-      _selectedCategory = 'General';
-      _selectedPriority = 'Normal';
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Query submitted successfully!'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-
-    Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Query submitted successfully!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        
+        // Reload queries and stats
+        await _loadQueries();
+        await _loadStats();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting query: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   void _showNewQueryDialog() {
@@ -180,535 +218,970 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.background,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.92,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(28),
-              topRight: Radius.circular(28),
-            ),
-          ),
-          child: Column(
-            children: [
-              // Drag handle
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 14),
-                width: 45,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.borderDark.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(3),
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.92,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (context, scrollController) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
                 ),
               ),
-              
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 8, 28, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'New Query',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.5,
-                      ),
+              child: Column(
+                children: [
+                  // Drag handle
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 14),
+                    width: 45,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderDark.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(3),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _isInstitutionContext
-                          ? 'Submit your query to $_institutionName'
-                          : 'Submit your query to the Cortexa support team',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary.withValues(alpha: 0.8),
-                      ),
+                  ),
+
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 8, 28, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'New Query',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _institutionId != null
+                              ? 'Submit your query to your institution'
+                              : 'Submit your query to Cortexa support',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textSecondary.withValues(
+                              alpha: 0.8,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              
-              const Divider(height: 1, thickness: 1),
-              
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      
-                      // Title
-                      TextField(
-                        controller: _titleController,
-                        enableInteractiveSelection: true,
-                        style: const TextStyle(fontSize: 15),
-                        decoration: InputDecoration(
-                          labelText: 'Title *',
-                          labelStyle: const TextStyle(fontSize: 14),
-                          hintText: 'Enter query title',
-                          hintStyle: TextStyle(fontSize: 14, color: AppColors.textTertiary.withValues(alpha: 0.5)),
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: AppColors.borderDark.withValues(alpha: 0.2)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      
-                      // Description
-                      TextField(
-                        controller: _descriptionController,
-                        enableInteractiveSelection: true,
-                        maxLines: 5,
-                        style: const TextStyle(fontSize: 15),
-                        decoration: InputDecoration(
-                          labelText: 'Description *',
-                          labelStyle: const TextStyle(fontSize: 14),
-                          hintText: 'Describe your query in detail',
-                          hintStyle: TextStyle(fontSize: 14, color: AppColors.textTertiary.withValues(alpha: 0.5)),
-                          alignLabelWithHint: true,
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: AppColors.borderDark.withValues(alpha: 0.2)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      
-                      // Category
-                      StatefulBuilder(
-                        builder: (context, setDialogState) => DropdownButtonFormField<String>(
-                          initialValue: _selectedCategory,
-                          style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
-                          decoration: InputDecoration(
-                            labelText: 'Category',
-                            labelStyle: const TextStyle(fontSize: 14),
-                            filled: true,
-                            fillColor: AppColors.background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: AppColors.borderDark.withValues(alpha: 0.2)),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          ),
-                          items: _categories.map((category) {
-                            return DropdownMenuItem(
-                              value: category,
-                              child: Text(category),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setDialogState(() => _selectedCategory = value!);
-                            setState(() => _selectedCategory = value!);
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      
-                      // Priority
-                      StatefulBuilder(
-                        builder: (context, setDialogState) => DropdownButtonFormField<String>(
-                          initialValue: _selectedPriority,
-                          style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
-                          decoration: InputDecoration(
-                            labelText: 'Priority',
-                            labelStyle: const TextStyle(fontSize: 14),
-                            filled: true,
-                            fillColor: AppColors.background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: AppColors.borderDark.withValues(alpha: 0.2)),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                          ),
-                          items: _priorities.map((priority) {
-                            IconData icon;
-                            Color color;
-                            switch (priority) {
-                              case 'Low':
-                                icon = Icons.arrow_downward;
-                                color = Colors.blue;
-                                break;
-                              case 'Normal':
-                                icon = Icons.remove;
-                                color = Colors.green;
-                                break;
-                              case 'High':
-                                icon = Icons.arrow_upward;
-                                color = Colors.orange;
-                                break;
-                              case 'Urgent':
-                                icon = Icons.priority_high;
-                                color = Colors.red;
-                                break;
-                              default:
-                                icon = Icons.remove;
-                                color = Colors.grey;
-                            }
-                            
-                            return DropdownMenuItem(
-                              value: priority,
-                              child: Row(
-                                children: [
-                                  Icon(icon, size: 18, color: color),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    priority,
-                                    style: const TextStyle(fontSize: 15),
-                                  ),
-                                ],
+                  ),
+
+                  const Divider(height: 1, thickness: 1),
+
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title
+                          TextField(
+                            controller: _titleController,
+                            enableInteractiveSelection: true,
+                            style: const TextStyle(fontSize: 15),
+                            decoration: InputDecoration(
+                              labelText: 'Title *',
+                              labelStyle: const TextStyle(fontSize: 14),
+                              hintText: 'Enter query title',
+                              hintStyle: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textTertiary.withValues(
+                                  alpha: 0.5,
+                                ),
                               ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setDialogState(() => _selectedPriority = value!);
-                            setState(() => _selectedPriority = value!);
-                          },
-                        ),
+                              filled: true,
+                              fillColor: AppColors.background,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: AppColors.borderDark.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Description
+                          TextField(
+                            controller: _descriptionController,
+                            enableInteractiveSelection: true,
+                            maxLines: 5,
+                            style: const TextStyle(fontSize: 15),
+                            decoration: InputDecoration(
+                              labelText: 'Description *',
+                              labelStyle: const TextStyle(fontSize: 14),
+                              hintText: 'Describe your query in detail',
+                              hintStyle: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textTertiary.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                              alignLabelWithHint: true,
+                              filled: true,
+                              fillColor: AppColors.background,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: AppColors.borderDark.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Category
+                          StatefulBuilder(
+                            builder: (context, setDialogState) =>
+                                DropdownButtonFormField<String>(
+                                  initialValue: _selectedCategory,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Category',
+                                    labelStyle: const TextStyle(fontSize: 14),
+                                    filled: true,
+                                    fillColor: AppColors.background,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: AppColors.borderDark.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: AppColors.primary,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                  items: _categories.map((category) {
+                                    return DropdownMenuItem(
+                                      value: category['value'],
+                                      child: Text(category['label']!),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setDialogState(() => _selectedCategory = value);
+                                      setState(() => _selectedCategory = value);
+                                    }
+                                  },
+                                ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Priority
+                          StatefulBuilder(
+                            builder: (context, setDialogState) =>
+                                DropdownButtonFormField<String>(
+                                  initialValue: _selectedPriority,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Priority',
+                                    labelStyle: const TextStyle(fontSize: 14),
+                                    filled: true,
+                                    fillColor: AppColors.background,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                        color: AppColors.borderDark.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                        color: AppColors.primary,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 16,
+                                    ),
+                                  ),
+                                  items: _priorities.map((priority) {
+                                    final priorityValue = priority['value']!;
+                                    final priorityLabel = priority['label']!;
+                                    IconData icon;
+                                    Color color;
+                                    switch (priorityValue) {
+                                      case 'low':
+                                        icon = Icons.arrow_downward;
+                                        color = Colors.blue;
+                                        break;
+                                      case 'normal':
+                                        icon = Icons.remove;
+                                        color = Colors.green;
+                                        break;
+                                      case 'high':
+                                        icon = Icons.arrow_upward;
+                                        color = Colors.orange;
+                                        break;
+                                      case 'urgent':
+                                        icon = Icons.priority_high;
+                                        color = Colors.red;
+                                        break;
+                                      default:
+                                        icon = Icons.remove;
+                                        color = Colors.grey;
+                                    }
+
+                                    return DropdownMenuItem(
+                                      value: priorityValue,
+                                      child: Row(
+                                        children: [
+                                          Icon(icon, size: 18, color: color),
+                                          const SizedBox(width: 10),
+                                          Text(
+                                            priorityLabel,
+                                            style: const TextStyle(
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setDialogState(() => _selectedPriority = value);
+                                      setState(() => _selectedPriority = value);
+                                    }
+                                  },
+                                ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              
-              // Bottom buttons section
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: AppColors.borderDark.withValues(alpha: 0.2),
-                      width: 1,
                     ),
                   ),
-                ),
-                padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.textPrimary,
-                          side: BorderSide(color: AppColors.borderDark.withValues(alpha: 0.4)),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+
+                  // Bottom buttons section
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border(
+                        top: BorderSide(
+                          color: AppColors.borderDark.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              side: BorderSide(
+                                color: AppColors.borderDark.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton(
-                        onPressed: _submitQuery,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            onPressed: _submitQuery,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'Submit Query',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
-                        child: const Text(
-                          'Submit Query',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _showQueryDetails(Map<String, dynamic> query) {
-    final createdAt = DateTime.parse(query['createdAt'] as String);
-    final formattedDate = '${createdAt.day.toString().padLeft(2, '0')}/${createdAt.month.toString().padLeft(2, '0')}/${createdAt.year}, ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}:${createdAt.second.toString().padLeft(2, '0')}';
+  void _showQueryDetails(Query query) {
+    // Local state for this modal
+    Query currentQuery = query;
     
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.background,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(28),
-              topRight: Radius.circular(28),
-            ),
-          ),
-          child: Column(
-            children: [
-              // Drag handle
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 14),
-                width: 45,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.borderDark.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-              
-              // Header with title and close button
-              Padding(
-                padding: const EdgeInsets.fromLTRB(28, 8, 20, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        query['title'] as String,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                          letterSpacing: -0.5,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+      builder: (modalContext) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: DraggableScrollableSheet(
+                initialChildSize: 0.85,
+                minChildSize: 0.5,
+                maxChildSize: 0.95,
+                builder: (context, scrollController) => Container(
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(28),
+                      topRight: Radius.circular(28),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 24),
-                      onPressed: () => Navigator.pop(context),
-                      color: AppColors.textSecondary,
-                    ),
-                  ],
-                ),
-              ),
-              
-              const Divider(height: 1, thickness: 1),
-              
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(28),
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Status badges
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _getStatusColor(query['status'] as String).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: _getStatusColor(query['status'] as String).withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              query['status'] as String,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: _getStatusColor(query['status'] as String),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _getPriorityColor(query['priority'] as String).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: _getPriorityColor(query['priority'] as String).withValues(alpha: 0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _getPriorityIcon(query['priority'] as String),
-                                  size: 14,
-                                  color: _getPriorityColor(query['priority'] as String),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  query['priority'] as String,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: _getPriorityColor(query['priority'] as String),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      
-                      // Description
-                      Text(
-                        query['description'] as String,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: AppColors.textSecondary,
-                          height: 1.6,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      
-                      // Category
+                      // Drag handle
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        margin: const EdgeInsets.symmetric(vertical: 14),
+                        width: 45,
+                        height: 5,
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.category_outlined,
-                              size: 16,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              query['category'] as String,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
+                          color: AppColors.borderDark.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(3),
                         ),
                       ),
-                      const SizedBox(height: 32),
-                      
-                      // Admin response section (mock)
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.borderDark.withValues(alpha: 0.2),
-                            width: 1,
-                          ),
-                        ),
+
+                      // Header with title and close button
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 8, 20, 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Title and Close Button Row
                             Row(
                               children: [
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.success,
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: const Center(
-                                    child: Text(
-                                      'A',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                Expanded(
+                                  child: Text(
+                                    currentQuery.title,
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                      letterSpacing: -0.5,
                                     ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                IconButton(
+                                  icon: const Icon(Icons.close, size: 24),
+                                  onPressed: () => Navigator.pop(context),
+                                  color: AppColors.textSecondary,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            
+                            // Tags and Status Dropdown Row
+                            Row(
+                              children: [
+                                // Tags wrapped in Flexible to prevent overflow
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
                                     children: [
-                                      const Text(
-                                        'Admin',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.textPrimary,
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _getStatusColor(
+                                            currentQuery.status,
+                                          ).withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: _getStatusColor(
+                                              currentQuery.status,
+                                            ).withValues(alpha: 0.3),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          currentQuery.status,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: _getStatusColor(
+                                              currentQuery.status,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        formattedDate,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textTertiary.withValues(alpha: 0.7),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _getPriorityColor(
+                                            currentQuery.priority,
+                                          ).withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: _getPriorityColor(
+                                              currentQuery.priority,
+                                            ).withValues(alpha: 0.3),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              _getPriorityIcon(
+                                                currentQuery.priority,
+                                              ),
+                                              size: 14,
+                                              color: _getPriorityColor(
+                                                currentQuery.priority,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              currentQuery.priority,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: _getPriorityColor(
+                                                  currentQuery.priority,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
+                                
+                                // Status update dropdown for admin/teacher
+                                if (_userRole == 'admin' || _userRole == 'teacher') ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    constraints: const BoxConstraints(maxWidth: 140),
+                                    padding: const EdgeInsets.only(left: 8, right: 4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.background,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: AppColors.borderDark.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                    child: DropdownButton<String>(
+                                      value: currentQuery.status,
+                                      underline: const SizedBox(),
+                                      isDense: true,
+                                      isExpanded: true,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                      items: const [
+                                        DropdownMenuItem(
+                                          value: 'open',
+                                          child: Text('Open'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'in-progress',
+                                          child: Text('In Progress'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'resolved',
+                                          child: Text('Resolved'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: 'closed',
+                                          child: Text('Closed'),
+                                        ),
+                                      ],
+                                      onChanged: (newStatus) async {
+                                        if (newStatus != null) {
+                                          try {
+                                            final updatedQuery =
+                                                await _queryRepository
+                                                    .updateQueryStatus(
+                                              queryId: currentQuery.id,
+                                              status: newStatus,
+                                            );
+                                            setModalState(() {
+                                              currentQuery = updatedQuery;
+                                            });
+                                            setState(() {
+                                              _queries = _queries
+                                                  .map((q) => q.id ==
+                                                          currentQuery.id
+                                                      ? updatedQuery
+                                                      : q)
+                                                  .toList();
+                                            });
+                                            _loadStats();
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Status updated successfully',
+                                                ),
+                                                backgroundColor: AppColors.success,
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Error updating status: $e',
+                                                ),
+                                                backgroundColor: AppColors.error,
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Your query has been received. Our support team will review it and respond shortly.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textSecondary,
-                                height: 1.5,
+                          ],
+                        ),
+                      ),
+
+                      const Divider(height: 1, thickness: 1),
+
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const ClampingScrollPhysics(),
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(28),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Description
+                              const Text(
+                                'Description',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
+                              const SizedBox(height: 8),
+                              Text(
+                                currentQuery.description,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  color: AppColors.textSecondary,
+                                  height: 1.6,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Category
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.category_outlined,
+                                          size: 16,
+                                          color: AppColors.primary,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          currentQuery.category,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'By ${currentQuery.createdBy.name}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textTertiary.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 32),
+
+                              // Replies section
+                              const Text(
+                                'Replies',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+
+                              if (currentQuery.replies.isEmpty)
+                                Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.background,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: AppColors.borderDark.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                          Icons.chat_bubble_outline,
+                                          size: 48,
+                                          color: AppColors.textTertiary
+                                              .withValues(alpha: 0.3),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          'No replies yet',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: AppColors.textTertiary
+                                                .withValues(alpha: 0.6),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              else
+                                ...currentQuery.replies.map((reply) {
+                                  final replyDate = _formatDateTime(
+                                    reply.repliedAt,
+                                  );
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.background,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: AppColors.borderDark.withValues(
+                                          alpha: 0.2,
+                                        ),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              width: 36,
+                                              height: 36,
+                                              decoration: BoxDecoration(
+                                                color: _getUserRoleColor(
+                                                  reply.repliedBy.userModel,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(18),
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  reply.repliedBy.name[0]
+                                                      .toUpperCase(),
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    reply.repliedBy.name,
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color:
+                                                          AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    replyDate,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppColors
+                                                          .textTertiary
+                                                          .withValues(
+                                                        alpha: 0.7,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          reply.text,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: AppColors.textSecondary,
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Reply input field
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border(
+                            top: BorderSide(
+                              color: AppColors.borderDark.withValues(
+                                alpha: 0.2,
+                              ),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _replyController,
+                                minLines: 1,
+                                maxLines: 3,
+                                style: const TextStyle(fontSize: 15),
+                                decoration: InputDecoration(
+                                  hintText: 'Type your reply...',
+                                  hintStyle: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textTertiary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                  filled: true,
+                                  fillColor: AppColors.background,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: AppColors.borderDark.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.primary,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            ElevatedButton(
+                              onPressed: () async {
+                                if (_replyController.text.trim().isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Please enter a reply'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                try {
+                                  final updatedQuery =
+                                      await _queryRepository.addReply(
+                                    queryId: currentQuery.id,
+                                    text: _replyController.text.trim(),
+                                  );
+
+                                  _replyController.clear();
+                                  setModalState(() {
+                                    currentQuery = updatedQuery;
+                                  });
+                                  setState(() {
+                                    _queries = _queries
+                                        .map((q) =>
+                                            q.id == currentQuery.id
+                                                ? updatedQuery
+                                                : q)
+                                        .toList();
+                                  });
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Reply sent successfully'),
+                                      backgroundColor: AppColors.success,
+                                    ),
+                                  );
+                                } catch (e) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error sending reply: $e'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 16,
+                                ),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Icon(Icons.send, size: 20),
                             ),
                           ],
                         ),
@@ -717,35 +1190,65 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Open':
-        return Colors.orange;
-      case 'In Progress':
-        return Colors.blue;
-      case 'Resolved':
+  Color _getUserRoleColor(String userModel) {
+    switch (userModel.toLowerCase()) {
+      case 'admin':
+        return AppColors.error;
+      case 'teacher':
         return AppColors.success;
+      case 'student':
+        return AppColors.primary;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'open':
+        return Colors.orange;
+      case 'in-progress':
+        return Colors.blue;
+      case 'resolved':
+        return AppColors.success;
+      case 'closed':
+        return Colors.grey.shade600;
       default:
         return Colors.grey;
     }
   }
 
   Color _getPriorityColor(String priority) {
-    switch (priority) {
-      case 'Low':
+    switch (priority.toLowerCase()) {
+      case 'low':
         return Colors.blue;
-      case 'Normal':
+      case 'normal':
         return Colors.green;
-      case 'High':
+      case 'high':
         return Colors.orange;
-      case 'Urgent':
+      case 'urgent':
         return Colors.red;
       default:
         return Colors.grey;
@@ -753,14 +1256,14 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
   }
 
   IconData _getPriorityIcon(String priority) {
-    switch (priority) {
-      case 'Low':
+    switch (priority.toLowerCase()) {
+      case 'low':
         return Icons.arrow_downward;
-      case 'Normal':
+      case 'normal':
         return Icons.remove;
-      case 'High':
+      case 'high':
         return Icons.arrow_upward;
-      case 'Urgent':
+      case 'urgent':
         return Icons.priority_high;
       default:
         return Icons.remove;
@@ -769,9 +1272,8 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredQueries = _filterStatus == 'All'
-        ? _queries
-        : _queries.where((q) => q['status'] == _filterStatus).toList();
+    // Queries are already filtered from backend based on _filterStatus
+    final filteredQueries = _queries;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -828,16 +1330,14 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _isInstitutionContext
-                      ? 'Get help and support from $_institutionName'
-                      : 'Get help and support from Cortexa team',
+                  'Get help and support for your queries',
                   style: const TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 20),
-                
+
                 // Stats in 2x2 grid
                 Column(
                   children: [
@@ -845,14 +1345,14 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                       children: [
                         _buildStatCard(
                           'Total Queries',
-                          _queries.length.toString(),
+                          _stats?.total.toString() ?? '0',
                           Icons.chat_bubble_outline,
                           AppColors.primary,
                         ),
                         const SizedBox(width: 12),
                         _buildStatCard(
                           'Open',
-                          _queries.where((q) => q['status'] == 'Open').length.toString(),
+                          _stats?.open.toString() ?? '0',
                           Icons.schedule,
                           Colors.orange,
                         ),
@@ -863,14 +1363,14 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                       children: [
                         _buildStatCard(
                           'In Progress',
-                          _queries.where((q) => q['status'] == 'In Progress').length.toString(),
+                          _stats?.inProgress.toString() ?? '0',
                           Icons.hourglass_empty,
                           Colors.blue,
                         ),
                         const SizedBox(width: 12),
                         _buildStatCard(
                           'Resolved',
-                          _queries.where((q) => q['status'] == 'Resolved').length.toString(),
+                          _stats?.resolved.toString() ?? '0',
                           Icons.check_circle_outline,
                           AppColors.success,
                         ),
@@ -881,7 +1381,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
               ],
             ),
           ),
-          
+
           // Filter chips with horizontal scroll
           SizedBox(
             height: 50,
@@ -889,58 +1389,86 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 24),
               children: [
-                _buildFilterChip('All', _filterStatus == 'All', Icons.list),
+                _buildFilterChip('all', 'All', _filterStatus == 'all', Icons.list),
                 const SizedBox(width: 8),
-                _buildFilterChip('Open', _filterStatus == 'Open', Icons.schedule),
+                _buildFilterChip(
+                  'open',
+                  'Open',
+                  _filterStatus == 'open',
+                  Icons.schedule,
+                ),
                 const SizedBox(width: 8),
-                _buildFilterChip('In Progress', _filterStatus == 'In Progress', Icons.hourglass_empty),
+                _buildFilterChip(
+                  'in-progress',
+                  'In Progress',
+                  _filterStatus == 'in-progress',
+                  Icons.hourglass_empty,
+                ),
                 const SizedBox(width: 8),
-                _buildFilterChip('Resolved', _filterStatus == 'Resolved', Icons.check_circle),
+                _buildFilterChip(
+                  'resolved',
+                  'Resolved',
+                  _filterStatus == 'resolved',
+                  Icons.check_circle,
+                ),
               ],
             ),
           ),
           const SizedBox(height: 8),
-          
+
           // Queries list
           Expanded(
-            child: filteredQueries.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.help_outline,
-                          size: 80,
-                          color: AppColors.textTertiary.withValues(alpha: 0.3),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No queries yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondary.withValues(alpha: 0.8),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap the + button to create your first query',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textTertiary.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    itemCount: filteredQueries.length,
-                    itemBuilder: (context, index) {
-                      final query = filteredQueries[index];
-                      return _buildQueryCard(query);
-                    },
-                  ),
+                : filteredQueries.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.help_outline,
+                              size: 80,
+                              color: AppColors.textTertiary.withValues(alpha: 0.3),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No queries yet',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary.withValues(
+                                  alpha: 0.8,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Tap the + button to create your first query',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textTertiary.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 8,
+                        ),
+                        itemCount: filteredQueries.length,
+                        itemBuilder: (context, index) {
+                          final query = filteredQueries[index];
+                          return _buildQueryCard(query);
+                        },
+                      ),
           ),
         ],
       ),
@@ -956,17 +1484,19 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: color.withValues(alpha: 0.2),
-            width: 1,
-          ),
+          border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1007,7 +1537,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
     );
   }
 
-  Widget _buildFilterChip(String label, bool isSelected, IconData icon) {
+  Widget _buildFilterChip(String value, String label, bool isSelected, IconData icon) {
     return FilterChip(
       label: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1030,23 +1560,25 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
       ),
       selected: isSelected,
       onSelected: (selected) {
-        setState(() => _filterStatus = label);
+        setState(() => _filterStatus = value);
+        _loadQueries(); // Reload with new filter
       },
       backgroundColor: AppColors.surface,
       selectedColor: AppColors.primary,
       checkmarkColor: Colors.white,
       showCheckmark: false,
       side: BorderSide(
-        color: isSelected ? AppColors.primary : AppColors.borderDark.withValues(alpha: 0.3),
+        color: isSelected
+            ? AppColors.primary
+            : AppColors.borderDark.withValues(alpha: 0.3),
         width: 1,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     );
   }
 
-  Widget _buildQueryCard(Map<String, dynamic> query) {
-    final createdAt = DateTime.parse(query['createdAt'] as String);
-    final timeAgo = _formatTimeAgo(createdAt);
+  Widget _buildQueryCard(Query query) {
+    final timeAgo = _formatTimeAgo(query.createdAt);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1075,7 +1607,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                   children: [
                     Expanded(
                       child: Text(
-                        query['title'] as String,
+                        query.title,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -1087,17 +1619,22 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(query['status'] as String).withValues(alpha: 0.15),
+                        color: _getStatusColor(query.status).withValues(
+                          alpha: 0.15,
+                        ),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        query['status'] as String,
+                        query.status,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: _getStatusColor(query['status'] as String),
+                          color: _getStatusColor(query.status),
                         ),
                       ),
                     ),
@@ -1105,7 +1642,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  query['description'] as String,
+                  query.description,
                   style: const TextStyle(
                     fontSize: 14,
                     color: AppColors.textSecondary,
@@ -1116,8 +1653,9 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    // Show username for admin viewing institution queries
-                    if (_isInstitutionContext && _storage.getCurrentUser()?.role.toLowerCase() == 'admin' && query['username'] != null) ...[
+                    // Show username for admin/teacher viewing all queries
+                    if (_userRole != null &&
+                        (_userRole == 'admin' || _userRole == 'teacher')) ...[
                       Icon(
                         Icons.person_outline,
                         size: 14,
@@ -1126,11 +1664,13 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          query['username'] as String,
+                          query.createdBy.name,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
-                            color: AppColors.textTertiary.withValues(alpha: 0.8),
+                            color: AppColors.textTertiary.withValues(
+                              alpha: 0.8,
+                            ),
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1139,13 +1679,16 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                     ],
                     Flexible(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          query['category'] as String,
+                          query.category,
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
@@ -1157,18 +1700,18 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                     ),
                     const SizedBox(width: 8),
                     Icon(
-                      _getPriorityIcon(query['priority'] as String),
+                      _getPriorityIcon(query.priority),
                       size: 14,
-                      color: _getPriorityColor(query['priority'] as String),
+                      color: _getPriorityColor(query.priority),
                     ),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
-                        query['priority'] as String,
+                        query.priority,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
-                          color: _getPriorityColor(query['priority'] as String),
+                          color: _getPriorityColor(query.priority),
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),

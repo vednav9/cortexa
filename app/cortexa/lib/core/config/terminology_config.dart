@@ -16,12 +16,12 @@ class TerminologyConfig {
     }
   }
 
-  /// Get label for learning program (Subject/Subject/Module)
+  /// Get label for learning program (Course/Subject/Module)
   static String getLearningProgramLabel(InstitutionType type, {bool plural = false}) {
     switch (type) {
       case InstitutionType.college:
       case InstitutionType.institute:
-        return plural ? 'Subjects' : 'Subject';
+        return plural ? 'Courses' : 'Course';
       case InstitutionType.school:
         return plural ? 'Subjects' : 'Subject';
       case InstitutionType.trainingCenter:
@@ -213,7 +213,7 @@ class TerminologyConfig {
     switch (type) {
       case InstitutionType.college:
       case InstitutionType.institute:
-        return 'Manage subjects and curricula';
+        return 'Manage courses and curricula';
       case InstitutionType.school:
         return 'Manage subjects and syllabus';
       case InstitutionType.trainingCenter:

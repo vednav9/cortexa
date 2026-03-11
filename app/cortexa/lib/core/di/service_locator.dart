@@ -8,6 +8,17 @@ import '../providers/app_state_provider.dart';
 import '../network/api_client.dart';
 import '../../features/auth/data/repositories/mock_auth_repository.dart';
 import '../../features/auth/data/repositories/auth_repository.dart';
+import '../../features/dashboard/data/repositories/dashboard_repository.dart';
+import '../../features/dashboard/data/repositories/invitation_repository.dart';
+import '../../features/institution/data/repositories/institution_admin_repository.dart';
+import '../../features/institution/data/repositories/announcement_repository.dart';
+import '../../features/institution/data/repositories/department_repository.dart';
+import '../../features/institution/data/repositories/course_repository.dart';
+import '../../features/institution/data/repositories/semester_repository.dart';
+import '../../features/institution/data/repositories/academic_calendar_repository.dart';
+import '../../features/institution/data/repositories/faculty_repository.dart';
+import '../../features/rag_assistant/data/repositories/ai_repository.dart';
+import '../../features/teacher/data/repositories/teacher_ai_repository.dart';
 
 final getIt = GetIt.instance;
 
@@ -99,6 +110,111 @@ Future<void> setupServiceLocator() async {
     ),
   );
   print('✅ MockAuthRepository registered');
+  
+  // Dashboard Repository
+  print('📊 Creating DashboardRepository...');
+  getIt.registerSingleton<DashboardRepository>(
+    DashboardRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ DashboardRepository registered');
+  
+  // Invitation Repository
+  print('✉️ Creating InvitationRepository...');
+  getIt.registerSingleton<InvitationRepository>(
+    InvitationRepository(
+      getIt<ApiClient>(),
+    ),
+  );
+  print('✅ InvitationRepository registered');
+  
+  // Institution Admin Repository
+  print('🏛️ Creating InstitutionAdminRepository...');
+  getIt.registerSingleton<InstitutionAdminRepository>(
+    InstitutionAdminRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ InstitutionAdminRepository registered');
+  
+  // Announcement Repository
+  print('📢 Creating AnnouncementRepository...');
+  getIt.registerSingleton<AnnouncementRepository>(
+    AnnouncementRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ AnnouncementRepository registered');
+  
+  // Department Repository
+  print('🏢 Creating DepartmentRepository...');
+  getIt.registerSingleton<DepartmentRepository>(
+    DepartmentRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ DepartmentRepository registered');
+  
+  // Course Repository
+  print('📚 Creating CourseRepository...');
+  getIt.registerSingleton<CourseRepository>(
+    CourseRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ CourseRepository registered');
+  
+  // Semester Repository
+  print('📅 Creating SemesterRepository...');
+  getIt.registerSingleton<SemesterRepository>(
+    SemesterRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ SemesterRepository registered');
+  
+  // Academic Calendar Repository
+  print('🗓️ Creating AcademicCalendarRepository...');
+  getIt.registerSingleton<AcademicCalendarRepository>(
+    AcademicCalendarRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ AcademicCalendarRepository registered');
+  
+  // Faculty Repository
+  print('👨‍🏫 Creating FacultyRepository...');
+  getIt.registerSingleton<FacultyRepository>(
+    FacultyRepository(),
+  );
+  print('✅ FacultyRepository registered');
+  
+  // AI Repository
+  print('🤖 Creating AiRepository...');
+  getIt.registerSingleton<AiRepository>(
+    AiRepository(
+      getIt<ApiClient>(),
+      getIt<HiveStorageService>(),
+    ),
+  );
+  print('✅ AiRepository registered');
+  
+  // Teacher AI Repository
+  print('👨‍🏫 Creating TeacherAiRepository...');
+  getIt.registerSingleton<TeacherAiRepository>(
+    TeacherAiRepository(
+      getIt<ApiClient>(),
+    ),
+  );
+  print('✅ TeacherAiRepository registered');
   
   print('🎉 Service locator setup complete!');
 }
