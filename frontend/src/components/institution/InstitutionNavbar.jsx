@@ -113,9 +113,9 @@ export default function InstitutionNavbar({
             <div className="flex items-center gap-2">
 
               {/* Desktop profile button */}
-              <div className="relative hidden sm:block" ref={profileRef}>
+              <div className="relative hidden sm:block" ref={profileMenuRef}>
                 <button
-                  onClick={() => setProfileOpen(!profileOpen)}
+                  onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   {/* Avatar */}
@@ -129,14 +129,14 @@ export default function InstitutionNavbar({
                     <p className="text-[13px] font-semibold text-gray-800 leading-tight">{user?.name}</p>
                     <p className="text-[11px] text-gray-400 capitalize leading-tight">{user?.role}</p>
                   </div>
-                  <motion.div animate={{ rotate: profileOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                  <motion.div animate={{ rotate: profileMenuOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                     <FiChevronDown className="w-3.5 h-3.5 text-gray-400" />
                   </motion.div>
                 </button>
 
                 {/* Dropdown */}
                 <AnimatePresence>
-                  {profileOpen && (
+                  {profileMenuOpen && (
                     <motion.div
                       initial={{ opacity: 0, y: -8, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -172,7 +172,7 @@ export default function InstitutionNavbar({
                       {/* Menu items */}
                       <div className="p-1.5">
                         <button
-                          onClick={() => setProfileOpen(false)}
+                          onClick={() => setProfileMenuOpen(false)}
                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors text-left"
                         >
                           <FiUser className="w-4 h-4 flex-shrink-0" />

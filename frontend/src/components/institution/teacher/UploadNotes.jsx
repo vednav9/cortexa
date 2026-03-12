@@ -24,7 +24,8 @@ const hexToRgb = (hex) => {
 
 export default function UploadNotes() {
     const { user } = useAuth();
-    const { currentInstitution } = useOutletContext();
+    const outletContext = useOutletContext();
+    const activeInstitution = outletContext?.currentInstitution || outletContext?.institution;
     const [courses, setCourses] = useState([]);
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -36,22 +37,22 @@ export default function UploadNotes() {
     const [fileName, setFileName] = useState("");
     const [selectedCourse, setSelectedCourse] = useState("");
 
-    const brandColor = currentInstitution?.branding?.primaryColor || '#10b981';
+    const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
     const rgb = hexToRgb(brandColor);
 
     // Fetch courses
     useEffect(() => {
-        if (currentInstitution?._id) {
+        if (user?.role === 'teacher') {
             fetchCourses();
         }
-    }, [currentInstitution]);
+    }, [user]);
 
     // Fetch documents when course is selected
     useEffect(() => {
-        if (selectedCourse && currentInstitution?._id) {
+        if (selectedCourse) {
             fetchDocuments();
         }
-    }, [selectedCourse, currentInstitution]);
+    }, [selectedCourse]);
 
     const fetchCourses = async () => {
         try {

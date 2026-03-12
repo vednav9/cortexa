@@ -124,7 +124,7 @@ export default function RAGChatbot() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef(null);
+  const chatScrollRef = useRef(null);
   const inputRef = useRef(null);
 
   /* Upload panel state */
@@ -135,7 +135,11 @@ export default function RAGChatbot() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!chatScrollRef.current || (!loading && messages.length === 0)) return;
+    // Keep scrolling inside chat panel only, avoiding full-page jump on tab open.
+    requestAnimationFrame(() => {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    });
   }, [messages, loading]);
 
   /* ── Send message ── */
@@ -200,12 +204,12 @@ export default function RAGChatbot() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
+      className="min-h-screen p-4 md:p-8"
       style={{ backgroundColor: `rgba(${rgb},0.03)` }}
     >
 
       {/* ── Page header ─────────────────────────────────────────── */}
-      <div className="px-4 sm:px-6 py-5 max-w-5xl mx-auto w-full">
+      <div className="max-w-7xl mx-auto w-full mb-6">
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -213,17 +217,14 @@ export default function RAGChatbot() {
         >
           <div className="flex items-center gap-3">
             <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: `rgba(${rgb},0.12)` }}
+              className="p-3.5 rounded-2xl flex items-center justify-center shrink-0 border"
+              style={{ backgroundColor: `rgba(${rgb},0.1)`, borderColor: `rgba(${rgb},0.2)` }}
             >
-              <HiSparkles className="w-5 h-5" style={{ color: brand }} />
+              <HiSparkles className="text-2xl" style={{ color: brand }} />
             </div>
             <div>
-              <h1 className="text-[18px] font-extrabold text-gray-900 tracking-tight leading-tight">AI Assistant</h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] text-gray-400 font-medium">RAG · Web Search</span>
-              </div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">AI Assistant</h1>
+              <p className="text-gray-500 mt-1 font-medium">RAG-powered answers from your notes and web context</p>
             </div>
           </div>
 
@@ -243,7 +244,7 @@ export default function RAGChatbot() {
       </div>
 
       {/* ── Main content ─────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-4 px-4 sm:px-6 pb-6 max-w-5xl mx-auto w-full">
+      <div className="flex-1 flex flex-col lg:flex-row gap-6 md:gap-8 max-w-7xl mx-auto w-full">
 
         {/* ── CHAT PANEL ─────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col bg-white rounded-2xl border overflow-hidden"
@@ -254,7 +255,10 @@ export default function RAGChatbot() {
             style={{ background: `linear-gradient(90deg,${brand},rgba(${rgb},0.25))` }} />
 
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4 min-h-[400px] max-h-[calc(100vh-300px)]">
+          <div
+            ref={chatScrollRef}
+            className="flex-1 overflow-y-auto px-5 py-5 space-y-4 min-h-[400px] max-h-[calc(100vh-300px)]"
+          >
 
             {/* Empty state */}
             {messages.length === 0 && (
@@ -304,7 +308,6 @@ export default function RAGChatbot() {
               </div>
             )}
 
-            <div ref={bottomRef} />
           </div>
 
           {/* Input bar */}

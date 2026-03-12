@@ -21,6 +21,15 @@ import contactRoutes from './routes/contactRoutes.js';
 
 dotenv.config();
 
+// Keep backend terminal output error-focused by default.
+// Set LOG_LEVEL=debug to re-enable standard console logs.
+if (process.env.LOG_LEVEL !== "debug" && !global.__cortexaLogsMinimized) {
+    global.__cortexaLogsMinimized = true;
+    console.log = () => {};
+    console.info = () => {};
+    console.debug = () => {};
+}
+
 const app = express();
 
 /* =====================
