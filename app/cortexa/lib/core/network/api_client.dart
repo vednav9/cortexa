@@ -78,42 +78,72 @@ class ApiClient {
     String endpoint, {
     Map<String, dynamic>? body,
   }) async {
-    final url = Uri.parse('${ApiConfig.aiBaseUrl}$endpoint');
+    final primaryBase = ApiConfig.aiBaseUrl;
+    final fallbackBase = primaryBase.endsWith('/api')
+        ? primaryBase.substring(0, primaryBase.length - 4)
+        : primaryBase;
+    final candidateUrls = <Uri>[
+      Uri.parse('$primaryBase$endpoint'),
+      if (fallbackBase != primaryBase) Uri.parse('$fallbackBase$endpoint'),
+    ];
+
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
-    print('🤖 AI POST Request: $url');
-    print('📦 Body: ${body != null ? jsonEncode(body) : "null"}');
+    ApiException? lastApiException;
 
-    try {
-      final response = await _client
-          .post(
-            url,
-            headers: headers,
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(const Duration(minutes: 3));
+    for (var i = 0; i < candidateUrls.length; i++) {
+      final url = candidateUrls[i];
+      print('🤖 AI POST Request: $url');
+      print('📦 Body: ${body != null ? jsonEncode(body) : "null"}');
 
-      print('📡 AI Response Status: ${response.statusCode}');
-      print('📄 AI Response Body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
+      try {
+        final response = await _client
+            .post(
+              url,
+              headers: headers,
+              body: body != null ? jsonEncode(body) : null,
+            )
+            .timeout(const Duration(minutes: 3));
 
-      return _handleResponse(response);
-    } on TimeoutException {
-      throw ApiException(
-        'AI request timed out. The AI service may be starting up — please try again in a moment.',
-        statusCode: 408,
-        technicalMessage: 'AI request timed out after 3 minutes. AI URL: ${ApiConfig.aiBaseUrl}',
-      );
-    } catch (e) {
-      print('❌ Error in AI POST request: $e');
-      if (e is ApiException) rethrow;
-      throw ApiException(
-        'Could not reach the AI service. Please check your connection and try again.',
-        technicalMessage: 'AI network error: $e',
-      );
+        print('📡 AI Response Status: ${response.statusCode}');
+        print('📄 AI Response Body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
+
+        return _handleResponse(response);
+      } on TimeoutException {
+        throw ApiException(
+          'AI request timed out. The AI service may be starting up — please try again in a moment.',
+          statusCode: 408,
+          technicalMessage: 'AI request timed out after 3 minutes. AI URLs: $candidateUrls',
+        );
+      } catch (e) {
+        print('❌ Error in AI POST request ($url): $e');
+        if (e is ApiException) {
+          lastApiException = e;
+          // Retry only when first candidate looks like a potential /api path mismatch.
+          final shouldRetry = i == 0 &&
+              candidateUrls.length > 1 &&
+              e.statusCode == 404;
+          if (shouldRetry) {
+            continue;
+          }
+          rethrow;
+        }
+
+        // Network-level exceptions should allow retry to next candidate if any.
+        if (i < candidateUrls.length - 1) {
+          continue;
+        }
+        throw ApiException(
+          'Could not reach the AI service. Please check your connection and try again.',
+          technicalMessage: 'AI network error: $e',
+        );
+      }
     }
+
+    throw lastApiException ?? ApiException('Could not reach the AI service.');
   }
 
   /// Like [post], but also returns response headers/status.
@@ -450,7 +480,7 @@ class ApiClient {
       return data;
     } else {
       // Get error message from response - backend messages are already user-friendly
-      final backendMessage = data['message'] as String?;
+      final backendMessage = (data['message'] ?? data['detail'] ?? data['error']) as String?;
       final userMessage = ErrorMessageMapper.getCombinedMessage(
         statusCode, 
         backendMessage,

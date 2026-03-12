@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
 import { uploadToR2, deleteFromR2 } from "../services/cloudflareR2.js";
+import aiService from "../services/aiService.js";
 
 
 
@@ -655,7 +656,7 @@ export const markDocumentFailed = async (req, res) => {
 ========================= */
 export const generateMCQs = async (req, res) => {
     try {
-        const { courseId, topic, count, difficulty } = req.body;
+        const { courseId, topic, count, difficulty, sourceType } = req.body;
         const teacherId = req.user.id;
 
         if (!courseId || !topic) {
@@ -686,33 +687,66 @@ export const generateMCQs = async (req, res) => {
             });
         }
 
-        // TODO: Integrate with AI service to generate MCQs
-        // For now, return sample MCQs
-        const sampleMCQs = [];
-        for (let i = 0; i < (count || 5); i++) {
-            sampleMCQs.push({
-                question: `Sample question ${i + 1} about ${topic}`,
-                option_a: "Option A",
-                option_b: "Option B",
-                option_c: "Option C",
-                option_d: "Option D",
-                correct_answer: 0,
-                explanation: `This is the explanation for question ${i + 1}`,
-                difficulty: difficulty || "medium"
+        const normalizedSourceType = ["topic", "document"].includes(sourceType)
+            ? sourceType
+            : "topic";
+        const normalizedDifficulty = ["easy", "medium", "hard"].includes((difficulty || "").toLowerCase())
+            ? difficulty.toLowerCase()
+            : "medium";
+        const requestedCount = Number.isFinite(Number(count))
+            ? Math.max(1, Math.min(20, Number(count)))
+            : 5;
+
+        let aiResult;
+        try {
+            // Primary path: topic/document-aware generation from indexed content.
+            aiResult = await aiService.generateMCQs(
+                normalizedSourceType,
+                topic,
+                requestedCount,
+                normalizedDifficulty
+            );
+        } catch (primaryError) {
+            const primaryMessage = primaryError?.message || "";
+            const noContextError = primaryMessage.toLowerCase().includes("no content found for topic");
+
+            if (!noContextError) {
+                throw primaryError;
+            }
+
+            // Fallback path: topic-seeded text generation when vector context is missing.
+            const topicSeed = `Topic: ${topic}\nGenerate accurate MCQs using domain knowledge for this topic.`;
+            aiResult = await aiService.generateMCQs(
+                "text",
+                topicSeed,
+                requestedCount,
+                normalizedDifficulty
+            );
+        }
+
+        const mcqs = Array.isArray(aiResult?.mcqs) ? aiResult.mcqs : [];
+
+        if (mcqs.length === 0) {
+            return res.status(502).json({
+                success: false,
+                message: "AI returned no MCQs. Try a broader topic or different source type."
             });
         }
 
         res.status(200).json({
             success: true,
-            mcqs: sampleMCQs,
-            message: "MCQs generated successfully (AI integration pending)"
+            mcqs,
+            generatedCount: mcqs.length,
+            sourceType: normalizedSourceType,
+            message: "MCQs generated successfully"
         });
     } catch (error) {
         console.error("Generate MCQs error:", error);
+        const errorMessage = error?.message || "Unknown MCQ generation error";
         res.status(500).json({
             success: false,
             message: "Failed to generate MCQs",
-            error: error.message
+            error: errorMessage
         });
     }
 };
@@ -763,7 +797,7 @@ export const saveMCQSet = async (req, res) => {
             questions: mcqs.map(mcq => ({
                 question: mcq.question,
                 options: mcq.options || [mcq.option_a, mcq.option_b, mcq.option_c, mcq.option_d],
-                correctAnswer: mcq.correctAnswer || mcq.correct_answer,
+                correctAnswer: mcq.correctAnswer ?? mcq.correct_answer,
                 explanation: mcq.explanation || "",
                 difficulty: mcq.difficulty || "medium"
             }))
@@ -822,7 +856,7 @@ export const addToMCQSet = async (req, res) => {
         const newQuestions = mcqs.map(mcq => ({
             question: mcq.question,
             options: mcq.options || [mcq.option_a, mcq.option_b, mcq.option_c, mcq.option_d],
-            correctAnswer: mcq.correctAnswer || mcq.correct_answer,
+            correctAnswer: mcq.correctAnswer ?? mcq.correct_answer,
             explanation: mcq.explanation || "",
             difficulty: mcq.difficulty || "medium"
         }));

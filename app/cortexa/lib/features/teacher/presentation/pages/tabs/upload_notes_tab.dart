@@ -38,6 +38,38 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
     _loadCourses();
   }
 
+  void _showStatusSnackBar({
+    required String message,
+    required IconData icon,
+    required Color color,
+    int seconds = 4,
+  }) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: seconds),
+      ),
+    );
+  }
+
   Future<void> _loadCourses() async {
     setState(() {
       _isLoadingCourses = true;
@@ -102,28 +134,12 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
 
   Future<void> _pickDocument() async {
     if (_selectedCourse == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Please select a course first',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.orange.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Please select a course first',
+        icon: Icons.warning_amber_rounded,
+        color: Colors.orange.shade600,
+        seconds: 3,
+      );
       return;
     }
 
@@ -141,29 +157,11 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
         final extension = file.extension?.toLowerCase();
         final allowedExtensions = ['pdf', 'txt', 'docx', 'doc', 'ppt', 'pptx'];
         if (extension == null || !allowedExtensions.contains(extension)) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Invalid file type. Only PDF, Word, TXT, and PowerPoint files are allowed.',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-                backgroundColor: Colors.red.shade600,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                margin: const EdgeInsets.all(16),
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
+          _showStatusSnackBar(
+            message: 'Invalid file type. Use PDF, Word, TXT, or PowerPoint.',
+            icon: Icons.error_outline,
+            color: Colors.red.shade600,
+          );
           return;
         }
 
@@ -198,28 +196,11 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
         
         // Validate file is not empty
         if (file.size == 0) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'The selected file is empty. Please choose a valid document.',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-                backgroundColor: Colors.red.shade600,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                margin: const EdgeInsets.all(16),
-              ),
-            );
-          }
+          _showStatusSnackBar(
+            message: 'The selected file is empty. Please choose a valid document.',
+            icon: Icons.error_outline,
+            color: Colors.red.shade600,
+          );
           return;
         }
 
@@ -231,28 +212,11 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
         _showFileNameDialog();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Failed to select file: ${e.toString()}',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Failed to select file: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+      );
     }
   }
 
