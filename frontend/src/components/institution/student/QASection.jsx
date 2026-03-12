@@ -1,338 +1,324 @@
+// QASection.jsx – Consistent Brand-Themed Design
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  FiMessageCircle,
-  FiSend,
-  FiThumbsUp,
-  FiCheckCircle,
-  FiClock,
-  FiSearch,
-  FiUser,
-  FiBookOpen,
-  FiEye,
-  FiX,
-  FiAlertCircle,
+  FiMessageCircle, FiSend, FiThumbsUp, FiCheckCircle,
+  FiClock, FiSearch, FiUser, FiBookOpen, FiEye,
+  FiX, FiAlertCircle, FiPlus, FiChevronDown,
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../../context/authcontext";
 import { useOutletContext } from "react-router-dom";
 import toast from "react-hot-toast";
 import { qaAPI, academicAPI } from "../../../services/api";
+import { InstitutionContext } from "../../../context/InstitutionContext";
 
+/* ─── Helpers ─────────────────────────────────────────────────── */
+const hexToRgb = (hex) => {
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r ? `${parseInt(r[1], 16)}, ${parseInt(r[2], 16)}, ${parseInt(r[3], 16)}` : "59, 130, 246";
+};
+
+const timeAgo = (d) => {
+  const s = Math.floor((Date.now() - new Date(d)) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(d).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+};
+
+const inputFocus = (brand) => (e) => { e.target.style.borderColor = brand; e.target.style.backgroundColor = "#fff"; };
+const inputBlur = (e) => { e.target.style.borderColor = ""; e.target.style.backgroundColor = ""; };
+
+/* ─── Status config ─────────────────────────────────────────── */
+const STATUS = {
+  open: { label: "Open", dot: "#f59e0b", pill: "bg-amber-50 text-amber-600" },
+  "in-progress": { label: "In Progress", dot: "#3b82f6", pill: "bg-blue-50 text-blue-600" },
+  resolved: { label: "Resolved", dot: "#10b981", pill: "bg-emerald-50 text-emerald-600" },
+  closed: { label: "Closed", dot: "#94a3b8", pill: "bg-slate-100 text-slate-500" },
+};
+const PRIORITY = {
+  low: { label: "Low", dot: "#94a3b8", pill: "bg-slate-100 text-slate-500" },
+  normal: { label: "Normal", dot: "#3b82f6", pill: "bg-blue-50 text-blue-600" },
+  high: { label: "High", dot: "#f59e0b", pill: "bg-amber-50 text-amber-600" },
+  urgent: { label: "Urgent", dot: "#ef4444", pill: "bg-red-50 text-red-600" },
+};
+const CATEGORIES = ["general", "technical", "academic", "assignment", "exam", "other"];
+
+const EMPTY_Q = { title: "", description: "", category: "general", priority: "normal", tags: [], isAnonymous: false };
+
+/* ─── Skeleton ──────────────────────────────────────────────── */
+const Skeleton = () => (
+  <div className="space-y-3">
+    {[1, 2, 3].map(i => (
+      <div key={i} className="bg-white rounded-2xl border border-gray-100 flex overflow-hidden animate-pulse">
+        <div className="w-[3px] bg-gray-100 flex-shrink-0" />
+        <div className="flex-1 p-5 space-y-3">
+          <div className="flex gap-2">
+            <div className="h-4 w-16 bg-gray-100 rounded-full" />
+            <div className="h-4 w-12 bg-gray-100 rounded-full" />
+          </div>
+          <div className="h-5 w-2/3 bg-gray-100 rounded-lg" />
+          <div className="h-3.5 w-full bg-gray-50 rounded-lg" />
+          <div className="h-3.5 w-4/5 bg-gray-50 rounded-lg" />
+          <div className="h-3 w-1/4 bg-gray-50 rounded-lg mt-2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+/* ─── Question card ─────────────────────────────────────────── */
+function QACard({ qa, brand, rgb, index, onClick, onUpvote }) {
+  const s = STATUS[qa.status] || STATUS.open;
+  const p = PRIORITY[qa.priority] || PRIORITY.normal;
+  const hasAccepted = qa.answers?.some(a => a.isAccepted);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ delay: index * 0.04, duration: 0.28 }}
+      onClick={() => onClick(qa)}
+      className="bg-white rounded-2xl border border-gray-100 overflow-hidden cursor-pointer hover:border-gray-200 hover:shadow-[0_4px_24px_-6px_rgba(0,0,0,0.08)] transition-all group"
+    >
+      <div className="flex">
+        {/* Priority bar */}
+        <div className="w-[3px] flex-shrink-0" style={{ backgroundColor: p.dot }} />
+
+        <div className="flex-1 min-w-0 p-5">
+          {/* Badges row */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${s.pill}`}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.dot }} />
+              {s.label}
+            </span>
+            {qa.priority !== "normal" && (
+              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${p.pill}`}>{p.label}</span>
+            )}
+            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-500 capitalize">
+              {qa.category}
+            </span>
+            {hasAccepted && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+                <FiCheckCircle className="w-3 h-3" /> Answered
+              </span>
+            )}
+          </div>
+
+          {/* Title */}
+          <h3 className="text-[15px] font-extrabold text-gray-900 leading-snug mb-1.5 group-hover:text-gray-700 transition-colors">
+            {qa.title}
+          </h3>
+          <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2 mb-3">
+            {qa.description}
+          </p>
+
+          {/* Tags */}
+          {qa.tags?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {qa.tags.map((tag, i) => (
+                <span key={i} className="text-[11px] font-medium px-2 py-0.5 rounded-lg"
+                  style={{ backgroundColor: `rgba(${rgb},0.08)`, color: brand }}>
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+            <div className="flex items-center gap-3 text-[12px] text-gray-400">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold text-white flex-shrink-0"
+                  style={{ backgroundColor: brand }}>
+                  {(qa.isAnonymous ? "A" : qa.askedBy?.name?.charAt(0) || "?").toUpperCase()}
+                </div>
+                <span className="font-semibold text-gray-500">
+                  {qa.isAnonymous ? "Anonymous" : qa.askedBy?.name}
+                </span>
+              </div>
+              <span className="text-gray-200">·</span>
+              <div className="flex items-center gap-1">
+                <FiClock className="w-3 h-3" />
+                <span>{timeAgo(qa.createdAt)}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <FiEye className="w-3 h-3" />
+                <span>{qa.views}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-[12px] text-gray-400">
+              <button
+                onClick={e => { e.stopPropagation(); onUpvote(qa._id); }}
+                className="flex items-center gap-1 hover:text-blue-500 transition-colors"
+              >
+                <FiThumbsUp className="w-3.5 h-3.5" />
+                <span>{qa.upvotes?.length || 0}</span>
+              </button>
+              <div className="flex items-center gap-1">
+                <FiMessageCircle className="w-3.5 h-3.5" />
+                <span>{qa.answers?.length || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+════════════════════════════════════════════════════════════════ */
 export default function QASection() {
   const { user } = useAuth();
-  const { institution } = useOutletContext();
-  
+  const ctx = useOutletContext();
+  const instCtx = React.useContext(InstitutionContext);
+  const institution = ctx?.institution || instCtx?.institution;
+
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [qas, setQas] = useState([]);
   const [stats, setStats] = useState({ total: 0, open: 0, inProgress: 0, resolved: 0 });
-  const [showAskModal, setShowAskModal] = useState(false);
+  const [showAskModal, setAskModal] = useState(false);
   const [selectedQA, setSelectedQA] = useState(null);
-  const [newQuestion, setNewQuestion] = useState({
-    title: "",
-    description: "",
-    category: "general",
-    priority: "normal",
-    tags: [],
-    isAnonymous: false,
-  });
+  const [newQ, setNewQ] = useState(EMPTY_Q);
   const [newAnswer, setNewAnswer] = useState("");
   const [filter, setFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [catFilter, setCatFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("-createdAt");
   const [loading, setLoading] = useState(true);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [tagInput, setTagInput] = useState("");
 
-  const brandColor = institution?.branding?.primaryColor || "#3b82f6";
-  const canAnswer = user?.role === 'teacher' || user?.role === 'admin';
+  const brand = institution?.branding?.primaryColor || "#3b82f6";
+  const rgb = hexToRgb(brand);
+  const canAnswer = ["teacher", "admin"].includes(user?.role);
 
-  const categories = [
-    { value: "general", label: "General", color: "blue" },
-    { value: "technical", label: "Technical", color: "purple" },
-    { value: "academic", label: "Academic", color: "green" },
-    { value: "assignment", label: "Assignment", color: "orange" },
-    { value: "exam", label: "Exam", color: "red" },
-    { value: "other", label: "Other", color: "gray" },
-  ];
-
-  const priorities = [
-    { value: "low", label: "Low", color: "gray" },
-    { value: "normal", label: "Normal", color: "blue" },
-    { value: "high", label: "High", color: "orange" },
-    { value: "urgent", label: "Urgent", color: "red" },
-  ];
-
-  // Fetch courses for the institution
-  useEffect(() => {
-    if (institution?._id) {
-      fetchCourses();
-    }
-  }, [institution?._id]);
-
-  // Fetch Q&As when course changes
-  useEffect(() => {
-    if (selectedCourse?._id) {
-      fetchQAs();
-      fetchStats();
-    }
-  }, [selectedCourse?._id, filter, categoryFilter, searchQuery, sortBy]);
+  /* ── Data fetching ── */
+  useEffect(() => { if (institution?._id) fetchCourses(); }, [institution?._id]);
+  useEffect(() => { if (selectedCourse?._id) { fetchQAs(); fetchStats(); } }, [selectedCourse?._id, filter, catFilter, search, sortBy]);
 
   const fetchCourses = async () => {
     try {
       setLoadingCourses(true);
-      console.log("Fetching courses for institution:", institution._id);
-      
-      const response = await academicAPI.getCourses(institution._id, {});
-      console.log("Courses API response:", response.data);
-      
-      const coursesData = response.data.courses || [];
-      console.log("Courses found:", coursesData.length);
-      
-      setCourses(coursesData);
-      
-      // Auto-select first course if available
-      if (coursesData.length > 0) {
-        console.log("Auto-selecting first course:", coursesData[0].name);
-        setSelectedCourse(coursesData[0]);
-      } else {
-        console.warn("No courses available in institution");
-      }
-    } catch (error) {
-      console.error("Error fetching courses:", error);
-      console.error("Error response:", error.response?.data);
-      toast.error(error.response?.data?.message || "Failed to load courses");
-    } finally {
-      setLoadingCourses(false);
-    }
+      const { data } = await academicAPI.getCourses(institution._id, {});
+      const list = data.courses || [];
+      setCourses(list);
+      if (list.length > 0) setSelectedCourse(list[0]);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to load courses");
+    } finally { setLoadingCourses(false); }
   };
-  
 
   const fetchQAs = async () => {
     if (!selectedCourse?._id) return;
-
     try {
       setLoading(true);
-      
-      const params = {
+      const { data } = await qaAPI.getByCourse(selectedCourse._id, {
         status: filter !== "all" ? filter : undefined,
-        category: categoryFilter !== "all" ? categoryFilter : undefined,
-        search: searchQuery || undefined,
+        category: catFilter !== "all" ? catFilter : undefined,
+        search: search || undefined,
         sort: sortBy,
-      };
-
-      const response = await qaAPI.getByCourse(selectedCourse._id, params);
-      setQas(response.data.qas || []);
-    } catch (error) {
-      console.error("Error fetching Q&As:", error);
-      toast.error("Failed to load questions");
-    } finally {
-      setLoading(false);
-    }
+      });
+      setQas(data.qas || []);
+    } catch { toast.error("Failed to load questions"); }
+    finally { setLoading(false); }
   };
 
   const fetchStats = async () => {
     if (!selectedCourse?._id) return;
-
     try {
-      const response = await qaAPI.getStatsByCourse(selectedCourse._id);
-      setStats(response.data.stats || { total: 0, open: 0, inProgress: 0, resolved: 0 });
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
+      const { data } = await qaAPI.getStatsByCourse(selectedCourse._id);
+      setStats(data.stats || { total: 0, open: 0, inProgress: 0, resolved: 0 });
+    } catch { }
   };
 
-  const handleAskQuestion = async (e) => {
+  /* ── Actions ── */
+  const handleAsk = async (e) => {
     e.preventDefault();
-
-    if (!selectedCourse?._id) {
-      toast.error("Please select a course first");
-      return;
-    }
-
-    if (!newQuestion.title.trim() || !newQuestion.description.trim()) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
+    if (!selectedCourse?._id) { toast.error("Select a course first"); return; }
     try {
-      const response = await qaAPI.create(selectedCourse._id, {
-        ...newQuestion,
-        tags: newQuestion.tags.filter(tag => tag.trim() !== ""),
-      });
-
-      setQas([response.data.qa, ...qas]);
-      toast.success("Question posted successfully!");
-      setShowAskModal(false);
-      setNewQuestion({
-        title: "",
-        description: "",
-        category: "general",
-        priority: "normal",
-        tags: [],
-        isAnonymous: false,
-      });
+      const { data } = await qaAPI.create(selectedCourse._id, { ...newQ, tags: newQ.tags.filter(t => t.trim()) });
+      setQas(prev => [data.qa, ...prev]);
+      toast.success("Question posted!");
+      setAskModal(false);
+      setNewQ(EMPTY_Q);
       fetchStats();
-    } catch (error) {
-      console.error("Error posting question:", error);
-      toast.error(error.response?.data?.message || "Failed to post question");
-    }
+    } catch (err) { toast.error(err.response?.data?.message || "Failed to post"); }
   };
 
-  const handleAddAnswer = async () => {
-    if (!canAnswer) {
-      toast.error("Only teachers and admins can answer questions");
-      return;
-    }
-
-    if (!newAnswer.trim()) {
-      toast.error("Please enter an answer");
-      return;
-    }
-
+  const handleAnswer = async () => {
+    if (!canAnswer) { toast.error("Only teachers can answer"); return; }
+    if (!newAnswer.trim()) { toast.error("Please enter an answer"); return; }
     try {
-      const response = await qaAPI.addAnswer(selectedQA._id, { text: newAnswer });
-      
-      setSelectedQA(response.data.qa);
-      setQas(qas.map(qa => qa._id === selectedQA._id ? response.data.qa : qa));
-      
+      const { data } = await qaAPI.addAnswer(selectedQA._id, { text: newAnswer });
+      setSelectedQA(data.qa);
+      setQas(qas.map(q => q._id === selectedQA._id ? data.qa : q));
       setNewAnswer("");
-      toast.success("Answer posted successfully!");
+      toast.success("Answer posted!");
       fetchStats();
-    } catch (error) {
-      console.error("Error posting answer:", error);
-      toast.error(error.response?.data?.message || "Failed to post answer");
-    }
+    } catch (err) { toast.error(err.response?.data?.message || "Failed to post answer"); }
   };
 
-  const handleUpvoteQA = async (qaId) => {
+  const handleUpvoteQA = async (id) => {
     try {
-      const response = await qaAPI.upvoteQA(qaId);
-      
-      setQas(qas.map(qa => 
-        qa._id === qaId 
-          ? { ...qa, upvotes: Array(response.data.upvotes).fill(null) } 
-          : qa
-      ));
-
-      if (selectedQA?._id === qaId) {
-        setSelectedQA({ ...selectedQA, upvotes: Array(response.data.upvotes).fill(null) });
-      }
-    } catch (error) {
-      console.error("Error upvoting:", error);
-      toast.error("Failed to upvote");
-    }
+      const { data } = await qaAPI.upvoteQA(id);
+      const updated = q => q._id === id ? { ...q, upvotes: Array(data.upvotes).fill(null) } : q;
+      setQas(prev => prev.map(updated));
+      if (selectedQA?._id === id) setSelectedQA(q => ({ ...q, upvotes: Array(data.upvotes).fill(null) }));
+    } catch { toast.error("Failed to upvote"); }
   };
 
   const handleUpvoteAnswer = async (qaId, answerId) => {
     try {
       await qaAPI.upvoteAnswer(qaId, answerId);
-      
-      const updatedQA = await qaAPI.getById(qaId);
-      setSelectedQA(updatedQA.data.qa);
-      setQas(qas.map(qa => qa._id === qaId ? updatedQA.data.qa : qa));
-    } catch (error) {
-      console.error("Error upvoting answer:", error);
-      toast.error("Failed to upvote answer");
-    }
+      const { data } = await qaAPI.getById(qaId);
+      setSelectedQA(data.qa);
+      setQas(prev => prev.map(q => q._id === qaId ? data.qa : q));
+    } catch { toast.error("Failed to upvote"); }
   };
 
-  const handleAcceptAnswer = async (answerId) => {
+  const handleAccept = async (answerId) => {
     try {
-      const response = await qaAPI.acceptAnswer(selectedQA._id, answerId);
-      
-      setSelectedQA(response.data.qa);
-      setQas(qas.map(qa => qa._id === selectedQA._id ? response.data.qa : qa));
-      
+      const { data } = await qaAPI.acceptAnswer(selectedQA._id, answerId);
+      setSelectedQA(data.qa);
+      setQas(prev => prev.map(q => q._id === selectedQA._id ? data.qa : q));
       toast.success("Answer accepted!");
       fetchStats();
-    } catch (error) {
-      console.error("Error accepting answer:", error);
-      toast.error(error.response?.data?.message || "Failed to accept answer");
-    }
+    } catch (err) { toast.error(err.response?.data?.message || "Failed"); }
   };
 
-  const handleUpdateStatus = async (qaId, newStatus) => {
-    if (!canAnswer) {
-      toast.error("Only teachers and admins can update status");
-      return;
-    }
-
+  const handleStatusChange = async (qaId, status) => {
+    if (!canAnswer) { toast.error("Only teachers can update status"); return; }
     try {
-      const response = await qaAPI.updateStatus(qaId, newStatus);
-      
-      setQas(qas.map(qa => qa._id === qaId ? response.data.qa : qa));
-      if (selectedQA?._id === qaId) {
-        setSelectedQA(response.data.qa);
-      }
-      
+      const { data } = await qaAPI.updateStatus(qaId, status);
+      setQas(prev => prev.map(q => q._id === qaId ? data.qa : q));
+      if (selectedQA?._id === qaId) setSelectedQA(data.qa);
       toast.success("Status updated!");
       fetchStats();
-    } catch (error) {
-      console.error("Error updating status:", error);
-      toast.error("Failed to update status");
-    }
+    } catch { toast.error("Failed to update status"); }
   };
 
-  const handleAddTag = () => {
-    if (tagInput.trim() && !newQuestion.tags.includes(tagInput.trim())) {
-      setNewQuestion({
-        ...newQuestion,
-        tags: [...newQuestion.tags, tagInput.trim()],
-      });
-      setTagInput("");
-    }
+  const addTag = () => {
+    const t = tagInput.trim();
+    if (t && !newQ.tags.includes(t)) { setNewQ({ ...newQ, tags: [...newQ.tags, t] }); setTagInput(""); }
   };
 
-  const handleRemoveTag = (tagToRemove) => {
-    setNewQuestion({
-      ...newQuestion,
-      tags: newQuestion.tags.filter(tag => tag !== tagToRemove),
-    });
-  };
-
-  const getTimeAgo = (date) => {
-    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "open": return "bg-yellow-100 text-yellow-700";
-      case "in-progress": return "bg-blue-100 text-blue-700";
-      case "resolved": return "bg-green-100 text-green-700";
-      case "closed": return "bg-gray-100 text-gray-700";
-      default: return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "urgent": return "bg-red-100 text-red-700";
-      case "high": return "bg-orange-100 text-orange-700";
-      case "normal": return "bg-blue-100 text-blue-700";
-      case "low": return "bg-gray-100 text-gray-700";
-      default: return "bg-gray-100 text-gray-700";
-    }
-  };
-
+  /* ── Loading states ── */
   if (loadingCourses) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: `rgba(${rgb},0.03)` }}>
         <div className="text-center">
-          <div 
-            className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto"
-            style={{ borderColor: brandColor }}
-          />
-          <p className="mt-4 text-gray-600">Loading courses...</p>
+          <div className="w-10 h-10 rounded-full border-[3px] border-t-transparent animate-spin mx-auto mb-3"
+            style={{ borderColor: `rgba(${rgb},0.2)`, borderTopColor: brand }} />
+          <p className="text-[13px] text-gray-400 font-medium">Loading courses…</p>
         </div>
       </div>
     );
@@ -340,454 +326,290 @@ export default function QASection() {
 
   if (courses.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-center">
-          <FiAlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">No Courses Available</h2>
-          <p className="text-gray-600">Please create courses in the Academic Structure section first</p>
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: `rgba(${rgb},0.03)` }}>
+        <div className="bg-white rounded-2xl border p-14 text-center max-w-sm" style={{ borderColor: `rgba(${rgb},0.15)` }}>
+          <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+            style={{ backgroundColor: `rgba(${rgb},0.08)` }}>
+            <FiBookOpen className="w-6 h-6" style={{ color: `rgba(${rgb},0.4)` }} />
+          </div>
+          <p className="text-[15px] font-extrabold text-gray-800">No Courses Yet</p>
+          <p className="text-[13px] text-gray-400 mt-1">Create courses in the Academic Structure section first.</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header with Course Selector */}
-        <div className="flex justify-between items-start mb-8">
-          <div className="flex-1">
-            <h1 className="text-4xl font-black text-gray-900 mb-4 flex items-center space-x-3">
-              <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${brandColor}20` }}
-              >
-                <HiSparkles style={{ color: brandColor }} className="w-6 h-6" />
-              </div>
-              <span>Q&A Section</span>
-            </h1>
+  /* ── FILTERS sidebar config ── */
+  const STATUS_FILTERS = [
+    { key: "all", label: `All  ·  ${qas.length}` },
+    { key: "open", label: `Open  ·  ${stats.open}` },
+    { key: "in-progress", label: `In Progress  ·  ${stats.inProgress}` },
+    { key: "resolved", label: `Resolved  ·  ${stats.resolved}` },
+  ];
 
-            {/* Course Selector */}
-            <div className="bg-white rounded-xl p-4 shadow-lg max-w-md">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Select Course
-              </label>
+  return (
+    <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: `rgba(${rgb},0.03)` }}>
+      <div className="max-w-7xl mx-auto">
+
+        {/* ── TOP BAR ─────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8"
+        >
+          {/* Title */}
+          <div className="flex items-center gap-4">
+            <div
+              className="p-3.5 rounded-2xl flex items-center justify-center shrink-0 border"
+              style={{ backgroundColor: `rgba(${rgb},0.1)`, borderColor: `rgba(${rgb},0.2)` }}
+            >
+              <FiMessageCircle className="text-2xl" style={{ color: brand }} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">Q&amp;A</h1>
+              <p className="text-gray-500 mt-1 font-medium">{institution?.name}</p>
+            </div>
+          </div>
+
+          {/* Right: course selector + ask button */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Course selector */}
+            <div className="relative">
               <select
                 value={selectedCourse?._id || ""}
-                onChange={(e) => {
-                  const course = courses.find(c => c._id === e.target.value);
-                  setSelectedCourse(course);
-                }}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none"
+                onChange={e => { const c = courses.find(c => c._id === e.target.value); setSelectedCourse(c); }}
+                className="appearance-none pl-4 pr-8 py-2.5 text-[13px] font-semibold border-2 border-gray-100 rounded-xl bg-white outline-none transition-all text-gray-700"
+                onFocus={e => { e.target.style.borderColor = brand; }}
+                onBlur={e => { e.target.style.borderColor = ""; }}
               >
-                <option value="">-- Select a Course --</option>
-                {courses.map(course => (
-                  <option key={course._id} value={course._id}>
-                    {course.code} - {course.name}
-                  </option>
+                {courses.map(c => (
+                  <option key={c._id} value={c._id}>{c.code} — {c.name}</option>
                 ))}
+              </select>
+              <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            </div>
+
+            {/* Ask button */}
+            <motion.button
+              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+              onClick={() => { if (!selectedCourse) { toast.error("Select a course first"); return; } setAskModal(true); }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-bold shadow-sm hover:shadow-md transition-all flex-shrink-0"
+              style={{ backgroundColor: brand }}
+            >
+              <FiPlus className="w-4 h-4" />
+              <span className="hidden sm:inline">Ask Question</span>
+            </motion.button>
+          </div>
+        </motion.div>
+
+        {/* ── BODY ─────────────────────────────────────────────── */}
+        <div className="flex flex-col lg:flex-row gap-6">
+
+          {/* ── SIDEBAR ─── */}
+          <motion.aside
+            initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 }}
+            className="w-full lg:w-56 flex-shrink-0 space-y-4"
+          >
+            {/* Status filter */}
+            <div className="bg-white rounded-2xl border p-5" style={{ borderColor: `rgba(${rgb},0.15)` }}>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Status</p>
+              <div className="space-y-1">
+                {STATUS_FILTERS.map(f => (
+                  <button key={f.key} onClick={() => setFilter(f.key)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-[13px] transition-all text-left"
+                    style={filter === f.key
+                      ? { backgroundColor: `rgba(${rgb},0.10)`, color: brand, fontWeight: 600 }
+                      : { color: "#6b7280", fontWeight: 500 }
+                    }>
+                    <span>{f.label.split("·")[0].trim()}</span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                      style={filter === f.key
+                        ? { backgroundColor: `rgba(${rgb},0.15)`, color: brand }
+                        : { backgroundColor: "#f3f4f6", color: "#9ca3af" }
+                      }>
+                      {f.label.split("·")[1]?.trim() || ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Category filter */}
+            <div className="bg-white rounded-2xl border p-5" style={{ borderColor: `rgba(${rgb},0.15)` }}>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Category</p>
+              <div className="space-y-1">
+                {["all", ...CATEGORIES].map(c => (
+                  <button key={c} onClick={() => setCatFilter(c)}
+                    className="w-full px-3 py-2 rounded-xl text-[13px] transition-all text-left capitalize"
+                    style={catFilter === c
+                      ? { backgroundColor: `rgba(${rgb},0.10)`, color: brand, fontWeight: 600 }
+                      : { color: "#6b7280", fontWeight: 500 }
+                    }>
+                    {c === "all" ? "All Categories" : c}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.aside>
+
+          {/* ── MAIN FEED ─── */}
+          <div className="flex-1 min-w-0 space-y-4">
+
+            {/* Search + sort bar */}
+            <div className="flex gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                <input
+                  value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Search questions…"
+                  className="w-full pl-9 pr-4 py-2.5 text-[13px] border-2 border-gray-100 rounded-xl bg-white outline-none transition-all"
+                  onFocus={inputFocus(brand)} onBlur={inputBlur}
+                />
+              </div>
+              <select
+                value={sortBy} onChange={e => setSortBy(e.target.value)}
+                className="px-3 py-2.5 text-[13px] font-medium border-2 border-gray-100 rounded-xl bg-white outline-none appearance-none transition-all text-gray-600"
+                onFocus={e => { e.target.style.borderColor = brand; }}
+                onBlur={e => { e.target.style.borderColor = ""; }}
+              >
+                <option value="-createdAt">Newest</option>
+                <option value="createdAt">Oldest</option>
+                <option value="-views">Most Viewed</option>
+                <option value="-upvotes">Most Upvoted</option>
               </select>
             </div>
 
-            {!canAnswer && (
-              <p className="text-sm text-orange-600 mt-3">
-                💡 Only teachers can answer questions. You can ask questions and upvote answers.
-              </p>
+            {/* Loading */}
+            {loading && <Skeleton />}
+
+            {/* Empty */}
+            {!loading && qas.length === 0 && (
+              <div className="bg-white rounded-2xl border p-14 text-center" style={{ borderColor: `rgba(${rgb},0.15)` }}>
+                <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                  style={{ backgroundColor: `rgba(${rgb},0.08)` }}>
+                  <FiMessageCircle className="w-6 h-6" style={{ color: `rgba(${rgb},0.4)` }} />
+                </div>
+                <p className="text-[15px] font-extrabold text-gray-800">No questions yet</p>
+                <p className="text-[13px] text-gray-400 mt-1 mb-5">Be the first to ask something!</p>
+                <button onClick={() => setAskModal(true)}
+                  className="px-5 py-2.5 rounded-xl text-white text-[13px] font-bold shadow-sm"
+                  style={{ backgroundColor: brand }}>
+                  Ask Question
+                </button>
+              </div>
+            )}
+
+            {/* Cards */}
+            {!loading && qas.length > 0 && (
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {qas.map((qa, i) => (
+                    <QACard key={qa._id} qa={qa} brand={brand} rgb={rgb} index={i}
+                      onClick={setSelectedQA} onUpvote={handleUpvoteQA} />
+                  ))}
+                </AnimatePresence>
+              </div>
             )}
           </div>
-          
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              if (!selectedCourse) {
-                toast.error("Please select a course first");
-                return;
-              }
-              setShowAskModal(true);
-            }}
-            className="px-6 py-3 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all flex items-center space-x-2"
-            style={{ backgroundColor: brandColor }}
-          >
-            <FiMessageCircle className="w-5 h-5" />
-            <span>Ask Question</span>
-          </motion.button>
         </div>
-
-        {/* Only show content if course is selected */}
-        {!selectedCourse ? (
-          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-            <FiBookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Course Selected</h3>
-            <p className="text-gray-600">Please select a course from the dropdown above to view Q&A section</p>
-          </div>
-        ) : (
-          <>
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              {[
-                { label: "Total", value: stats.total, icon: FiMessageCircle, color: "blue" },
-                { label: "Open", value: stats.open, icon: FiAlertCircle, color: "yellow" },
-                { label: "In Progress", value: stats.inProgress, icon: FiClock, color: "blue" },
-                { label: "Resolved", value: stats.resolved, icon: FiCheckCircle, color: "green" },
-              ].map((stat, index) => {
-                const Icon = stat.icon;
-                return (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="bg-white rounded-xl p-6 shadow-lg"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">{stat.label}</p>
-                        <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                      </div>
-                      <div className={`w-12 h-12 rounded-lg bg-${stat.color}-50 flex items-center justify-center`}>
-                        <Icon className={`w-6 h-6 text-${stat.color}-600`} />
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-
-            {/* Filters and Search */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-              <div className="flex flex-col gap-4">
-                {/* Search */}
-                <div className="relative">
-                  <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Search questions..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none transition-all"
-                  />
-                </div>
-
-                {/* Status Filters */}
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { value: "all", label: "All" },
-                    { value: "open", label: "Open" },
-                    { value: "in-progress", label: "In Progress" },
-                    { value: "resolved", label: "Resolved" },
-                  ].map((filterOption) => (
-                    <button
-                      key={filterOption.value}
-                      onClick={() => setFilter(filterOption.value)}
-                      className={`px-4 py-2 rounded-xl font-medium transition-all ${
-                        filter === filterOption.value
-                          ? "text-white shadow-lg"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                      style={filter === filterOption.value ? { backgroundColor: brandColor } : {}}
-                    >
-                      {filterOption.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Category Filters */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setCategoryFilter("all")}
-                    className={`px-4 py-2 rounded-xl font-medium transition-all ${
-                      categoryFilter === "all"
-                        ? "text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                    style={categoryFilter === "all" ? { backgroundColor: brandColor } : {}}
-                  >
-                    All Categories
-                  </button>
-                  {categories.map((cat) => (
-                    <button
-                      key={cat.value}
-                      onClick={() => setCategoryFilter(cat.value)}
-                      className={`px-4 py-2 rounded-xl font-medium transition-all ${
-                        categoryFilter === cat.value
-                          ? "text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                      style={categoryFilter === cat.value ? { backgroundColor: brandColor } : {}}
-                    >
-                      {cat.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Sort */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 font-medium">Sort by:</span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none"
-                  >
-                    <option value="-createdAt">Newest First</option>
-                    <option value="createdAt">Oldest First</option>
-                    <option value="-views">Most Viewed</option>
-                    <option value="-upvotes">Most Upvoted</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Questions List */}
-            {loading ? (
-              <div className="text-center py-12">
-                <div 
-                  className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto"
-                  style={{ borderColor: brandColor }}
-                />
-                <p className="mt-4 text-gray-600">Loading questions...</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {qas.length === 0 ? (
-                  <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-                    <FiMessageCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Questions Found</h3>
-                    <p className="text-gray-600 mb-6">Be the first to ask a question!</p>
-                    <button
-                      onClick={() => setShowAskModal(true)}
-                      className="px-6 py-3 text-white rounded-xl font-semibold"
-                      style={{ backgroundColor: brandColor }}
-                    >
-                      Ask Question
-                    </button>
-                  </div>
-                ) : (
-                  qas.map((qa, index) => (
-                    <motion.div
-                      key={qa._id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      onClick={() => setSelectedQA(qa)}
-                      className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all overflow-hidden cursor-pointer"
-                    >
-                      <div className="p-6">
-                        {/* Question Header */}
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(qa.status)}`}>
-                                {qa.status}
-                              </span>
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPriorityColor(qa.priority)}`}>
-                                {qa.priority}
-                              </span>
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700`}>
-                                {qa.category}
-                              </span>
-                            </div>
-
-                            <h3 className="text-xl font-bold text-gray-900 mb-2 hover:underline">
-                              {qa.title}
-                            </h3>
-                            <p className="text-gray-600 mb-3 line-clamp-2">{qa.description}</p>
-
-                            {/* Tags */}
-                            {qa.tags && qa.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mb-3">
-                                {qa.tags.map((tag, i) => (
-                                  <span key={i} className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-lg">
-                                    #{tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Meta Info */}
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
-                              <div className="flex items-center space-x-1">
-                                <FiUser className="w-4 h-4" />
-                                <span>{qa.isAnonymous ? "Anonymous" : qa.askedBy.name}</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <FiClock className="w-4 h-4" />
-                                <span>{getTimeAgo(qa.createdAt)}</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <FiEye className="w-4 h-4" />
-                                <span>{qa.views} views</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Stats */}
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="flex items-center gap-3 text-sm text-gray-500">
-                              <div className="flex items-center space-x-1">
-                                <FiThumbsUp className="w-4 h-4" />
-                                <span>{qa.upvotes?.length || 0}</span>
-                              </div>
-                              <div className="flex items-center space-x-1">
-                                <FiMessageCircle className="w-4 h-4" />
-                                <span>{qa.answers?.length || 0}</span>
-                              </div>
-                            </div>
-                            {qa.answers?.some(a => a.isAccepted) && (
-                              <span className="flex items-center space-x-1 text-green-600 text-sm font-medium">
-                                <FiCheckCircle className="w-4 h-4" />
-                                <span>Accepted</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleUpvoteQA(qa._id);
-                            }}
-                            className="flex items-center space-x-1 px-4 py-2 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-sm font-medium transition-all"
-                          >
-                            <FiThumbsUp className="w-4 h-4" />
-                            <span>Upvote</span>
-                          </button>
-                          <button className="flex items-center space-x-1 px-4 py-2 bg-gray-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-sm font-medium transition-all">
-                            <FiMessageCircle className="w-4 h-4" />
-                            <span>View ({qa.answers?.length || 0})</span>
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-              </div>
-            )}
-          </>
-        )}
       </div>
 
-      {/* Ask Question Modal */}
+      {/* ══ ASK QUESTION MODAL ═══════════════════════════════════ */}
       <AnimatePresence>
         {showAskModal && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowAskModal(false)}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setAskModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl z-10">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-3xl font-bold text-gray-900">Ask a Question</h2>
-                  <button
-                    onClick={() => setShowAskModal(false)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <FiX className="w-5 h-5" />
-                  </button>
+              <div className="h-[4px] flex-shrink-0" style={{ background: `linear-gradient(90deg,${brand},rgba(${rgb},0.25))` }} />
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-7 pt-6 pb-4 flex-shrink-0 border-b border-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `rgba(${rgb},0.10)` }}>
+                    <FiMessageCircle className="w-4 h-4" style={{ color: brand }} />
+                  </div>
+                  <div>
+                    <h2 className="text-[16px] font-extrabold text-gray-900">Ask a Question</h2>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{selectedCourse?.code} — {selectedCourse?.name}</p>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-600 mt-2">
-                  Course: <span className="font-semibold">{selectedCourse?.code} - {selectedCourse?.name}</span>
-                </p>
+                <button onClick={() => setAskModal(false)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors">
+                  <FiX className="w-4 h-4" />
+                </button>
               </div>
 
-              <form onSubmit={handleAskQuestion} className="p-6 space-y-4">
+              <form onSubmit={handleAsk} className="overflow-y-auto px-7 py-5 space-y-4">
+                {/* Title */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Question Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newQuestion.title}
-                    onChange={(e) => setNewQuestion({ ...newQuestion, title: e.target.value })}
-                    placeholder="What's your question?"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Title *</label>
+                  <input required type="text" placeholder="What's your question?"
+                    value={newQ.title} onChange={e => setNewQ({ ...newQ, title: e.target.value })}
+                    className="w-full px-4 py-3 text-[14px] border-2 border-gray-100 rounded-xl bg-gray-50 outline-none transition-all placeholder:text-gray-300"
+                    onFocus={inputFocus(brand)} onBlur={inputBlur}
                   />
                 </div>
 
+                {/* Description */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    required
-                    value={newQuestion.description}
-                    onChange={(e) => setNewQuestion({ ...newQuestion, description: e.target.value })}
-                    placeholder="Provide more details about your question..."
-                    rows={4}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 resize-none"
+                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Description *</label>
+                  <textarea required rows={4} placeholder="Provide more context…"
+                    value={newQ.description} onChange={e => setNewQ({ ...newQ, description: e.target.value })}
+                    className="w-full px-4 py-3 text-[14px] border-2 border-gray-100 rounded-xl bg-gray-50 outline-none resize-none transition-all placeholder:text-gray-300"
+                    onFocus={inputFocus(brand)} onBlur={inputBlur}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-                    <select
-                      value={newQuestion.category}
-                      onChange={(e) => setNewQuestion({ ...newQuestion, category: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.value} value={cat.value}>{cat.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Priority</label>
-                    <select
-                      value={newQuestion.priority}
-                      onChange={(e) => setNewQuestion({ ...newQuestion, priority: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
-                    >
-                      {priorities.map(pri => (
-                        <option key={pri.value} value={pri.value}>{pri.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                {/* Category + Priority */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { field: "category", label: "Category", opts: CATEGORIES },
+                    { field: "priority", label: "Priority", opts: ["low", "normal", "high", "urgent"] },
+                  ].map(({ field, label, opts }) => (
+                    <div key={field}>
+                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{label}</label>
+                      <select value={newQ[field]} onChange={e => setNewQ({ ...newQ, [field]: e.target.value })}
+                        className="w-full px-3 py-3 text-[13px] border-2 border-gray-100 rounded-xl bg-gray-50 outline-none transition-all appearance-none capitalize"
+                        onFocus={e => { e.target.style.borderColor = brand; }}
+                        onBlur={e => { e.target.style.borderColor = ""; }}
+                      >
+                        {opts.map(o => <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
+                      </select>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Tags */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Tags</label>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={tagInput}
-                      onChange={(e) => setTagInput(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-                      placeholder="Add tags (e.g., arrays, sorting)..."
-                      className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Tags</label>
+                  <div className="flex gap-2">
+                    <input type="text" placeholder="e.g. arrays, sorting…"
+                      value={tagInput} onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                      className="flex-1 px-4 py-2.5 text-[13px] border-2 border-gray-100 rounded-xl bg-gray-50 outline-none transition-all placeholder:text-gray-300"
+                      onFocus={inputFocus(brand)} onBlur={inputBlur}
                     />
-                    <button
-                      type="button"
-                      onClick={handleAddTag}
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
-                    >
+                    <button type="button" onClick={addTag}
+                      className="px-4 py-2.5 text-[13px] font-semibold text-gray-600 bg-gray-50 border-2 border-gray-100 rounded-xl hover:bg-gray-100 transition-colors">
                       Add
                     </button>
                   </div>
-                  {newQuestion.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {newQuestion.tags.map((tag, i) => (
-                        <span key={i} className="px-3 py-1 bg-blue-50 text-blue-600 text-sm rounded-lg flex items-center gap-2">
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTag(tag)}
-                            className="hover:text-red-600 transition-colors"
-                          >
-                            <FiX className="w-3 h-3" />
+                  {newQ.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {newQ.tags.map((t, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg"
+                          style={{ backgroundColor: `rgba(${rgb},0.08)`, color: brand }}>
+                          #{t}
+                          <button type="button" onClick={() => setNewQ({ ...newQ, tags: newQ.tags.filter(x => x !== t) })}>
+                            <FiX className="w-2.5 h-2.5" />
                           </button>
                         </span>
                       ))}
@@ -796,35 +618,34 @@ export default function QASection() {
                 </div>
 
                 {/* Anonymous */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="anonymous"
-                    checked={newQuestion.isAnonymous}
-                    onChange={(e) => setNewQuestion({ ...newQuestion, isAnonymous: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="anonymous" className="text-sm text-gray-700 cursor-pointer">
-                    Post anonymously
-                  </label>
-                </div>
+                <button type="button" onClick={() => setNewQ({ ...newQ, isAnonymous: !newQ.isAnonymous })}
+                  className="w-full flex items-center gap-3 py-3 px-4 rounded-xl border-2 transition-all text-left"
+                  style={newQ.isAnonymous
+                    ? { borderColor: `rgba(${rgb},0.3)`, backgroundColor: `rgba(${rgb},0.05)` }
+                    : { borderColor: "#f3f4f6", backgroundColor: "#f9fafb" }}
+                >
+                  <div className="w-10 h-[22px] rounded-full relative flex-shrink-0 transition-all"
+                    style={{ backgroundColor: newQ.isAnonymous ? brand : "#d1d5db" }}>
+                    <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-all ${newQ.isAnonymous ? "left-[22px]" : "left-[3px]"}`} />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-gray-700">Post anonymously</p>
+                    <p className="text-[11px] text-gray-400">Your name won't be shown</p>
+                  </div>
+                </button>
 
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowAskModal(false)}
-                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all"
-                  >
+                {/* Actions */}
+                <div className="flex gap-3 pt-1 pb-2">
+                  <button type="button" onClick={() => setAskModal(false)}
+                    className="flex-1 py-3 text-[13px] font-semibold text-gray-500 rounded-xl border-2 border-gray-100 hover:bg-gray-50 transition-colors">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-6 py-3 text-white rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center space-x-2"
-                    style={{ backgroundColor: brandColor }}
-                  >
-                    <FiSend className="w-5 h-5" />
-                    <span>Post Question</span>
-                  </button>
+                  <motion.button type="submit"
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    className="flex-1 py-3 text-[13px] font-bold text-white rounded-xl shadow-sm transition-all"
+                    style={{ backgroundColor: brand }}>
+                    Post Question
+                  </motion.button>
                 </div>
               </form>
             </motion.div>
@@ -832,200 +653,195 @@ export default function QASection() {
         )}
       </AnimatePresence>
 
-      {/* Q&A Details Modal */}
+      {/* ══ QA DETAIL MODAL ═════════════════════════════════════ */}
       <AnimatePresence>
         {selectedQA && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
             onClick={() => setSelectedQA(null)}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
-              {/* Header */}
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(selectedQA.status)}`}>
-                        {selectedQA.status}
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPriorityColor(selectedQA.priority)}`}>
-                        {selectedQA.priority}
-                      </span>
-                      {canAnswer && (
-                        <select
-                          value={selectedQA.status}
-                          onChange={(e) => handleUpdateStatus(selectedQA._id, e.target.value)}
-                          className="text-xs px-3 py-1 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <option value="open">Open</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="resolved">Resolved</option>
-                          <option value="closed">Closed</option>
-                        </select>
-                      )}
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedQA.title}</h2>
-                    <p className="text-gray-600 mb-3">{selectedQA.description}</p>
-                    
-                    {/* Tags */}
-                    {selectedQA.tags && selectedQA.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {selectedQA.tags.map((tag, i) => (
-                          <span key={i} className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-lg">
-                            #{tag}
+              <div className="h-[4px] flex-shrink-0" style={{ background: `linear-gradient(90deg,${brand},rgba(${rgb},0.25))` }} />
+
+              {/* Question header */}
+              <div className="px-7 pt-6 pb-5 flex-shrink-0 border-b" style={{ borderColor: `rgba(${rgb},0.08)` }}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    {/* Badges */}
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      {(() => {
+                        const s = STATUS[selectedQA.status] || STATUS.open;
+                        const p = PRIORITY[selectedQA.priority] || PRIORITY.normal;
+                        return <>
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${s.pill}`}>
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.dot }} />
+                            {s.label}
                           </span>
+                          {selectedQA.priority !== "normal" && (
+                            <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${p.pill}`}>{p.label}</span>
+                          )}
+                          <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-gray-50 text-gray-500 capitalize">
+                            {selectedQA.category}
+                          </span>
+                          {canAnswer && (
+                            <select value={selectedQA.status}
+                              onChange={e => handleStatusChange(selectedQA._id, e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              className="text-[11px] px-2.5 py-0.5 border border-gray-200 rounded-lg outline-none bg-white text-gray-500"
+                              onFocus={e => { e.target.style.borderColor = brand; }}
+                              onBlur={e => { e.target.style.borderColor = ""; }}
+                            >
+                              <option value="open">Open</option>
+                              <option value="in-progress">In Progress</option>
+                              <option value="resolved">Resolved</option>
+                              <option value="closed">Closed</option>
+                            </select>
+                          )}
+                        </>;
+                      })()}
+                    </div>
+
+                    <h2 className="text-[18px] font-extrabold text-gray-900 leading-snug mb-2">{selectedQA.title}</h2>
+                    <p className="text-[13.5px] text-gray-600 leading-[1.7] whitespace-pre-wrap mb-3">{selectedQA.description}</p>
+
+                    {/* Tags */}
+                    {selectedQA.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {selectedQA.tags.map((t, i) => (
+                          <span key={i} className="text-[11px] font-medium px-2 py-0.5 rounded-lg"
+                            style={{ backgroundColor: `rgba(${rgb},0.08)`, color: brand }}>#{t}</span>
                         ))}
                       </div>
                     )}
 
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span>By {selectedQA.isAnonymous ? "Anonymous" : selectedQA.askedBy.name}</span>
-                      <span>{getTimeAgo(selectedQA.createdAt)}</span>
+                    {/* Meta */}
+                    <div className="flex items-center gap-4 text-[12px] text-gray-400">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold text-white flex-shrink-0"
+                          style={{ backgroundColor: brand }}>
+                          {(selectedQA.isAnonymous ? "A" : selectedQA.askedBy?.name?.charAt(0) || "?").toUpperCase()}
+                        </div>
+                        <span className="font-semibold text-gray-500">
+                          {selectedQA.isAnonymous ? "Anonymous" : selectedQA.askedBy?.name}
+                        </span>
+                      </div>
+                      <span className="text-gray-200">·</span>
+                      <span>{timeAgo(selectedQA.createdAt)}</span>
+                      <span className="text-gray-200">·</span>
                       <span>{selectedQA.views} views</span>
-                      <button
-                        onClick={() => handleUpvoteQA(selectedQA._id)}
-                        className="flex items-center space-x-1 hover:text-blue-600 transition-colors"
-                      >
-                        <FiThumbsUp className="w-4 h-4" />
-                        <span>{selectedQA.upvotes?.length || 0} upvotes</span>
+                      <button onClick={() => handleUpvoteQA(selectedQA._id)}
+                        className="flex items-center gap-1 hover:text-blue-500 transition-colors ml-1">
+                        <FiThumbsUp className="w-3.5 h-3.5" />
+                        <span>{selectedQA.upvotes?.length || 0}</span>
                       </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setSelectedQA(null)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    <FiX className="w-5 h-5" />
+
+                  <button onClick={() => setSelectedQA(null)}
+                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors flex-shrink-0">
+                    <FiX className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
               {/* Answers */}
-              <div className="flex-1 overflow-y-auto p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">
-                  {selectedQA.answers?.length || 0} Answer{selectedQA.answers?.length !== 1 ? 's' : ''}
-                </h3>
+              <div className="flex-1 overflow-y-auto px-7 py-5">
+                <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-4">
+                  {selectedQA.answers?.length || 0} Answer{selectedQA.answers?.length !== 1 ? "s" : ""}
+                </p>
 
-                {selectedQA.answers && selectedQA.answers.length > 0 ? (
-                  <div className="space-y-4">
-                    {selectedQA.answers.map((answer) => (
-                      <div
-                        key={answer._id}
-                        className={`p-4 rounded-xl transition-all ${
-                          answer.isAccepted
-                            ? "bg-green-50 border-2 border-green-200"
-                            : "bg-gray-50 hover:bg-gray-100"
-                        }`}
+                {!selectedQA.answers?.length ? (
+                  <div className="text-center py-10 rounded-2xl" style={{ backgroundColor: `rgba(${rgb},0.04)` }}>
+                    <FiMessageCircle className="w-8 h-8 mx-auto mb-2" style={{ color: `rgba(${rgb},0.3)` }} />
+                    <p className="text-[13px] font-semibold text-gray-600">No answers yet</p>
+                    <p className="text-[12px] text-gray-400 mt-0.5">
+                      {canAnswer ? "Be the first to answer!" : "Only teachers can answer questions."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedQA.answers.map(ans => (
+                      <div key={ans._id}
+                        className={`rounded-2xl border p-5 transition-all ${ans.isAccepted
+                            ? "border-emerald-200 bg-emerald-50"
+                            : "border-gray-100 bg-gray-50"
+                          }`}
                       >
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1">
-                            <p className="text-gray-700 mb-3 whitespace-pre-wrap">{answer.text}</p>
-                            <div className="flex items-center gap-3 text-sm text-gray-500">
-                              <span className="font-medium">{answer.answeredBy.name}</span>
-                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">
-                                {answer.answeredBy.userType}
-                              </span>
-                              <span>{getTimeAgo(answer.answeredAt)}</span>
-                            </div>
+                        {ans.isAccepted && (
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 mb-2">
+                            <FiCheckCircle className="w-3.5 h-3.5" /> Accepted Answer
                           </div>
-                          {answer.isAccepted && (
-                            <div className="flex items-center space-x-1 text-green-600 ml-2">
-                              <FiCheckCircle className="w-5 h-5" />
-                              <span className="text-xs font-semibold">Accepted</span>
+                        )}
+                        <p className="text-[13.5px] text-gray-700 leading-[1.7] whitespace-pre-wrap mb-4">{ans.text}</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-[12px] text-gray-400">
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-extrabold text-white flex-shrink-0"
+                              style={{ backgroundColor: brand }}>
+                              {ans.answeredBy?.name?.charAt(0).toUpperCase() || "?"}
                             </div>
-                          )}
-                        </div>
-
-                        {/* Answer Actions */}
-                        <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
-                          <button
-                            onClick={() => handleUpvoteAnswer(selectedQA._id, answer._id)}
-                            className="flex items-center space-x-1 px-3 py-1.5 bg-white hover:bg-blue-50 hover:text-blue-600 rounded-lg text-sm transition-all border border-gray-200"
-                          >
-                            <FiThumbsUp className="w-4 h-4" />
-                            <span>{answer.upvotes?.length || 0}</span>
-                          </button>
-
-                          {/* Accept Answer Button */}
-                          {!answer.isAccepted && 
-                           (selectedQA.askedBy.userId === user?.id || canAnswer) && (
-                            <button
-                              onClick={() => handleAcceptAnswer(answer._id)}
-                              className="flex items-center space-x-1 px-3 py-1.5 bg-white hover:bg-green-50 text-green-600 rounded-lg text-sm font-medium transition-all border border-green-200"
-                            >
-                              <FiCheckCircle className="w-4 h-4" />
-                              <span>Accept Answer</span>
+                            <span className="font-semibold text-gray-600">{ans.answeredBy?.name}</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold capitalize"
+                              style={{ backgroundColor: `rgba(${rgb},0.08)`, color: brand }}>
+                              {ans.answeredBy?.userType}
+                            </span>
+                            <span className="text-gray-200">·</span>
+                            <span>{timeAgo(ans.answeredAt)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => handleUpvoteAnswer(selectedQA._id, ans._id)}
+                              className="flex items-center gap-1 text-[12px] px-2.5 py-1 rounded-lg border border-gray-200 bg-white hover:border-blue-200 hover:text-blue-500 transition-all text-gray-400">
+                              <FiThumbsUp className="w-3.5 h-3.5" /> {ans.upvotes?.length || 0}
                             </button>
-                          )}
+                            {!ans.isAccepted && (selectedQA.askedBy?.userId === user?.id || canAnswer) && (
+                              <button onClick={() => handleAccept(ans._id)}
+                                className="flex items-center gap-1 text-[12px] px-2.5 py-1 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-600 transition-all font-semibold">
+                                <FiCheckCircle className="w-3.5 h-3.5" /> Accept
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl">
-                    <FiMessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 mb-2">No answers yet</p>
-                    <p className="text-sm text-gray-400">
-                      {canAnswer 
-                        ? "Be the first to answer this question!" 
-                        : "Only teachers can answer questions."}
-                    </p>
-                  </div>
                 )}
               </div>
 
-              {/* Answer Input - Only for Teachers */}
+              {/* Answer input (teacher/admin) */}
               {canAnswer && (
-                <div className="p-6 border-t border-gray-200 bg-gray-50">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Post Your Answer
-                  </label>
-                  <div className="flex gap-3">
-                    <textarea
-                      value={newAnswer}
-                      onChange={(e) => setNewAnswer(e.target.value)}
-                      placeholder="Type your answer here..."
-                      rows={3}
-                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 resize-none"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && e.ctrlKey) {
-                          handleAddAnswer();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between items-center mt-3">
-                    <p className="text-xs text-gray-500">Press Ctrl + Enter to submit</p>
-                    <button
-                      onClick={handleAddAnswer}
-                      disabled={!newAnswer.trim()}
-                      className="px-6 py-2.5 text-white rounded-xl font-semibold flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg"
-                      style={{ backgroundColor: brandColor }}
-                    >
-                      <FiSend className="w-4 h-4" />
-                      Post Answer
-                    </button>
+                <div className="px-7 py-5 border-t flex-shrink-0" style={{ borderColor: `rgba(${rgb},0.08)`, backgroundColor: `rgba(${rgb},0.02)` }}>
+                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Your Answer</label>
+                  <textarea rows={3} value={newAnswer} onChange={e => setNewAnswer(e.target.value)}
+                    placeholder="Type your answer… (Ctrl+Enter to submit)"
+                    onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) handleAnswer(); }}
+                    className="w-full px-4 py-3 text-[13.5px] border-2 border-gray-100 rounded-xl bg-white outline-none resize-none placeholder:text-gray-300 transition-all"
+                    onFocus={inputFocus(brand)} onBlur={inputBlur}
+                  />
+                  <div className="flex items-center justify-between mt-3">
+                    <p className="text-[11px] text-gray-300">Ctrl + Enter to submit</p>
+                    <motion.button onClick={handleAnswer} disabled={!newAnswer.trim()}
+                      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                      className="flex items-center gap-2 px-5 py-2.5 text-[13px] font-bold text-white rounded-xl shadow-sm disabled:opacity-40 transition-all"
+                      style={{ backgroundColor: brand }}>
+                      <FiSend className="w-3.5 h-3.5" /> Post Answer
+                    </motion.button>
                   </div>
                 </div>
               )}
 
-              {/* Show message for students */}
+              {/* Student notice */}
               {!canAnswer && (
-                <div className="p-4 border-t border-gray-200 bg-orange-50">
-                  <p className="text-sm text-orange-700 text-center flex items-center justify-center gap-2">
-                    <FiAlertCircle className="w-4 h-4" />
-                    Only teachers can answer questions. You can upvote helpful answers.
-                  </p>
+                <div className="px-7 py-4 border-t flex-shrink-0 flex items-center justify-center gap-2 text-[12px] text-gray-400"
+                  style={{ borderColor: `rgba(${rgb},0.08)` }}>
+                  <FiAlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  Only teachers and admins can answer questions. You can upvote helpful answers.
                 </div>
               )}
             </motion.div>

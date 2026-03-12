@@ -108,7 +108,7 @@ export default function BrowseInstitutionsTab({
       onCountChange(filteredInstitutions.length);
     }
   }, [filteredInstitutions, onCountChange]);
-  
+
 
   const typeOptions = [
     { value: 'all', label: 'All Types' },
@@ -141,7 +141,7 @@ export default function BrowseInstitutionsTab({
           placeholder="Search institutions by name or location..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-3.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white shadow-sm transition-all"
+          className="w-full pl-12 pr-4 py-3 border border-gray-200/80 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-sm transition-all text-sm"
         />
       </div>
 
@@ -152,9 +152,9 @@ export default function BrowseInstitutionsTab({
           <div className="relative" ref={typeDropdownRef}>
             <button
               onClick={() => setOpenDropdown(openDropdown === 'type' ? null : 'type')}
-              className="px-4 py-2.5 bg-white border border-gray-300 rounded-lg hover:border-emerald-400 transition-all flex items-center space-x-2 min-w-[160px] justify-between shadow-sm"
+              className="px-4 py-2 bg-white border border-gray-200/80 rounded-xl hover:border-gray-300 transition-all flex items-center space-x-2 min-w-[150px] justify-between shadow-sm"
             >
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-[13px] font-medium text-gray-700">
                 {typeOptions.find(opt => opt.value === filters.type)?.label}
               </span>
               <FiChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${openDropdown === 'type' ? 'rotate-180' : ''}`} />
@@ -167,15 +167,15 @@ export default function BrowseInstitutionsTab({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute top-full mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto"
+                  className="absolute top-full mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-lg shadow-gray-200/50 z-50 max-h-64 overflow-y-auto p-1.5"
                 >
                   {typeOptions.map((option) => (
                     <button
                       key={option.value}
                       onClick={() => handleFilterChange('type', option.value)}
-                      className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${filters.type === option.value
-                        ? 'bg-emerald-50 text-emerald-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
+                      className={`w-full px-3 py-2 text-left text-[13px] rounded-lg transition-colors ${filters.type === option.value
+                        ? 'bg-gray-100 text-gray-900 font-medium'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }`}
                     >
                       {option.label}
@@ -190,9 +190,9 @@ export default function BrowseInstitutionsTab({
           <div className="relative" ref={sortDropdownRef}>
             <button
               onClick={() => setOpenDropdown(openDropdown === 'sort' ? null : 'sort')}
-              className="px-4 py-2.5 bg-white border border-gray-300 rounded-lg hover:border-emerald-400 transition-all flex items-center space-x-2 min-w-[160px] justify-between shadow-sm"
+              className="px-4 py-2 bg-white border border-gray-200/80 rounded-xl hover:border-gray-300 transition-all flex items-center space-x-2 min-w-[150px] justify-between shadow-sm"
             >
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-[13px] font-medium text-gray-700">
                 {sortOptions.find(opt => opt.value === filters.sortBy)?.label}
               </span>
               <FiChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${openDropdown === 'sort' ? 'rotate-180' : ''}`} />
@@ -205,15 +205,15 @@ export default function BrowseInstitutionsTab({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute top-full mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  className="absolute top-full mt-2 w-full bg-white border border-gray-100 rounded-xl shadow-lg shadow-gray-200/50 z-50 p-1.5"
                 >
                   {sortOptions.map((option) => (
                     <button
                       key={option.value}
                       onClick={() => handleFilterChange('sortBy', option.value)}
-                      className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${filters.sortBy === option.value
-                        ? 'bg-emerald-50 text-emerald-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
+                      className={`w-full px-3 py-2 text-left text-[13px] rounded-lg transition-colors ${filters.sortBy === option.value
+                        ? 'bg-gray-100 text-gray-900 font-medium'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }`}
                     >
                       {option.label}
@@ -226,7 +226,7 @@ export default function BrowseInstitutionsTab({
 
           <button
             onClick={handleReset}
-            className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium shadow-sm"
+            className="px-4 py-2 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors text-[13px] font-medium border border-gray-200/80 hover:text-gray-900"
           >
             Reset
           </button>
@@ -238,128 +238,136 @@ export default function BrowseInstitutionsTab({
         </div>
       </div>
 
-      {/* Institution Cards */}
       <div className="space-y-4">
         {loading ? (
-          <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
-            <FiLoader className="w-12 h-12 text-emerald-500 mx-auto mb-4 animate-spin" />
-            <p className="text-gray-500 text-lg font-medium">Loading institutions...</p>
+          <div className="text-center py-20 bg-white border border-gray-200/60 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
+            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm border border-emerald-100/50">
+              <FiLoader className="w-8 h-8 text-emerald-500 animate-spin" />
+            </div>
+            <p className="text-gray-900 text-lg font-bold tracking-tight">Loading directory...</p>
+            <p className="text-gray-500 text-[13px] mt-1">Please wait while we fetch the institutions</p>
           </div>
         ) : filteredInstitutions.length > 0 ? (
           filteredInstitutions.map((institution, index) => (
-            <motion.div
+            <motion.a
+              href={`/${institution.slug}`}
               key={institution._id || institution.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md hover:border-emerald-300 transition-all duration-300 cursor-pointer"
+              className="block group bg-white border border-gray-200/60 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-emerald-200/60 transition-all duration-300 overflow-hidden relative cursor-pointer"
             >
-              <div className="flex items-start space-x-4">
+              <div className="p-6 md:p-7 flex flex-col sm:flex-row items-start gap-6">
+
                 {/* Logo */}
-                <div
-                  className="w-16 h-16 rounded-lg flex items-center justify-center text-white font-bold text-xl flex-shrink-0 shadow-sm"
-                  style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
-                >
-                  {institution.branding?.logo ? (
-                    <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover rounded-lg" />
-                  ) : (
-                    institution.code || institution.name.substring(0, 2).toUpperCase()
-                  )}
+                <div className="relative group-hover:scale-105 transition-transform duration-300 flex-shrink-0">
+                  <div className="absolute inset-0 bg-emerald-100 rounded-[18px] blur-md opacity-0 group-hover:opacity-40 transition-opacity"></div>
+                  <div
+                    className="w-16 h-16 rounded-[18px] flex items-center justify-center text-white font-bold text-xl shadow-sm border border-emerald-100/50 relative z-10 overflow-hidden"
+                    style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
+                  >
+                    {institution.branding?.logo ? (
+                      <img src={institution.branding.logo} alt={institution.code || institution.name} className="w-full h-full object-cover" />
+                    ) : (
+                      institution.code || institution.name.substring(0, 2).toUpperCase()
+                    )}
+                  </div>
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 min-w-0">
-                  {/* Header */}
-                  <div className="flex items-start justify-between mb-2">
+                <div className="flex-1 min-w-0 w-full">
+                  {/* Header Row */}
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 mb-2">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-800 mb-1">
+                      <h3 className="text-xl font-bold text-gray-900 leading-tight tracking-tight truncate">
                         {institution.name}
                       </h3>
-                      <p className="text-sm text-gray-500">{institution.code || ''}</p>
+                      {institution.code && (
+                        <p className="text-[13px] font-semibold text-gray-500 mt-1 tracking-widest uppercase">{institution.code}</p>
+                      )}
                     </div>
-                    <span
-                      className="px-3 py-1 rounded-full text-xs font-semibold text-white shadow-sm"
-                      style={{ backgroundColor: institution.branding?.primaryColor || '#10b981' }}
-                    >
-                      {institution.type}
-                    </span>
+                    {/* Badge */}
+                    <div className="flex-shrink-0">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest border"
+                        style={{
+                          color: institution.branding?.primaryColor || '#10b981',
+                          backgroundColor: `${institution.branding?.primaryColor}15` || '#10b98115',
+                          borderColor: `${institution.branding?.primaryColor}40` || '#10b98140'
+                        }}>
+                        {institution.type}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Info Row */}
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-3">
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-gray-500 mb-4 mt-3">
                     {institution.address?.city && (
-                      <div className="flex items-center space-x-1.5">
-                        <FiMapPin className="w-4 h-4" />
-                        <span>{institution.address.city}{institution.address.state && `, ${institution.address.state}`}</span>
+                      <div className="flex items-center gap-1.5">
+                        <FiMapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span className="truncate">{institution.address.city}{institution.address.state && `, ${institution.address.state}`}</span>
                       </div>
                     )}
                     {institution.stats?.totalStudents && (
-                      <div className="flex items-center space-x-1.5">
-                        <FiUsers className="w-4 h-4" />
-                        <span>{institution.stats.totalStudents.toLocaleString()} Students</span>
+                      <div className="flex items-center gap-1.5">
+                        <FiUsers className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span><strong className="text-gray-700 font-semibold">{institution.stats.totalStudents.toLocaleString()}</strong> Students</span>
                       </div>
                     )}
                     {institution.stats?.totalCourses && (
-                      <div className="flex items-center space-x-1.5">
-                        <FiBook className="w-4 h-4" />
-                        <span>{institution.stats.totalCourses} Courses</span>
+                      <div className="flex items-center gap-1.5">
+                        <FiBook className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span><strong className="text-gray-700 font-semibold">{institution.stats.totalCourses}</strong> Courses</span>
                       </div>
                     )}
                     {institution.established && (
-                      <div className="text-gray-500">
-                        Est. {institution.established}
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-gray-300 rounded-full flex-shrink-0"></span>
+                        <span>Est. <strong className="text-gray-700 font-semibold">{institution.established}</strong></span>
                       </div>
                     )}
                   </div>
 
                   {/* Description */}
                   {institution.description && (
-                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                    <p className="text-gray-600 text-[13px] mb-5 line-clamp-2 leading-relaxed">
                       {institution.description}
                     </p>
                   )}
 
-                  {/* Departments */}
+                  {/* Departments Bottom Row */}
                   {institution.departments && institution.departments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {institution.departments.slice(0, 4).map((dept, idx) => (
-                        <span
-                          key={dept._id || dept.id || idx}
-                          className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium"
-                        >
-                          {dept.code || dept.name}
-                        </span>
-                      ))}
-                      {institution.departments.length > 4 && (
-                        <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                          +{institution.departments.length - 4} more
-                        </span>
-                      )}
+                    <div className="mt-auto pt-4 border-t border-gray-100/80">
+
+                      {/* Departments */}
+                      <div className="flex flex-wrap gap-2">
+                        {institution.departments?.slice(0, 3).map((dept, idx) => (
+                          <span
+                            key={dept._id || dept.id || idx}
+                            className="px-2.5 py-1 bg-gray-50 border border-gray-200/60 text-gray-600 rounded-lg text-[11px] font-medium"
+                          >
+                            {dept.code || dept.name}
+                          </span>
+                        ))}
+                        {institution.departments?.length > 3 && (
+                          <span className="px-2.5 py-1 bg-gray-50 border border-gray-200/60 text-gray-500 rounded-lg text-[11px] font-medium">
+                            +{institution.departments.length - 3}
+                          </span>
+                        )}
+                      </div>
+
                     </div>
                   )}
-
-                  {/* Actions */}
-                  <div className="flex items-center space-x-3">
-                    <a
-                      href={`/${institution.slug}`}
-                      className="px-5 py-2.5 rounded-lg font-medium border-2 transition-all flex items-center space-x-2 hover:bg-gray-50"
-                      style={{
-                        borderColor: institution.branding?.primaryColor || '#10b981',
-                        color: institution.branding?.primaryColor || '#10b981'
-                      }}
-                    >
-                      <span>View Details</span>
-                      <FiExternalLink className="w-4 h-4" />
-                    </a>
-                  </div>
                 </div>
               </div>
-            </motion.div>
+            </motion.a>
           ))
         ) : (
-          <div className="text-center py-16 bg-white border border-gray-200 rounded-xl">
-            <p className="text-gray-500 text-lg font-medium mb-2">No institutions found</p>
-            <p className="text-gray-400 text-sm">Try adjusting your search or filters</p>
+          <div className="text-center py-20 bg-white border border-gray-200/60 rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]">
+            <div className="w-20 h-20 bg-gray-50/80 rounded-[18px] flex items-center justify-center mx-auto mb-5 border border-gray-100 shadow-sm">
+              <FiSearch className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-gray-900 text-xl font-bold tracking-tight mb-2">No institutions found</p>
+            <p className="text-gray-500 text-[13px] max-w-sm mx-auto">Try adjusting your search criteria or removing filters to discover more directories.</p>
           </div>
         )}
       </div>

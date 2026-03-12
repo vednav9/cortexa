@@ -13,3 +13,14 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* Fix white background on overscroll */
+html, body {
+  height: 100%;
+  margin: 0;
+  background-color: #080808; /* Dark theme background */
+}
+
+#root {
+  min-height: 100vh;
+}
