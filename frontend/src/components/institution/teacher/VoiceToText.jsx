@@ -31,7 +31,7 @@ const LectureRecorder = () => {
   const { user } = useAuth();
   const outletContext = useOutletContext();
   const activeInstitution = outletContext?.currentInstitution || outletContext?.institution;
-  const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
+  const brandColor = activeInstitution?.color || '#10b981';
   const rgb = hexToRgb(brandColor);
 
   // Recording state

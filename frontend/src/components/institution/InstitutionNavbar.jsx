@@ -11,9 +11,7 @@ import { API_BASE_URL } from "../../config/api";
 
 const hexToRgb = (hex) => {
   const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return r
-    ? `${parseInt(r[1], 16)}, ${parseInt(r[2], 16)}, ${parseInt(r[3], 16)}`
-    : "16, 185, 129";
+  return r ? `${parseInt(r[1],16)}, ${parseInt(r[2],16)}, ${parseInt(r[3],16)}` : '16, 185, 129';
 };
 
 export default function InstitutionNavbar({
@@ -21,17 +19,18 @@ export default function InstitutionNavbar({
   onBackToDashboard,
   brandColor = "#10b981",
 }) {
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const profileMenuRef = useRef(null);
+  const profileRef = useRef(null);
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
   const rgb = hexToRgb(brandColor);
 
   useEffect(() => {
     const handler = (e) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
-        setProfileMenuOpen(false);
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+        setMobileOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);

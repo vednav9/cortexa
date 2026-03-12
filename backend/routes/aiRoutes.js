@@ -1,5 +1,6 @@
 import express from "express";
 import aiService from "../services/aiService.js";
+import documentService from "../services/documentService.js";
 import multer from "multer";
 const router = express.Router();
 
@@ -86,15 +87,39 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'File is required' });
     }
 
-    const { institution_id, course_id } = req.body;
+    const { institution_id, course_id, uploaded_by } = req.body;
 
-    const result = await aiService.uploadDocument(
+    if (!institution_id || !course_id || !uploaded_by) {
+      return res.status(400).json({ 
+        error: 'institution_id, course_id, and uploaded_by are required' 
+      });
+    }
+
+    // Get file type from extension
+    const fileExtension = req.file.originalname.split('.').pop().toLowerCase();
+    
+    // Process and store document (R2 + MongoDB + AI server)
+    const result = await documentService.processAndStoreDocument(
       req.file.buffer,
       req.file.originalname,
-      institution_id,
-      course_id
+      {
+        institutionId: institution_id,
+        courseId: course_id,
+        uploadedBy: uploaded_by,
+        fileType: fileExtension,
+        fileSize: req.file.size
+      }
     );
-    res.json(result);
+
+    res.json({
+      success: true,
+      filename: result.document.fileName,
+      fileUrl: result.r2Url,
+      chunksCount: result.chunksCount,
+      embeddingsCount: result.embeddingsCount,
+      documentId: result.document._id,
+      message: result.message
+    });
   } catch (error) {
     console.error('Document upload error:', error);
     res.status(500).json({ error: error.message });
