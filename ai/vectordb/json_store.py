@@ -171,6 +171,31 @@ class JSONStore:
         }
         self._save_data()
         print("✓ Deleted all documents")
+
+    def remove_document_chunks(self, source_filename: str) -> int:
+        """
+        Remove all stored chunks that belong to the given file.
+
+        Matches on two criteria (either is sufficient):
+          1. doc['id'].startswith(source_filename + '_')   – ID convention used by /upload
+          2. doc['metadata'].get('source') == source_filename
+
+        Returns the number of chunks removed.
+        """
+        prefix = source_filename + '_'
+        before = len(self.data['documents'])
+        self.data['documents'] = [
+            doc for doc in self.data['documents']
+            if not (
+                doc.get('id', '').startswith(prefix) or
+                doc.get('metadata', {}).get('source') == source_filename
+            )
+        ]
+        removed = before - len(self.data['documents'])
+        if removed:
+            self._save_data()
+            print(f"✓ Removed {removed} existing chunks for '{source_filename}'")
+        return removed
     
     def get_stats(self) -> Dict:
         """Get store statistics"""

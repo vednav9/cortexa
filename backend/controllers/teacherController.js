@@ -5,6 +5,7 @@ import Admin from "../models/admin.js";
 import Course from "../models/course.js";
 import Document from "../models/document.js";
 import DocumentChunk from "../models/documentChunk.js";
+import EmbeddingStore from "../models/embeddingStore.js";
 import MCQSet from "../models/mcqSet.js";
 import MCQAttempt from "../models/mcqAttempt.js";
 import bcrypt from "bcryptjs";
@@ -539,6 +540,12 @@ export const deleteDocument = async (req, res) => {
 
         // Delete from MongoDB only after storage deletion succeeds
         await Document.findByIdAndDelete(documentId);
+
+        // Delete all chunks and embeddings associated with this document
+        await Promise.all([
+            DocumentChunk.deleteMany({ document: documentId }),
+            EmbeddingStore.deleteMany({ documentId: documentId }),
+        ]);
 
         res.status(200).json({
             success: true,

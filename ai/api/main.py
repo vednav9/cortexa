@@ -85,6 +85,17 @@ class HybridQueryRequest(BaseModel):
     use_web_fallback: bool = True
 
 
+# Fast endpoints for Node-side orchestration
+class EmbedRequest(BaseModel):
+    text: str
+
+
+class GenerateRequest(BaseModel):
+    query: str
+    context: str
+    source_type: str = "documents"  # "documents" | "web"
+
+
 # NEW: Speech-to-Text Models
 class TranscribeRequest(BaseModel):
     audio_filename: str
@@ -253,7 +264,11 @@ async def upload_document(
             'institution_id': institution_id,
             'course_id': course_id
         }
-        
+
+        # Remove any previously-stored chunks for this file so that
+        # re-uploads do not accumulate duplicate vectors.
+        vector_store.remove_document_chunks(file.filename)
+
         chunks = doc_processor.process_document(str(file_path), metadata)
         
         texts = [chunk.text for chunk in chunks]
@@ -509,6 +524,44 @@ async def hybrid_query(request: HybridQueryRequest):
         return result
     except Exception as e:
         print(f"❌ Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# FAST PRIMITIVE ENDPOINTS  (used by Node backend for server-side RAG)
+# ============================================================================
+
+@app.post("/embed")
+async def embed_text(request: EmbedRequest):
+    """
+    Embed a single text string and return its float vector.
+    Uses only the sentence-transformer (fast, no LLM needed).
+    """
+    try:
+        from models.embeddings import get_embedding_model
+        embedding_model = get_embedding_model()
+        vector = embedding_model.encode_query(request.text)
+        return {"embedding": vector.tolist(), "dimension": len(vector)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate")
+async def generate_answer(request: GenerateRequest):
+    """
+    Generate a short answer given pre-built context.
+    Called by the Node backend after it has already done retrieval from MongoDB.
+    Much faster than /assistant because no retrieval step happens here.
+    """
+    try:
+        assistant = get_hybrid_assistant_instance()
+        answer = assistant._generate_answer(
+            query=request.query,
+            context=request.context,
+            source_type=request.source_type,
+        )
+        return {"answer": answer}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

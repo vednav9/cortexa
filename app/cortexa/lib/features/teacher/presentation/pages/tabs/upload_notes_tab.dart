@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../../../core/constants/app_colors.dart';
 import '../../../../../../core/config/api_config.dart';
 import '../../../../../../core/network/api_client.dart';
@@ -1143,6 +1144,21 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.download_rounded,
+                size: 20,
+              ),
+              color: AppColors.primary,
+              onPressed: () async {
+                final uri = Uri.tryParse(document.fileUrl);
+                if (uri != null) {
+                  await launchUrl(uri,
+                      mode: LaunchMode.externalApplication);
+                }
+              },
+              tooltip: 'Download',
             ),
             IconButton(
               icon: const Icon(
