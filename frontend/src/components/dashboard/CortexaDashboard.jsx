@@ -23,11 +23,11 @@ import { socket } from "../../socket";
 import { useNotification } from "../../context/NotificationContext";
 
 
-import { studentAPI, teacherAPI, adminAPI } from "../../services/api";
+import { studentAPI, teacherAPI, adminAPI, authAPI } from "../../services/api";
 import toast from "react-hot-toast";
 
 const CortexaDashboard = () => {
-    const { user, loading, refreshUser } = useAuth();
+    const { user, setUser, loading, refreshUser } = useAuth();
 
     console.log("AUTH USER:", user);
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -48,46 +48,46 @@ const CortexaDashboard = () => {
     // 🔁 Re-fetch institutions (used by dashboard + events)
     const fetchInstitutions = async () => {
         if (!user || !user.role) return;
-      
+
         try {
-          setInstitutionsLoading(true);
-          const role = user.role.toLowerCase();
-      
-          if (role === "student") {
-            const { data } = await studentAPI.getMyInstitution();
-            setMyInstitutions(
-              data.institution
-                ? [{ ...data.institution, role: "student" }]
-                : []
-            );
-          }
-          else if (role === "teacher") {
-            const { data } = await teacherAPI.getMyInstitution();
-            setMyInstitutions(
-              data.institution
-                ? [{ ...data.institution, role: "teacher" }]
-                : []
-            );
-          }
-          else if (role === "admin") {
-            const { data } = await adminAPI.getInstitution();
-            setMyInstitutions(
-              data.institution
-                ? [{ ...data.institution, role: "admin" }]
-                : []
-            );
-          }
-          else {
-            setMyInstitutions([]);
-          }
+            setInstitutionsLoading(true);
+            const role = user.role.toLowerCase();
+
+            if (role === "student") {
+                const { data } = await studentAPI.getMyInstitution();
+                setMyInstitutions(
+                    data.institution
+                        ? [{ ...data.institution, role: "student" }]
+                        : []
+                );
+            }
+            else if (role === "teacher") {
+                const { data } = await teacherAPI.getMyInstitution();
+                setMyInstitutions(
+                    data.institution
+                        ? [{ ...data.institution, role: "teacher" }]
+                        : []
+                );
+            }
+            else if (role === "admin") {
+                const { data } = await adminAPI.getInstitution();
+                setMyInstitutions(
+                    data.institution
+                        ? [{ ...data.institution, role: "admin" }]
+                        : []
+                );
+            }
+            else {
+                setMyInstitutions([]);
+            }
         } catch (err) {
-          console.error("Failed to fetch institutions:", err);
-          setMyInstitutions([]);
+            console.error("Failed to fetch institutions:", err);
+            setMyInstitutions([]);
         } finally {
-          setInstitutionsLoading(false);
+            setInstitutionsLoading(false);
         }
-      };
-      
+    };
+
 
     useEffect(() => {
         if (!user) return;
@@ -240,7 +240,7 @@ const CortexaDashboard = () => {
 
 
     return (
-        <div className="flex w-full h-screen bg-gray-50 lg:pl-80">
+        <div className="flex w-full h-screen bg-gray-50 lg:pl-72">
             {/* SIDEBAR */}
             <Sidebar
                 isOpen={sidebarOpen}
@@ -252,10 +252,10 @@ const CortexaDashboard = () => {
 
 
             {/* MAIN CONTENT */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col bg-gray-50/50">
                 {/* Header */}
-                <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
-                    <div className="flex items-center justify-between px-6 py-4">
+                <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-200/60 transition-all">
+                    <div className="flex items-center justify-between px-8 h-[72px]">
                         {/* Left */}
                         <div className="flex items-center space-x-4">
                             <button
@@ -266,16 +266,13 @@ const CortexaDashboard = () => {
                             </button>
 
                             <div className="flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-md">
-                                    <HiSparkles className="w-5 h-5 text-white" />
-                                </div>
                                 <div>
-                                    <h1 className="text-xl font-bold text-gray-800">
+                                    <h1 className="text-[17px] font-bold text-gray-900 tracking-tight leading-none">
                                         {activeTab === "dashboard" ? "Dashboard" :
                                             activeTab === "notifications" ? "Notifications" :
                                                 activeTab === "querydesk" ? "Query Desk" : "Dashboard"}
                                     </h1>
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-[12px] text-gray-500 mt-1">
                                         {activeTab === "dashboard" ? "Your learning hub" :
                                             activeTab === "notifications" ? "Stay updated with your activity" :
                                                 activeTab === "querydesk" ? "Get help and support" : "Welcome back"}
@@ -288,21 +285,18 @@ const CortexaDashboard = () => {
                         <div className="relative" ref={profileMenuRef}>
                             <button
                                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                                className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                                className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-full border border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm transition-all"
                             >
-                                <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-green-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                <div className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-green-400 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm">
                                     {user?.name?.charAt(0).toUpperCase() || "U"}
                                 </div>
-                                <div className="hidden sm:block text-left">
-                                    <p className="text-sm font-semibold text-gray-800">
+                                <div className="hidden sm:block text-left pr-1">
+                                    <p className="text-[13px] font-semibold text-gray-800 leading-tight">
                                         {user?.name || "User"}
-                                    </p>
-                                    <p className="text-xs text-gray-500 capitalize">
-                                        {user?.role || "Student"}
                                     </p>
                                 </div>
                                 <FiChevronDown
-                                    className={`w-4 h-4 text-gray-500 transition-transform ${profileMenuOpen ? 'rotate-180' : ''
+                                    className={`w-3.5 h-3.5 text-gray-400 transition-transform ${profileMenuOpen ? 'rotate-180' : ''
                                         }`}
                                 />
                             </button>
@@ -324,23 +318,33 @@ const CortexaDashboard = () => {
                                                 {user?.email || "user@email.com"}
                                             </p>
                                         </div>
-                                        <button className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors">
-                                            <FiUser className="w-4 h-4" />
-                                            <span>Profile</span>
-                                        </button>
-                                        <button className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors">
-                                            <FiSettings className="w-4 h-4" />
-                                            <span>Settings</span>
-                                        </button>
-                                        {/* <div className="border-t border-gray-100">
-                                            <button
-                                                onClick={() => setProfileMenuOpen(false)}
-                                                className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-colors"
-                                            >
-                                                <FiLogOut className="w-4 h-4" />
-                                                <span>Logout</span>
+                                        <div className="p-1.5">
+                                            <button className="w-full px-3 py-2 text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg flex items-center gap-2.5 transition-colors">
+                                                <FiUser className="w-4 h-4 text-gray-400" />
+                                                <span>Profile</span>
                                             </button>
-                                        </div> */}
+                                            <button className="w-full px-3 py-2 text-left text-[13px] font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg flex items-center gap-2.5 transition-colors">
+                                                <FiSettings className="w-4 h-4 text-gray-400" />
+                                                <span>Settings</span>
+                                            </button>
+                                            <div className="my-1 border-t border-gray-100"></div>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        await authAPI.logout();
+                                                    } catch (err) {
+                                                        console.error("Logout failed", err);
+                                                    }
+                                                    setUser(null);
+                                                    localStorage.removeItem("auth");
+                                                    window.location.href = "/login";
+                                                }}
+                                                className="w-full px-3 py-2 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2.5 transition-colors"
+                                            >
+                                                <FiLogOut className="w-4 h-4 text-red-500" />
+                                                <span>Sign Out</span>
+                                            </button>
+                                        </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -473,10 +477,10 @@ const CortexaDashboard = () => {
                                 </div>
 
                                 <div className="p-6">
-                                <BrowseInstitutionsTab
-  excludeInstitutionId={user?.institution?._id}
-  onCountChange={setBrowseCount}
-/>
+                                    <BrowseInstitutionsTab
+                                        excludeInstitutionId={user?.institution?._id}
+                                        onCountChange={setBrowseCount}
+                                    />
 
                                 </div>
                             </motion.section>
@@ -493,8 +497,8 @@ const CortexaDashboard = () => {
 
                     {/* QUERY DESK */}
                     {activeTab === "querydesk" && (
-  <QueryDesk institution={myInstitutions[0]} />
-)}
+                        <QueryDesk institution={myInstitutions[0]} />
+                    )}
 
                 </main>
             </div>

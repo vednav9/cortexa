@@ -1,4 +1,3 @@
-// GenerateMCQ.jsx - AI-powered MCQ generation for teachers
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useOutletContext } from "react-router-dom";
@@ -13,13 +12,22 @@ import {
     FiTrash2,
     FiEdit2,
     FiClock,
-    FiUsers
+    FiUsers,
+    FiX
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 
+const hexToRgb = (hex) => {
+    const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return r
+        ? `${parseInt(r[1], 16)}, ${parseInt(r[2], 16)}, ${parseInt(r[3], 16)}`
+        : '16, 185, 129';
+};
+
 export default function GenerateMCQ() {
     const { user } = useAuth();
-    const { currentInstitution } = useOutletContext();
+    const outletContext = useOutletContext();
+    const activeInstitution = outletContext?.currentInstitution || outletContext?.institution;
     const [courses, setCourses] = useState([]);
     const [savedMCQSets, setSavedMCQSets] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -34,7 +42,7 @@ export default function GenerateMCQ() {
 
     // Generated MCQs
     const [generatedMCQs, setGeneratedMCQs] = useState([]);
-    
+
     // Save modal
     const [showSaveModal, setShowSaveModal] = useState(false);
     const [saveMode, setSaveMode] = useState("new"); // new or existing
@@ -50,20 +58,32 @@ export default function GenerateMCQ() {
     const [dueDate, setDueDate] = useState("");
     const [duration, setDuration] = useState(30);
 
+    const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
+    const rgb = hexToRgb(brandColor);
+
     useEffect(() => {
-        if (currentInstitution?._id) {
+        if (user?.role === 'teacher') {
             fetchCourses();
             fetchSavedMCQSets();
         }
-    }, [currentInstitution]);
+    }, [user]);
 
     const fetchCourses = async () => {
         try {
             const response = await api.get('/teacher/authorized-courses');
-            setCourses(response.data.courses || []);
+            const coursesData = response.data.courses || [];
+            setCourses(coursesData);
+
+            if (!selectedCourse && coursesData.length > 0) {
+                setSelectedCourse(coursesData[0]._id);
+            }
+
+            if (coursesData.length === 0) {
+                toast.error('No authorized courses found. Contact your admin.');
+            }
         } catch (error) {
             console.error("Fetch courses error:", error);
-            toast.error("Failed to load courses");
+            toast.error(error.response?.data?.message || "Failed to load courses");
         }
     };
 
@@ -78,7 +98,6 @@ export default function GenerateMCQ() {
 
     const fetchStudents = async (courseId) => {
         try {
-            // Fetch students enrolled in the course
             const response = await api.get(`/teacher/students?courseId=${courseId}`);
             setStudents(response.data.students || []);
         } catch (error) {
@@ -212,63 +231,76 @@ export default function GenerateMCQ() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 py-8">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: `rgba(${rgb},0.02)` }}>
+            <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <h1 className="text-4xl font-black text-gray-900 mb-2 flex items-center gap-3">
-                        <HiSparkles className="text-purple-600" />
-                        Generate MCQs with AI
-                    </h1>
-                    <p className="text-gray-600">
-                        Create multiple choice questions using artificial intelligence
-                    </p>
+                    <div className="flex items-center gap-4 mb-2">
+                        <div
+                            className="p-3.5 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm"
+                            style={{ backgroundColor: `rgba(${rgb},0.1)`, borderColor: `rgba(${rgb},0.2)` }}
+                        >
+                            <HiSparkles className="text-2xl" style={{ color: brandColor }} />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                                Generate MCQs
+                            </h1>
+                            <p className="text-gray-500 mt-1 font-medium">
+                                Create multiple choice questions powered by artificial intelligence
+                            </p>
+                        </div>
+                    </div>
                 </motion.div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Generation Section */}
-                    <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="space-y-6"
-                    >
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+                    {/* left column: Input Form */}
+                    <div className="lg:col-span-5 space-y-6">
                         {/* Course Selection */}
-                        <div className="bg-white rounded-2xl shadow-xl p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">
-                                Select Course
+                        <motion.div
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-6"
+                        >
+                            <h2 className="text-[14px] font-bold text-gray-900 uppercase tracking-wider mb-4">
+                                1. Select Course
                             </h2>
                             <select
                                 value={selectedCourse}
                                 onChange={(e) => setSelectedCourse(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                         focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                         transition-all"
+                                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all"
+                                style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                             >
                                 <option value="">Choose a course...</option>
                                 {courses.map((course) => (
                                     <option key={course._id} value={course._id}>
-                                        {course.name} ({course.code})
+                                        {course.code} - {course.name}
                                     </option>
                                 ))}
                             </select>
-                        </div>
+                        </motion.div>
 
                         {/* Generation Form */}
-                        <div className="bg-white rounded-2xl shadow-xl p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">
-                                Generate Questions
+                        <motion.div
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-6 flex flex-col"
+                        >
+                            <h2 className="text-[14px] font-bold text-gray-900 uppercase tracking-wider mb-5">
+                                2. AI Parameters
                             </h2>
 
                             {/* Source Type */}
-                            <div className="mb-4">
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            <div className="mb-5">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
                                     Source Type
                                 </label>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-2 gap-3 p-1 rounded-xl bg-gray-50/80 border border-gray-100">
                                     {[
                                         { value: "document", label: "Document" },
                                         { value: "topic", label: "Topic" }
@@ -277,12 +309,16 @@ export default function GenerateMCQ() {
                                             key={type.value}
                                             onClick={() => setSourceType(type.value)}
                                             className={`
-                                                px-4 py-2 rounded-lg font-semibold transition-all
+                                                px-4 py-2.5 rounded-lg font-bold text-[13px] transition-all
                                                 ${sourceType === type.value
-                                                    ? "bg-purple-600 text-white"
-                                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                                    ? "shadow-sm"
+                                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
                                                 }
                                             `}
+                                            style={{
+                                                backgroundColor: sourceType === type.value ? brandColor : 'transparent',
+                                                color: sourceType === type.value ? '#ffffff' : undefined,
+                                            }}
                                         >
                                             {type.label}
                                         </button>
@@ -291,10 +327,9 @@ export default function GenerateMCQ() {
                             </div>
 
                             {/* Source Input */}
-                            <div className="mb-4">
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    {sourceType === "document" && "Document Name"}
-                                    {sourceType === "topic" && "Enter Topic"}
+                            <div className="mb-5">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                    {sourceType === "document" ? "Document Details" : "Topic Details"}
                                 </label>
                                 <textarea
                                     value={source}
@@ -304,18 +339,17 @@ export default function GenerateMCQ() {
                                             ? "Enter the document name from uploaded notes..."
                                             : "Enter a topic (e.g., 'Data Structures')..."
                                     }
-                                    rows={3}
-                                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                             focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                             transition-all resize-none"
+                                    rows={4}
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all resize-none"
+                                    style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                 />
                             </div>
 
                             {/* Settings */}
-                            <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="grid grid-cols-2 gap-4 mb-8">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Number of Questions
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                        Quantity
                                     </label>
                                     <input
                                         type="number"
@@ -323,21 +357,19 @@ export default function GenerateMCQ() {
                                         onChange={(e) => setNumQuestions(e.target.value)}
                                         min="1"
                                         max="20"
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                                 focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                                 transition-all"
+                                        className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-bold text-[14px] transition-all"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
                                         Difficulty
                                     </label>
                                     <select
                                         value={difficulty}
                                         onChange={(e) => setDifficulty(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                                 focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                                 transition-all"
+                                        className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-bold text-[14px] transition-all"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                     >
                                         <option value="easy">Easy</option>
                                         <option value="medium">Medium</option>
@@ -346,119 +378,128 @@ export default function GenerateMCQ() {
                                 </div>
                             </div>
 
-                            {/* Generate Button */}
-                            <motion.button
+                            <button
                                 onClick={handleGenerateMCQs}
                                 disabled={generating || !selectedCourse}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
                                 className={`
                                     w-full py-4 rounded-xl font-bold text-white 
-                                    transition-all shadow-lg flex items-center justify-center gap-2
+                                    transition-all flex items-center justify-center gap-2 mt-auto
                                     ${generating || !selectedCourse
-                                        ? "bg-gray-400 cursor-not-allowed"
-                                        : "bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-xl"
+                                        ? "bg-gray-300 text-gray-500 cursor-not-allowed shadow-none"
+                                        : "hover:-translate-y-0.5"
                                     }
                                 `}
+                                style={{
+                                    backgroundColor: generating || !selectedCourse ? undefined : brandColor,
+                                    boxShadow: generating || !selectedCourse ? undefined : `0 6px 20px -4px rgba(${rgb}, 0.5)`
+                                }}
                             >
                                 {generating ? (
                                     <>
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent 
-                                                      rounded-full animate-spin" />
+                                        <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
                                         Generating...
                                     </>
                                 ) : (
                                     <>
                                         <HiSparkles className="w-5 h-5" />
-                                        Generate MCQs
+                                        Generate Questions
                                     </>
                                 )}
-                            </motion.button>
-                        </div>
-                    </motion.div>
+                            </button>
+                        </motion.div>
+                    </div>
 
-                    {/* Generated MCQs Preview */}
+                    {/* right column: Generated MCQs Preview */}
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="bg-white rounded-2xl shadow-xl p-6"
+                        className="lg:col-span-7 bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-6 md:p-8 flex flex-col h-[calc(100vh-140px)] min-h-[600px]"
                     >
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">
-                                Generated MCQs ({generatedMCQs.length})
-                            </h2>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 shrink-0">
+                            <div>
+                                <h2 className="text-[14px] font-bold text-gray-900 uppercase tracking-wider">
+                                    3. Preview Generated Content
+                                </h2>
+                                <p className="text-xs font-semibold text-gray-400 mt-1">Review the AI output before saving</p>
+                            </div>
                             {generatedMCQs.length > 0 && (
                                 <button
                                     onClick={() => setShowSaveModal(true)}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-lg 
-                                             hover:bg-green-700 transition-colors flex items-center gap-2"
+                                    className="px-5 py-2.5 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-colors flex items-center gap-2 text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5"
                                 >
                                     <FiSave className="w-4 h-4" />
-                                    Save
+                                    Save This Set
                                 </button>
                             )}
                         </div>
 
                         {generatedMCQs.length === 0 ? (
-                            <div className="text-center py-12">
-                                <FiCheckSquare className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                                <p className="text-gray-600">
-                                    Generated MCQs will appear here
+                            <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50/50">
+                                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: `rgba(${rgb},0.08)` }}>
+                                    <FiCheckSquare className="w-8 h-8 opacity-50" style={{ color: brandColor }} />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-700">Empty Output</h3>
+                                <p className="text-sm font-medium text-gray-400 mt-1 max-w-sm text-center">
+                                    Fill out the parameters and click "Generate Questions" to see the AI output here.
                                 </p>
                             </div>
                         ) : (
-                            <div className="space-y-6 max-h-[600px] overflow-y-auto pr-2">
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-6 scrollbar-thin">
                                 {generatedMCQs.map((mcq, index) => (
-                                    <motion.div
+                                    <div
                                         key={index}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: index * 0.1 }}
-                                        className="p-4 rounded-xl border-2 border-purple-200 
-                                                 bg-purple-50"
+                                        className="p-5 rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
                                     >
-                                        <h3 className="font-bold text-gray-900 mb-3">
-                                            Q{index + 1}. {mcq.question}
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {[
-                                                { label: "A", text: mcq.option_a },
-                                                { label: "B", text: mcq.option_b },
-                                                { label: "C", text: mcq.option_c },
-                                                { label: "D", text: mcq.option_d }
-                                            ].map((option, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className={`
-                                                        p-3 rounded-lg flex items-center gap-3
-                                                        ${idx === mcq.correct_answer
-                                                            ? "bg-green-100 border-2 border-green-500"
-                                                            : "bg-white border border-gray-300"
-                                                        }
-                                                    `}
-                                                >
-                                                    <span className="font-bold text-gray-700">
-                                                        {option.label}.
-                                                    </span>
-                                                    <span className="text-gray-900">
-                                                        {option.text}
-                                                    </span>
-                                                    {idx === mcq.correct_answer && (
-                                                        <span className="ml-auto text-green-600 font-semibold">
-                                                            ✓ Correct
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        {mcq.explanation && (
-                                            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                                                <p className="text-sm text-gray-700">
-                                                    <span className="font-semibold">Explanation:</span> {mcq.explanation}
-                                                </p>
+                                        <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: brandColor }} />
+                                        <div className="flex gap-4">
+                                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-black text-gray-500 shrink-0">
+                                                {index + 1}
                                             </div>
-                                        )}
-                                    </motion.div>
+                                            <div className="flex-1">
+                                                <h3 className="font-bold text-gray-900 mb-4 mt-1 leading-relaxed text-[15px]">
+                                                    {mcq.question}
+                                                </h3>
+                                                <div className="grid gap-3 sm:grid-cols-2">
+                                                    {[
+                                                        { label: "A", text: mcq.option_a },
+                                                        { label: "B", text: mcq.option_b },
+                                                        { label: "C", text: mcq.option_c },
+                                                        { label: "D", text: mcq.option_d }
+                                                    ].map((option, idx) => {
+                                                        const isCorrect = idx === mcq.correct_answer;
+                                                        return (
+                                                            <div
+                                                                key={idx}
+                                                                className={`
+                                                                    p-3.5 rounded-xl flex items-start gap-3 border-2 transition-all
+                                                                    ${isCorrect
+                                                                        ? "bg-green-50/50 border-green-500"
+                                                                        : "bg-gray-50 border-transparent"
+                                                                    }
+                                                                `}
+                                                            >
+                                                                <span className={`w-6 h-6 rounded flex items-center justify-center font-bold text-xs shrink-0 ${isCorrect ? "bg-green-500 text-white" : "bg-white text-gray-500 shadow-sm"}`}>
+                                                                    {option.label}
+                                                                </span>
+                                                                <span className={`text-[13px] mt-0.5 font-medium ${isCorrect ? "text-green-900" : "text-gray-700"}`}>
+                                                                    {option.text}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {mcq.explanation && (
+                                                    <div className="mt-4 p-4 rounded-xl text-sm" style={{ backgroundColor: `rgba(${rgb},0.04)` }}>
+                                                        <div className="flex items-center gap-1.5 mb-1">
+                                                            <HiSparkles className="w-4 h-4" style={{ color: brandColor }} />
+                                                            <span className="font-bold text-gray-900 text-xs uppercase tracking-wide">AI Explanation</span>
+                                                        </div>
+                                                        <p className="text-gray-700 font-medium leading-relaxed">{mcq.explanation}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -469,64 +510,77 @@ export default function GenerateMCQ() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-8 bg-white rounded-2xl shadow-xl p-8"
+                    className="mt-8 bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-6 md:p-8"
                 >
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                        Saved MCQ Sets
-                    </h2>
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h2 className="text-xl font-black text-gray-900">
+                                Your Saved Question Sets
+                            </h2>
+                            <p className="text-gray-500 font-medium mt-1">
+                                Manage and assign your generated question sets
+                            </p>
+                        </div>
+                    </div>
 
                     {savedMCQSets.length === 0 ? (
-                        <div className="text-center py-12">
-                            <FiCheckSquare className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-                            <p className="text-gray-600">No saved MCQ sets yet</p>
+                        <div className="text-center py-12 rounded-2xl border-2 border-dashed border-gray-100 bg-gray-50">
+                            <FiSave className="w-10 h-10 mx-auto text-gray-400 mb-4" />
+                            <p className="text-gray-500 font-bold">No question sets saved yet</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {savedMCQSets.map((set) => (
                                 <motion.div
                                     key={set._id}
-                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="p-6 rounded-xl border-2 border-gray-200 
-                                             hover:border-purple-300 transition-all group"
+                                    className="p-6 rounded-2xl border border-gray-100 bg-white hover:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.1)] transition-all group flex flex-col h-full hover:border-transparent"
+                                    style={{ hover: { borderColor: brandColor } }}
                                 >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <h3 className="font-bold text-gray-900 text-lg 
-                                                     group-hover:text-purple-600 transition-colors">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <h3 className="font-bold text-gray-900 text-lg group-hover:text-[var(--brandColor)] transition-colors pr-2 break-words" style={{ '--brandColor': brandColor }}>
                                             {set.title}
                                         </h3>
                                         {set.isAssigned && (
-                                            <span className="px-2 py-1 bg-green-100 text-green-700 
-                                                         text-xs font-semibold rounded">
+                                            <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md bg-green-100 text-green-700 shrink-0 mt-1">
                                                 Assigned
                                             </span>
                                         )}
                                     </div>
-                                    
-                                    <p className="text-sm text-gray-600 mb-4">
-                                        {set.course?.name}
+
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-5 pb-4 border-b border-gray-50">
+                                        {set.course?.code} - {set.course?.name}
                                     </p>
 
-                                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                                        <span>{set.questions?.length || 0} questions</span>
-                                        <span>•</span>
-                                        <span>{set.duration || 30} mins</span>
+                                    <div className="grid grid-cols-2 gap-2 mb-6 mt-auto">
+                                        <div className="flex items-center gap-2 text-[13px] font-bold text-gray-600 bg-gray-50 p-2.5 rounded-xl">
+                                            <FiCheckSquare className="w-4 h-4 text-gray-400" />
+                                            {set.questions?.length || 0} QS
+                                        </div>
+                                        <div className="flex items-center gap-2 text-[13px] font-bold text-gray-600 bg-gray-50 p-2.5 rounded-xl">
+                                            <FiClock className="w-4 h-4 text-gray-400" />
+                                            {set.duration || 30}m
+                                        </div>
                                     </div>
 
                                     <button
                                         onClick={() => openAssignModal(set)}
                                         disabled={set.isAssigned}
                                         className={`
-                                            w-full py-2 rounded-lg font-semibold transition-all
+                                            w-full py-3 rounded-xl font-bold transition-all
                                             flex items-center justify-center gap-2
                                             ${set.isAssigned
-                                                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                                                : "bg-purple-600 text-white hover:bg-purple-700"
+                                                ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-transparent"
+                                                : "text-white hover:-translate-y-0.5 shadow-md hover:shadow-lg"
                                             }
                                         `}
+                                        style={{
+                                            backgroundColor: set.isAssigned ? undefined : brandColor
+                                        }}
                                     >
                                         <FiSend className="w-4 h-4" />
-                                        {set.isAssigned ? "Already Assigned" : "Assign to Students"}
+                                        {set.isAssigned ? "Assigned" : "Assign to Students"}
                                     </button>
                                 </motion.div>
                             ))}
@@ -542,49 +596,40 @@ export default function GenerateMCQ() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black bg-opacity-50 flex items-center 
-                                 justify-center z-50 p-4"
+                        className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
                         onClick={() => setShowSaveModal(false)}
                     >
                         <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full 
-                                     max-h-[90vh] overflow-y-auto"
+                            className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full"
                         >
-                            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                                Save MCQ Set
-                            </h2>
+                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
+                                <h2 className="text-xl font-black text-gray-900">
+                                    Save Question Set
+                                </h2>
+                                <button onClick={() => setShowSaveModal(false)} className="p-2 bg-gray-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+                                    <FiX className="w-5 h-5" />
+                                </button>
+                            </div>
 
                             {/* Save Mode Selection */}
                             <div className="mb-6">
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Save as
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">
+                                    Action
                                 </label>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-2 gap-2 p-1.5 rounded-xl bg-gray-50">
                                     <button
                                         onClick={() => setSaveMode("new")}
-                                        className={`
-                                            px-4 py-2 rounded-lg font-semibold transition-all
-                                            ${saveMode === "new"
-                                                ? "bg-purple-600 text-white"
-                                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                            }
-                                        `}
+                                        className={`px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${saveMode === "new" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
                                     >
-                                        New Set
+                                        Create New
                                     </button>
                                     <button
                                         onClick={() => setSaveMode("existing")}
-                                        className={`
-                                            px-4 py-2 rounded-lg font-semibold transition-all
-                                            ${saveMode === "existing"
-                                                ? "bg-purple-600 text-white"
-                                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                                            }
-                                        `}
+                                        className={`px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${saveMode === "existing" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
                                     >
                                         Add to Existing
                                     </button>
@@ -593,48 +638,45 @@ export default function GenerateMCQ() {
 
                             {saveMode === "new" ? (
                                 <>
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Title *
+                                    <div className="mb-5">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                            Title <span className="text-red-500">*</span>
                                         </label>
                                         <input
                                             type="text"
                                             value={mcqSetTitle}
                                             onChange={(e) => setMcqSetTitle(e.target.value)}
-                                            placeholder="E.g., Data Structures Mid-Term"
-                                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                                     focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                                     transition-all"
+                                            placeholder="e.g. Midterm Rev.1"
+                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all"
+                                            style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                         />
                                     </div>
-                                    <div className="mb-6">
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Description (Optional)
+                                    <div className="mb-8">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                            Description <span className="text-gray-400 font-semibold lowercase normal-case">(optional)</span>
                                         </label>
                                         <textarea
                                             value={mcqSetDescription}
                                             onChange={(e) => setMcqSetDescription(e.target.value)}
-                                            placeholder="Brief description of this MCQ set..."
-                                            rows={3}
-                                            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                                     focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                                     transition-all resize-none"
+                                            placeholder="Enter context..."
+                                            rows={2}
+                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all resize-none"
+                                            style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                         />
                                     </div>
                                 </>
                             ) : (
-                                <div className="mb-6">
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Select Existing Set *
+                                <div className="mb-8">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                        Select Target Set <span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         value={selectedExistingSet}
                                         onChange={(e) => setSelectedExistingSet(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                                 focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                                 transition-all"
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
                                     >
-                                        <option value="">Choose a set...</option>
+                                        <option value="">Choose...</option>
                                         {savedMCQSets
                                             .filter(set => set.course._id === selectedCourse)
                                             .map((set) => (
@@ -650,18 +692,16 @@ export default function GenerateMCQ() {
                             <div className="flex gap-4">
                                 <button
                                     onClick={() => setShowSaveModal(false)}
-                                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 
-                                             rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                                    className="flex-1 px-4 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleSaveMCQs}
-                                    className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 
-                                             to-blue-600 text-white rounded-xl font-semibold 
-                                             hover:shadow-lg transition-all"
+                                    className="flex-1 px-4 py-3.5 text-white rounded-xl font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                                    style={{ backgroundColor: brandColor }}
                                 >
-                                    Save
+                                    Confirm Save
                                 </button>
                             </div>
                         </motion.div>
@@ -676,108 +716,133 @@ export default function GenerateMCQ() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black bg-opacity-50 flex items-center 
-                                 justify-center z-50 p-4"
+                        className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
                         onClick={() => setShowAssignModal(false)}
                     >
                         <motion.div
-                            initial={{ scale: 0.9, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.9, opacity: 0 }}
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full 
-                                     max-h-[90vh] overflow-y-auto"
+                            className="bg-white rounded-3xl shadow-2xl p-8 max-w-2xl w-full max-h-[90vh] flex flex-col"
                         >
-                            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                                Assign MCQ Set
-                            </h2>
-                            <p className="text-gray-600 mb-6">
+                            <div className="flex items-center justify-between mb-2">
+                                <h2 className="text-xl font-black text-gray-900">
+                                    Issue Assignment
+                                </h2>
+                                <button onClick={() => setShowAssignModal(false)} className="p-2 bg-gray-50 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors">
+                                    <FiX className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <p className="text-[13px] font-bold text-gray-400 mb-6 uppercase tracking-wider">
                                 {assignMCQSet.title}
                             </p>
 
-                            {/* Students Selection */}
-                            <div className="mb-6">
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Select Students *
-                                </label>
-                                <div className="max-h-60 overflow-y-auto border-2 border-gray-200 
-                                              rounded-xl p-4 space-y-2">
-                                    {students.map((student) => (
-                                        <label
-                                            key={student._id}
-                                            className="flex items-center gap-3 p-3 rounded-lg 
-                                                     hover:bg-purple-50 cursor-pointer transition-colors"
-                                        >
+                            <div className="flex-1 overflow-y-auto pr-2 -mr-2">
+                                {/* Settings */}
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                            Due Time <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            value={dueDate}
+                                            onChange={(e) => setDueDate(e.target.value)}
+                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[13px] transition-all"
+                                            style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                            Duration limit
+                                        </label>
+                                        <div className="relative">
                                             <input
-                                                type="checkbox"
-                                                checked={selectedStudents.includes(student._id)}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setSelectedStudents([...selectedStudents, student._id]);
+                                                type="number"
+                                                value={duration}
+                                                onChange={(e) => setDuration(e.target.value)}
+                                                min="5"
+                                                max="180"
+                                                className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[13px] transition-all outline-none"
+                                                style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[12px] font-bold text-gray-400">min</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Students Selection */}
+                                <div className="mb-6">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">
+                                            Enrolled Students <span className="text-red-500">*</span>
+                                        </label>
+                                        {students.length > 0 && (
+                                            <button
+                                                onClick={() => {
+                                                    if (selectedStudents.length === students.length) {
+                                                        setSelectedStudents([]);
                                                     } else {
-                                                        setSelectedStudents(
-                                                            selectedStudents.filter(id => id !== student._id)
-                                                        );
+                                                        setSelectedStudents(students.map(s => s._id));
                                                     }
                                                 }}
-                                                className="w-5 h-5 text-purple-600 rounded 
-                                                         focus:ring-purple-500"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-gray-900">
-                                                    {student.fullName}
-                                                </p>
-                                                <p className="text-sm text-gray-600">
-                                                    {student.email}
-                                                </p>
-                                            </div>
-                                        </label>
-                                    ))}
+                                                className="text-[11px] font-bold text-gray-500 hover:text-gray-900 border px-2 py-0.5 rounded-md"
+                                            >
+                                                {selectedStudents.length === students.length ? "Deselect All" : "Select All"}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
+                                        <div className="max-h-52 overflow-y-auto p-2 space-y-1 scrollbar-thin">
+                                            {students.map((student) => {
+                                                const isSelected = selectedStudents.includes(student._id);
+                                                return (
+                                                    <label
+                                                        key={student._id}
+                                                        className={`flex items-center gap-4 p-3 rounded-lg cursor-pointer transition-colors border ${isSelected ? "bg-white border-transparent shadow-sm" : "border-transparent hover:bg-gray-100/50"}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedStudents([...selectedStudents, student._id]);
+                                                                } else {
+                                                                    setSelectedStudents(
+                                                                        selectedStudents.filter(id => id !== student._id)
+                                                                    );
+                                                                }
+                                                            }}
+                                                            className="w-4 h-4 rounded border-gray-300 focus:ring-2 focus:ring-offset-1"
+                                                            style={{ accentColor: brandColor, '--tw-ring-color': brandColor }}
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-bold text-[14px] text-gray-900 truncate">
+                                                                {student.fullName}
+                                                            </p>
+                                                            <p className="text-[12px] font-semibold text-gray-400 truncate mt-0.5">
+                                                                {student.email}
+                                                            </p>
+                                                        </div>
+                                                    </label>
+                                                )
+                                            })}
+                                            {students.length === 0 && (
+                                                <div className="p-6 text-center text-sm font-bold text-gray-400">
+                                                    No students enrolled in this course.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                {students.length === 0 && (
-                                    <p className="text-sm text-gray-600 mt-2">
-                                        No students found for this course
-                                    </p>
-                                )}
                             </div>
 
-                            {/* Settings */}
-                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Due Date *
-                                    </label>
-                                    <input
-                                        type="datetime-local"
-                                        value={dueDate}
-                                        onChange={(e) => setDueDate(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                                 focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                                 transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Duration (minutes)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={duration}
-                                        onChange={(e) => setDuration(e.target.value)}
-                                        min="5"
-                                        max="180"
-                                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 
-                                                 focus:border-purple-500 focus:ring focus:ring-purple-200 
-                                                 transition-all"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4">
+                            <div className="flex gap-4 pt-6 mt-4 border-t border-gray-100 shrink-0">
                                 <button
                                     onClick={() => setShowAssignModal(false)}
-                                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 
-                                             rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                                    className="flex-1 px-4 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
                                 >
                                     Cancel
                                 </button>
@@ -785,14 +850,15 @@ export default function GenerateMCQ() {
                                     onClick={handleAssignMCQSet}
                                     disabled={selectedStudents.length === 0 || !dueDate}
                                     className={`
-                                        flex-1 px-6 py-3 rounded-xl font-semibold transition-all
+                                        flex-1 px-4 py-3.5 rounded-xl font-bold transition-all shadow-md
                                         ${selectedStudents.length === 0 || !dueDate
-                                            ? "bg-gray-400 text-white cursor-not-allowed"
-                                            : "bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:shadow-lg"
+                                            ? "bg-gray-300 text-gray-500 cursor-not-allowed shadow-none"
+                                            : "text-white hover:-translate-y-0.5 hover:shadow-lg"
                                         }
                                     `}
+                                    style={{ backgroundColor: selectedStudents.length === 0 || !dueDate ? undefined : brandColor }}
                                 >
-                                    Assign MCQ Set
+                                    Assign Set
                                 </button>
                             </div>
                         </motion.div>

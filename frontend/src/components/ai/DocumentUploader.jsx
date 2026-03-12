@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { FiUpload, FiFile, FiCheck, FiX } from 'react-icons/fi';
 import aiService from '../../services/aiService';
 
-export default function DocumentUploader({ institutionId = null, courseId = null, onUploadComplete }) {
+export default function DocumentUploader({ institutionId = null, courseId = null, uploadedBy = null, onUploadComplete }) {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -101,11 +101,11 @@ export default function DocumentUploader({ institutionId = null, courseId = null
     setProgress({ status: 'uploading', message: 'Uploading document...' });
 
     try {
-      const response = await aiService.uploadDocument(fileToUpload, institutionId, courseId);
+      const response = await aiService.uploadDocument(fileToUpload, institutionId, courseId, uploadedBy);
       
       setProgress({ 
         status: 'success', 
-        message: `Successfully uploaded! ${response.chunks_added} chunks created.` 
+        message: `Successfully uploaded! ${response.chunksCount || response.chunks_added} chunks created.` 
       });
 
       setTimeout(() => {

@@ -9,43 +9,61 @@ import { useAuth } from "../context/authcontext";
 import InstitutionNavbar from "../components/institution/InstitutionNavbar";
 import InstitutionMenu from "../components/institution/InstitutionMenu";
 
+const getCachedInstitution = (slug) => {
+    try {
+        const raw = sessionStorage.getItem(`institution_${slug}`);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+};
+
+const setCachedInstitution = (slug, data) => {
+    try {
+        sessionStorage.setItem(`institution_${slug}`, JSON.stringify(data));
+    } catch { }
+};
+
 export default function InstitutionLayout() {
     const { slug } = useParams();
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [institution, setInstitution] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const cached = getCachedInstitution(slug);
+    const [institution, setInstitution] = useState(cached);
+    const [loading, setLoading] = useState(!cached);   // skip spinner if cached
     const [hasAccess, setHasAccess] = useState(false);
     const [showScrollTop, setShowScrollTop] = useState(false);
 
     useEffect(() => {
         const fetchInstitution = async () => {
             try {
-                // FIX: Use the correct endpoint with /slug/ prefix
                 const res = await api.get(`/institutions/slug/${slug}`);
-                setInstitution(res.data.institution);
-                
-                // Check if user has access to this institution
+                const inst = res.data.institution;
+
+                // Cache for instant next visit
+                setCachedInstitution(slug, inst);
+                setInstitution(inst);
+
                 if (user && user.institution) {
                     // Handle both ObjectId string and populated institution object
-                    const userInstitutionId = typeof user.institution === 'string' 
-                        ? user.institution 
+                    const userInstitutionId = typeof user.institution === 'string'
+                        ? user.institution
                         : user.institution._id;
-                    
+
                     const userInstitutionSlug = typeof user.institution === 'object' && user.institution.slug
                         ? user.institution.slug
                         : null;
-                    
+
                     const currentInstitutionId = res.data.institution._id;
                     const currentSlug = res.data.institution.slug;
-                    
+
                     // Check by ID (most reliable) or slug
                     const hasAccessById = userInstitutionId === currentInstitutionId;
                     const hasAccessBySlug = userInstitutionSlug && userInstitutionSlug === currentSlug;
                     const hasAccessBySlugParam = slug && (userInstitutionSlug === slug);
-                    
+
                     const accessGranted = hasAccessById || hasAccessBySlug || hasAccessBySlugParam;
-                    
+
                     console.log('🔍 Access Check:', {
                         userRole: user.role,
                         userInstitutionId,
@@ -58,7 +76,7 @@ export default function InstitutionLayout() {
                         hasAccessBySlugParam,
                         finalAccess: accessGranted
                     });
-                    
+
                     setHasAccess(accessGranted);
                 } else {
                     console.log('🔍 No user or no institution on user object');
@@ -105,11 +123,11 @@ export default function InstitutionLayout() {
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
                 <div className="text-center">
                     <motion.div
-                        animate={{ 
+                        animate={{
                             scale: [1, 1.1, 1],
                             rotate: [0, 180, 360]
                         }}
-                        transition={{ 
+                        transition={{
                             duration: 2,
                             repeat: Infinity,
                             ease: "easeInOut"
@@ -160,12 +178,12 @@ export default function InstitutionLayout() {
                 {/* Fixed Header Container */}
                 <div className="fixed top-0 left-0 right-0 z-50 bg-white">
                     {/* Institution Navbar */}
-                    <InstitutionNavbar 
+                    <InstitutionNavbar
                         institution={institution}
                         onBackToDashboard={handleBackToDashboard}
                         brandColor={brandColor}
                     />
-                    
+
                     {/* Institution Menu - Role-based horizontal menu */}
                     <InstitutionMenu
                         userRole={user?.role}
@@ -173,7 +191,7 @@ export default function InstitutionLayout() {
                         brandColor={brandColor}
                     />
                 </div>
-                
+
                 {/* Page Content - Add top padding to account for fixed header */}
                 <div className="relative pt-[112px]">
                     <Outlet context={{ hasAccess, institution }} />
