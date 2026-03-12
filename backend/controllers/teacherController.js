@@ -4,6 +4,7 @@ import Student from "../models/student.js";
 import Admin from "../models/admin.js";
 import Course from "../models/course.js";
 import Document from "../models/document.js";
+import DocumentChunk from "../models/documentChunk.js";
 import MCQSet from "../models/mcqSet.js";
 import MCQAttempt from "../models/mcqAttempt.js";
 import bcrypt from "bcryptjs";
@@ -589,10 +590,51 @@ export const markDocumentProcessed = async (req, res) => {
 
         await Document.findByIdAndUpdate(documentId, update);
 
+        // Respond immediately — chunk persistence is non-fatal background work.
         res.status(200).json({
             success: true,
             message: "Document marked as processed"
         });
+
+        // ── Persist AI chunks to MongoDB (fire-and-forget) ──────────────────
+        // The AI already has the chunks in memory from the Flutter upload step.
+        // Fetching them here and writing to DocumentChunk gives durable storage
+        // that survives HF Space restarts and enables future server-side RAG.
+        if (chunksCount > 0) {
+            (async () => {
+                try {
+                    const chunksData = await aiService.getDocumentChunks(document.originalName);
+                    const chunks = chunksData?.chunks ?? [];
+
+                    if (chunks.length === 0) return;
+
+                    // Remove any stale chunks from a previous version of this file.
+                    await DocumentChunk.deleteMany({ document: documentId });
+
+                    const docs = chunks.map((c, i) => ({
+                        document: documentId,
+                        chunkIndex: c.metadata?.chunk_index ?? i,
+                        text: c.text,
+                        embedding: Array.isArray(c.embedding) ? c.embedding : [],
+                        embeddingModel: chunksData.embedding_model || 'paraphrase-MiniLM-L3-v2',
+                        metadata: {
+                            institution_id: document.institution?.toString() ?? '',
+                            course_id: document.course?.toString() ?? '',
+                            fileName: document.originalName,
+                            fileType: document.fileType,
+                            uploadedBy: document.uploadedBy?.toString() ?? '',
+                        },
+                    }));
+
+                    await DocumentChunk.insertMany(docs, { ordered: false });
+                    console.log(`✅ Stored ${docs.length} chunks in MongoDB for "${document.originalName}"`);
+                } catch (chunkErr) {
+                    // Non-fatal — document status is already correct, only chunk
+                    // persistence failed.  Log and continue.
+                    console.error(`⚠️  Chunk persistence failed for document ${documentId}:`, chunkErr.message);
+                }
+            })();
+        }
     } catch (error) {
         console.error("Mark processed error:", error);
         res.status(500).json({

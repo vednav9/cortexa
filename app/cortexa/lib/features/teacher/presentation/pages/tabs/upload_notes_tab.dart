@@ -368,16 +368,16 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        aiIndexed ? 'Upload Successful!' : 'Saved (AI sync pending)',
+                        aiIndexed ? 'Upload Successful!' : 'Saved (processing pending)',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         aiIndexed
                           ? (statusSynced
-                            ? 'Document "$_displayFileName" is available and indexed for AI search'
-                            : 'Indexed in AI, but status sync is pending. Pull-to-refresh in a few seconds.')
-                          : 'Document saved. AI indexing will retry automatically — students may not see it in AI search yet.',
+                            ? 'Document "$_displayFileName" is uploaded and ready for students'
+                            : 'Document processed. Pull to refresh in a few seconds.')
+                          : 'Document saved. Processing will complete soon — students may not see it in search yet.',
                         style: const TextStyle(fontSize: 12),
                       ),
                     ],
@@ -870,7 +870,7 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
             CircularProgressIndicator(color: AppColors.primary),
             SizedBox(height: 16),
             Text(
-              'Uploading & indexing for AI...',
+              'Uploading and processing document...',
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
@@ -1129,7 +1129,7 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          document.isProcessed ? 'Processed' : 'Processing',
+                          document.isProcessed ? 'Ready' : 'Pending',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
