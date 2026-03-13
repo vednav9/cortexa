@@ -55,12 +55,12 @@ class ApiConfig {
    // ── NGROK TEST MODE ──────────────────────────────────────────────────────
    // Example:
    // static const String _ngrokBackendUrl = 'https://abcd-12-34-56-78.ngrok-free.app/api';
-   static const String _ngrokBackendUrl = 'https://146f-106-222-210-19.ngrok-free.app';
+   static const String _ngrokBackendUrl = 'https://5f85-106-222-210-19.ngrok-free.app';
 
    // If you run AI locally and expose it via ngrok, set that here.
    // If you want to keep using HF while testing backend locally, leave this as HF URL.
    // static const String _ngrokAiUrl = 'https://wxyz-12-34-56-78.ngrok-free.app/api';
-   static const String _ngrokAiUrl = 'https://jay-10020-cortexa-ai.hf.space/api';
+   static const String _ngrokAiUrl = 'https://jay-10020-cortexa-ai.hf.space';
 
    // Ensures backend base URL always ends with /api and has no trailing slash.
    static String _normalizeBackendBase(String raw) {
@@ -91,7 +91,7 @@ class ApiConfig {
   =========================== */
 
   // Local AI URL (for testing with local AI service)
-  static const String _localAiUrl = 'http://10.0.2.2:8000/api';
+   static const String _localAiUrl = 'http://10.0.2.2:8000';
 
   // Production AI URL — populated by ApiConfig.initialize() from local.properties.
   // NEVER hardcode this value here.

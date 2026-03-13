@@ -4,8 +4,9 @@ import FormData from "form-data"; // Node.js FormData
 const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
 
 // Increased timeouts for AI operations
-const DEFAULT_TIMEOUT = 180000; // 3 minutes
-const LONG_TIMEOUT = 300000; // 5 minutes
+const DEFAULT_TIMEOUT = 30000; // 30 seconds
+const LONG_TIMEOUT = 40000; // 40 seconds
+const UPLOAD_TIMEOUT = 300000; // 5 minutes for document indexing uploads
 
 class AIService {
   // RAG Query
@@ -87,7 +88,7 @@ class AIService {
         headers: {
           ...formData.getHeaders() // Get proper headers from form-data
         },
-        timeout: LONG_TIMEOUT, // 5 minutes for file upload
+        timeout: UPLOAD_TIMEOUT,
         maxContentLength: Infinity,
         maxBodyLength: Infinity
       });

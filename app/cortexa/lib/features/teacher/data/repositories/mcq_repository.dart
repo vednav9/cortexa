@@ -14,6 +14,7 @@ class MCQRepository {
     required String sourceType, // 'topic' or 'document'
     required int count,
     required String difficulty,
+    String? documentId,
   }) async {
     final normalizedDifficulty = difficulty.toLowerCase();
     final normalizedSourceType =
@@ -21,100 +22,26 @@ class MCQRepository {
             ? sourceType
             : 'topic';
 
-    // AI-first strategy: guarantees real generated MCQs when local backend is
-    // up but /teacher/mcq/generate may still be stale in some deployments.
-    try {
-      return await _generateViaAiRoute(
-        topic: topic,
-        sourceType: normalizedSourceType,
-        count: count,
-        difficulty: normalizedDifficulty,
-      );
-    } catch (firstError) {
-      // Fallback to teacher route for compatibility.
-      try {
-        final response = await _apiClient.post(
-          ApiConfig.teacherGenerateMCQs,
-          body: {
-            'courseId': courseId,
-            'topic': topic,
-            'sourceType': normalizedSourceType,
-            'count': count,
-            'difficulty': normalizedDifficulty,
-          },
-          requiresAuth: true,
-        );
-
-        if (response['success'] != true) {
-          throw Exception(response['message'] ?? 'Failed to generate MCQs');
-        }
-
-        final mcqsData = response['mcqs'] as List? ?? [];
-        if (_looksLikePlaceholderMcqs(mcqsData)) {
-          throw Exception('Teacher endpoint returned placeholder MCQs');
-        }
-
-        if (mcqsData.isEmpty) {
-          throw Exception('No MCQs returned');
-        }
-
-        return mcqsData.map((json) => MCQModel.fromJson(json)).toList();
-      } catch (fallbackError) {
-        throw Exception(
-          'Failed to generate MCQs: ${fallbackError.toString()} | AI direct error: ${firstError.toString()}',
-        );
-      }
-    }
-  }
-
-  bool _looksLikePlaceholderMcqs(List mcqsData) {
-    if (mcqsData.isEmpty) return false;
-
-    bool looksLikePlaceholder(dynamic item) {
-      if (item is! Map) return false;
-      final q = (item['question'] ?? '').toString().toLowerCase();
-      final exp = (item['explanation'] ?? '').toString().toLowerCase();
-      final options = [
-        (item['option_a'] ?? '').toString().toLowerCase(),
-        (item['option_b'] ?? '').toString().toLowerCase(),
-        (item['option_c'] ?? '').toString().toLowerCase(),
-        (item['option_d'] ?? '').toString().toLowerCase(),
-      ];
-
-      return q.startsWith('sample question') ||
-          exp.contains('this is the explanation for question') ||
-          options.every((o) => o.startsWith('option '));
-    }
-
-    // If most returned items look synthetic, treat the set as placeholder data.
-    final sampleCount = mcqsData.where(looksLikePlaceholder).length;
-    return sampleCount > 0 && sampleCount >= (mcqsData.length / 2).ceil();
-  }
-
-  Future<List<MCQModel>> _generateViaAiRoute({
-    required String topic,
-    required String sourceType,
-    required int count,
-    required String difficulty,
-  }) async {
-    final aiResponse = await _apiClient.aiPost(
-      '/mcq/generate',
+    final response = await _apiClient.post(
+      ApiConfig.teacherGenerateMCQs,
       body: {
-        'source_type': sourceType,
-        'source': topic,
-        'num_questions': count,
-        'difficulty': difficulty,
+        'courseId': courseId,
+        'topic': topic,
+        'sourceType': normalizedSourceType,
+        'count': count,
+        'difficulty': normalizedDifficulty,
+        if (documentId != null && documentId.isNotEmpty) 'documentId': documentId,
       },
+      requiresAuth: true,
     );
 
-    final status = (aiResponse['status'] ?? '').toString().toLowerCase();
-    if (status != 'success') {
-      throw Exception(aiResponse['error'] ?? aiResponse['message'] ?? 'AI generation failed');
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to generate MCQs');
     }
 
-    final mcqsData = aiResponse['mcqs'] as List? ?? [];
+    final mcqsData = response['mcqs'] as List? ?? [];
     if (mcqsData.isEmpty) {
-      throw Exception('AI returned no MCQs');
+      throw Exception('No MCQs returned');
     }
     return mcqsData.map((json) => MCQModel.fromJson(json)).toList();
   }

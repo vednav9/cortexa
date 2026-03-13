@@ -106,7 +106,7 @@ class ApiClient {
               headers: headers,
               body: body != null ? jsonEncode(body) : null,
             )
-            .timeout(const Duration(minutes: 3));
+            .timeout(const Duration(seconds: 40));
 
         print('📡 AI Response Status: ${response.statusCode}');
         print('📄 AI Response Body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
@@ -114,9 +114,9 @@ class ApiClient {
         return _handleResponse(response);
       } on TimeoutException {
         throw ApiException(
-          'AI request timed out. The AI service may be starting up — please try again in a moment.',
+          'AI request timed out after 40 seconds. Please try fewer questions or choose a shorter source.',
           statusCode: 408,
-          technicalMessage: 'AI request timed out after 3 minutes. AI URLs: $candidateUrls',
+          technicalMessage: 'AI request timed out after 40 seconds. AI URLs: $candidateUrls',
         );
       } catch (e) {
         print('❌ Error in AI POST request ($url): $e');
