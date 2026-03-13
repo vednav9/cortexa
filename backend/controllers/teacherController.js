@@ -4,12 +4,303 @@ import Student from "../models/student.js";
 import Admin from "../models/admin.js";
 import Course from "../models/course.js";
 import Document from "../models/document.js";
+import DocumentChunk from "../models/documentChunk.js";
+import EmbeddingStore from "../models/embeddingStore.js";
 import MCQSet from "../models/mcqSet.js";
 import MCQAttempt from "../models/mcqAttempt.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../utils/generateToken.js";
 import { cookieOptions } from "../utils/cookieOptions.js";
 import { uploadToR2, deleteFromR2 } from "../services/cloudflareR2.js";
+import aiService from "../services/aiService.js";
+
+const stripQuestionPrefix = (question = "") =>
+    String(question)
+        .replace(/^\s*(Q|Question)\s*\d+\s*[:.)-]\s*/i, "")
+        .trim();
+
+const normalizeOptions = (options, fallback = {}) => {
+    if (Array.isArray(options)) {
+        const result = options.map((o) => String(o ?? "").trim()).filter(Boolean);
+        return result.length >= 4 ? result.slice(0, 4) : [
+            ...result,
+            String(fallback.option_a ?? "Option A"),
+            String(fallback.option_b ?? "Option B"),
+            String(fallback.option_c ?? "Option C"),
+            String(fallback.option_d ?? "Option D"),
+        ].slice(0, 4);
+    }
+
+    if (options && typeof options === "object") {
+        return [
+            String(options.A ?? options.a ?? fallback.option_a ?? "Option A"),
+            String(options.B ?? options.b ?? fallback.option_b ?? "Option B"),
+            String(options.C ?? options.c ?? fallback.option_c ?? "Option C"),
+            String(options.D ?? options.d ?? fallback.option_d ?? "Option D"),
+        ];
+    }
+
+    return [
+        String(fallback.option_a ?? "Option A"),
+        String(fallback.option_b ?? "Option B"),
+        String(fallback.option_c ?? "Option C"),
+        String(fallback.option_d ?? "Option D"),
+    ];
+};
+
+const normalizeCorrectAnswer = (correctAnswer, optionsLength = 4) => {
+    const maxIndex = Math.max(0, Math.min(3, optionsLength - 1));
+    if (typeof correctAnswer === "number" && Number.isFinite(correctAnswer)) {
+        return Math.max(0, Math.min(maxIndex, Math.floor(correctAnswer)));
+    }
+
+    if (typeof correctAnswer === "string") {
+        const raw = correctAnswer.trim().toUpperCase();
+        if (/^[A-D]$/.test(raw)) {
+            return raw.charCodeAt(0) - 65;
+        }
+        const numeric = Number(raw);
+        if (Number.isFinite(numeric)) {
+            return Math.max(0, Math.min(maxIndex, Math.floor(numeric)));
+        }
+    }
+
+    return 0;
+};
+
+const normalizeMCQ = (mcq, difficulty = "medium") => {
+    const options = normalizeOptions(mcq.options, mcq);
+    const correctRaw = mcq.correctAnswer ?? mcq.correct_answer;
+    return {
+        question: stripQuestionPrefix(mcq.question || "Question"),
+        options,
+        correctAnswer: normalizeCorrectAnswer(correctRaw, options.length),
+        explanation: String(mcq.explanation || "").trim(),
+        difficulty: ["easy", "medium", "hard"].includes(String(mcq.difficulty || "").toLowerCase())
+            ? String(mcq.difficulty).toLowerCase()
+            : difficulty,
+    };
+};
+
+const mergeUniqueMcqs = (mcqs) => {
+    const seen = new Set();
+    return mcqs.filter((item) => {
+        const key = stripQuestionPrefix(item.question).toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+};
+
+const buildFallbackMcqs = (context, count, difficulty = "medium") => {
+    const sentences = String(context || "")
+        .split(/[.?!]\s+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 30)
+        .slice(0, count * 2);
+
+    const fallback = [];
+    for (let i = 0; i < count; i++) {
+        const basis = sentences[i] || `Core concept ${i + 1}`;
+        const clipped = basis.length > 160 ? `${basis.slice(0, 157)}...` : basis;
+        fallback.push({
+            question: `Which statement is most accurate about: ${clipped}?`,
+            options: [
+                clipped,
+                `A common misconception about ${clipped.split(" ").slice(0, 4).join(" ")}`,
+                "An unrelated statement that does not match the topic",
+                "None of the above",
+            ],
+            correctAnswer: 0,
+            explanation: "The first option is directly supported by the source context.",
+            difficulty,
+        });
+    }
+    return fallback;
+};
+
+const buildTopicWebContext = async (topic) => {
+    const safeTopic = String(topic || "").trim();
+    if (!safeTopic) return "";
+
+    try {
+        const webResult = await aiService.queryHybridAssistant(
+            `Provide concise study notes with key facts, definitions, and examples for: ${safeTopic}`,
+            true
+        );
+
+        const answer = String(webResult?.answer || "").trim();
+        const sources = Array.isArray(webResult?.sources) ? webResult.sources : [];
+        const sourceSnippets = sources
+            .map((s) => `${s?.title || "Source"}: ${String(s?.snippet || s?.content || "").trim()}`)
+            .filter((x) => x.length > 12)
+            .slice(0, 4)
+            .join("\n");
+
+        const combined = `${answer}\n${sourceSnippets}`.trim();
+        if (combined.length > 80) {
+            return combined.slice(0, 5000);
+        }
+    } catch (_) {
+        // Fall through to lightweight fallback prompt context.
+    }
+
+    return `Topic: ${safeTopic}`;
+};
+
+const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, courseId }) => {
+    let document = null;
+
+    if (documentId) {
+        document = await Document.findOne({
+            _id: documentId,
+            course: courseId,
+            uploadedBy: teacherId,
+        });
+    }
+
+    if (!document && documentName) {
+        document = await Document.findOne({
+            course: courseId,
+            uploadedBy: teacherId,
+            $or: [
+                { originalName: documentName },
+                { fileName: documentName },
+            ],
+        }).sort({ createdAt: -1 });
+    }
+
+    if (!document) {
+        throw new Error("Selected document not found for this course.");
+    }
+
+    const chunks = await DocumentChunk.find({ document: document._id })
+        .sort({ chunkIndex: 1 })
+        .limit(25)
+        .select("text chunkIndex");
+
+    let text = chunks
+        .map((chunk) => String(chunk.text || "").trim())
+        .filter(Boolean)
+        .join("\n\n")
+        .slice(0, 8000);
+
+    // Fallback when DB chunks are missing or stale: ask AI service for document chunks by name.
+    if (!text) {
+        try {
+            const aiChunks = await aiService.getDocumentChunks(document.originalName || document.fileName || documentName);
+            const normalized = Array.isArray(aiChunks)
+                ? aiChunks.map((c) => String(c?.text || c?.content || c || "").trim()).filter(Boolean)
+                : [];
+            text = normalized.join("\n\n").slice(0, 8000);
+        } catch (_) {
+            // Keep text empty and let caller fallback to broad topic context.
+        }
+    }
+
+    if (!text) {
+        text = `Document title: ${document.originalName || document.fileName || documentName || "Uploaded document"}`;
+    }
+
+    return {
+        document,
+        contextText: text,
+    };
+};
+
+const persistDocumentVectorsToMongo = async (document) => {
+    const candidateNames = [
+        document?.originalName,
+        document?.fileName,
+        document?.fileName && document?.fileType ? `${document.fileName}.${document.fileType}` : null,
+    ].filter(Boolean);
+
+    let chunksData = null;
+    let usedName = null;
+
+    for (const name of candidateNames) {
+        try {
+            const result = await aiService.getDocumentChunks(name);
+            const chunks = Array.isArray(result?.chunks) ? result.chunks : [];
+            if (chunks.length > 0) {
+                chunksData = result;
+                usedName = name;
+                break;
+            }
+        } catch (_) {
+            // Try next candidate file name.
+        }
+    }
+
+    if (!chunksData) {
+        throw new Error(`No chunks available in AI store for document names: ${candidateNames.join(", ")}`);
+    }
+
+    const chunks = Array.isArray(chunksData.chunks) ? chunksData.chunks : [];
+
+    if (!chunks.length) {
+        return { chunkCount: 0, embeddingCount: 0, sourceName: usedName || "" };
+    }
+
+    await Promise.all([
+        DocumentChunk.deleteMany({ document: document._id }),
+        EmbeddingStore.deleteMany({ documentId: document._id }),
+    ]);
+
+    const chunkDocs = chunks.map((chunk, i) => {
+        const metadata = chunk?.metadata || {};
+        const embedding = Array.isArray(chunk?.embedding)
+            ? chunk.embedding.map((value) => Number(value)).filter((n) => Number.isFinite(n))
+            : [];
+
+        return {
+            document: document._id,
+            chunkIndex: Number.isFinite(Number(metadata?.chunk_index))
+                ? Number(metadata.chunk_index)
+                : i,
+            text: String(chunk?.text || "").trim(),
+            embedding,
+            embeddingModel: chunksData?.embedding_model || 'paraphrase-MiniLM-L3-v2',
+            metadata: {
+                institution_id: document.institution?.toString() ?? '',
+                course_id: document.course?.toString() ?? '',
+                fileName: document.originalName,
+                fileType: document.fileType,
+                uploadedBy: document.uploadedBy?.toString() ?? '',
+            },
+        };
+    }).filter((doc) => doc.text.length > 0);
+
+    const insertedChunks = chunkDocs.length
+        ? await DocumentChunk.insertMany(chunkDocs, { ordered: false })
+        : [];
+
+    const embeddingDocs = insertedChunks.map((chunkDoc) => ({
+        documentId: document._id,
+        chunkId: chunkDoc._id,
+        text: chunkDoc.text,
+        embedding: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding : [],
+        embeddingDimension: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding.length : 0,
+        embeddingModel: chunkDoc.embeddingModel || 'paraphrase-MiniLM-L3-v2',
+        metadata: {
+            institution_id: document.institution,
+            course_id: document.course,
+            fileName: document.originalName,
+            fileType: document.fileType,
+            chunkIndex: chunkDoc.chunkIndex,
+        },
+    }));
+
+    if (embeddingDocs.length) {
+        await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
+    }
+
+    return {
+        chunkCount: insertedChunks.length,
+        embeddingCount: embeddingDocs.length,
+        sourceName: usedName || '',
+    };
+};
 
 
 
@@ -430,15 +721,52 @@ export const uploadNotes = async (req, res) => {
             isProcessed: false
         });
 
-        // Respond immediately — AI indexing is handled by the Flutter app
-        // to avoid Vercel's serverless function timeout (HF cold-start alone
-        // can exceed 60 s, the maximum Vercel allows).
-        res.status(201).json({
-            success: true,
-            message: "Document uploaded successfully",
-            document: document.toObject(),
-            statusSyncSupported: true
-        });
+        // Backend-owned pipeline:
+        // 1) Upload to AI /upload for chunking + embeddings
+        // 2) Persist AI chunks into Mongo DocumentChunk + EmbeddingStore
+        try {
+            const aiUpload = await aiService.uploadDocument(
+                file.buffer,
+                file.originalname,
+                teacher.institution?.toString(),
+                courseId
+            );
+
+            const persisted = await persistDocumentVectorsToMongo(document);
+
+            await Document.findByIdAndUpdate(document._id, {
+                isProcessed: true,
+                processingError: null,
+                chunksCount: persisted.chunkCount,
+            });
+
+            const updatedDocument = await Document.findById(document._id);
+
+            return res.status(201).json({
+                success: true,
+                message: "Document uploaded and indexed successfully",
+                document: updatedDocument?.toObject?.() || document.toObject(),
+                aiIndexed: true,
+                chunksAddedByAi: Number(aiUpload?.chunks_added || 0),
+                chunksPersisted: persisted.chunkCount,
+                embeddingsPersisted: persisted.embeddingCount,
+            });
+        } catch (indexErr) {
+            const errMsg = indexErr?.message || "AI indexing pipeline failed";
+
+            await Document.findByIdAndUpdate(document._id, {
+                isProcessed: false,
+                processingError: errMsg,
+            });
+
+            return res.status(502).json({
+                success: false,
+                message: "Document uploaded to storage, but AI indexing failed",
+                document: document.toObject(),
+                error: errMsg,
+                aiIndexed: false,
+            });
+        }
     } catch (error) {
         console.error("Upload notes error:", error);
         res.status(500).json({
@@ -538,6 +866,12 @@ export const deleteDocument = async (req, res) => {
         // Delete from MongoDB only after storage deletion succeeds
         await Document.findByIdAndDelete(documentId);
 
+        // Delete all chunks and embeddings associated with this document
+        await Promise.all([
+            DocumentChunk.deleteMany({ document: documentId }),
+            EmbeddingStore.deleteMany({ documentId: documentId }),
+        ]);
+
         res.status(200).json({
             success: true,
             message: "Document deleted successfully"
@@ -577,20 +911,38 @@ export const markDocumentProcessed = async (req, res) => {
             });
         }
 
+        let persisted = { chunkCount: 0, embeddingCount: 0, sourceName: "" };
+        const requestedChunks = Number.isFinite(Number(chunksCount))
+            ? Math.max(0, Math.floor(Number(chunksCount)))
+            : null;
+
+        try {
+            // Always attempt persistence so we don't depend on client chunk parsing.
+            persisted = await persistDocumentVectorsToMongo(document);
+        } catch (persistErr) {
+            // If client reported chunks were added, treat persistence failure as hard error.
+            if ((requestedChunks ?? 0) > 0) {
+                throw persistErr;
+            }
+        }
+
         const update = {
             isProcessed: true,
             processingError: null,
+            chunksCount: Math.max(
+                0,
+                persisted.chunkCount || (requestedChunks ?? 0)
+            ),
         };
-
-        if (typeof chunksCount === "number" && Number.isFinite(chunksCount) && chunksCount >= 0) {
-            update.chunksCount = Math.floor(chunksCount);
-        }
 
         await Document.findByIdAndUpdate(documentId, update);
 
         res.status(200).json({
             success: true,
-            message: "Document marked as processed"
+            message: "Document marked as processed",
+            chunksPersisted: persisted.chunkCount,
+            embeddingsPersisted: persisted.embeddingCount,
+            aiChunkSource: persisted.sourceName,
         });
     } catch (error) {
         console.error("Mark processed error:", error);
@@ -655,7 +1007,7 @@ export const markDocumentFailed = async (req, res) => {
 ========================= */
 export const generateMCQs = async (req, res) => {
     try {
-        const { courseId, topic, count, difficulty } = req.body;
+        const { courseId, topic, count, difficulty, sourceType, documentId } = req.body;
         const teacherId = req.user.id;
 
         if (!courseId || !topic) {
@@ -686,33 +1038,101 @@ export const generateMCQs = async (req, res) => {
             });
         }
 
-        // TODO: Integrate with AI service to generate MCQs
-        // For now, return sample MCQs
-        const sampleMCQs = [];
-        for (let i = 0; i < (count || 5); i++) {
-            sampleMCQs.push({
-                question: `Sample question ${i + 1} about ${topic}`,
-                option_a: "Option A",
-                option_b: "Option B",
-                option_c: "Option C",
-                option_d: "Option D",
-                correct_answer: 0,
-                explanation: `This is the explanation for question ${i + 1}`,
-                difficulty: difficulty || "medium"
+        const normalizedSourceType = ["topic", "document"].includes(sourceType)
+            ? sourceType
+            : "topic";
+        const normalizedDifficulty = ["easy", "medium", "hard"].includes((difficulty || "").toLowerCase())
+            ? difficulty.toLowerCase()
+            : "medium";
+        const requestedCount = Number.isFinite(Number(count))
+            ? Math.max(1, Math.min(10, Number(count)))
+            : 5;
+
+        let contextText = "";
+        let sourceMeta = topic;
+
+        if (normalizedSourceType === "document") {
+            const docContext = await buildDocumentChunkContext({
+                documentId,
+                documentName: topic,
+                teacherId,
+                courseId,
+            });
+            contextText = docContext.contextText;
+            sourceMeta = docContext.document?.originalName || topic;
+        } else {
+            // Topic mode: build context from web first, no document/chunk lookup.
+            contextText = await buildTopicWebContext(topic);
+        }
+
+        const aiPrompt = `Topic: ${topic}\n\nUse the following reference context to create accurate MCQs:\n${contextText}`;
+
+        let firstPass = null;
+        try {
+            firstPass = await aiService.generateMCQs(
+                "text",
+                aiPrompt,
+                requestedCount,
+                normalizedDifficulty
+            );
+        } catch (firstPassError) {
+            console.warn("Primary AI generation failed:", firstPassError?.message || firstPassError);
+        }
+
+        const rawFirstPass = Array.isArray(firstPass?.mcqs) ? firstPass.mcqs : [];
+        let mcqs = mergeUniqueMcqs(rawFirstPass.map((mcq) => normalizeMCQ(mcq, normalizedDifficulty)));
+
+        // Top-up pass for missing MCQs.
+        if (mcqs.length < requestedCount) {
+            const deficit = requestedCount - mcqs.length;
+            const topUpPrompt = `${aiPrompt}\n\nGenerate ${deficit} additional MCQs that are different from previous ones.`;
+            let secondPass = null;
+            try {
+                secondPass = await aiService.generateMCQs(
+                    "text",
+                    topUpPrompt,
+                    deficit,
+                    normalizedDifficulty
+                );
+            } catch (topUpError) {
+                console.warn("Top-up AI generation failed:", topUpError?.message || topUpError);
+            }
+            const rawSecondPass = Array.isArray(secondPass?.mcqs) ? secondPass.mcqs : [];
+            mcqs = mergeUniqueMcqs([
+                ...mcqs,
+                ...rawSecondPass.map((mcq) => normalizeMCQ(mcq, normalizedDifficulty)),
+            ]);
+        }
+
+        if (mcqs.length < requestedCount) {
+            const fallback = buildFallbackMcqs(contextText || topic, requestedCount - mcqs.length, normalizedDifficulty);
+            mcqs = mergeUniqueMcqs([...mcqs, ...fallback]);
+        }
+
+        mcqs = mcqs.slice(0, requestedCount);
+
+        if (mcqs.length === 0) {
+            return res.status(502).json({
+                success: false,
+                message: "AI returned no MCQs. Try a broader topic or different source type."
             });
         }
 
         res.status(200).json({
             success: true,
-            mcqs: sampleMCQs,
-            message: "MCQs generated successfully (AI integration pending)"
+            mcqs,
+            generatedCount: mcqs.length,
+            sourceType: normalizedSourceType,
+            source: sourceMeta,
+            message: "MCQs generated successfully"
         });
     } catch (error) {
         console.error("Generate MCQs error:", error);
+        const errorMessage = error?.message || "Unknown MCQ generation error";
         res.status(500).json({
             success: false,
             message: "Failed to generate MCQs",
-            error: error.message
+            error: errorMessage
         });
     }
 };
@@ -753,6 +1173,8 @@ export const saveMCQSet = async (req, res) => {
             });
         }
 
+        const normalizedQuestions = mcqs.map((mcq) => normalizeMCQ(mcq));
+
         // Create MCQ set
         const mcqSet = await MCQSet.create({
             title,
@@ -760,13 +1182,7 @@ export const saveMCQSet = async (req, res) => {
             course: courseId,
             institution: teacher.institution,
             createdBy: teacherId,
-            questions: mcqs.map(mcq => ({
-                question: mcq.question,
-                options: mcq.options || [mcq.option_a, mcq.option_b, mcq.option_c, mcq.option_d],
-                correctAnswer: mcq.correctAnswer || mcq.correct_answer,
-                explanation: mcq.explanation || "",
-                difficulty: mcq.difficulty || "medium"
-            }))
+            questions: normalizedQuestions,
         });
 
         res.status(201).json({
@@ -818,14 +1234,7 @@ export const addToMCQSet = async (req, res) => {
             });
         }
 
-        // Add questions
-        const newQuestions = mcqs.map(mcq => ({
-            question: mcq.question,
-            options: mcq.options || [mcq.option_a, mcq.option_b, mcq.option_c, mcq.option_d],
-            correctAnswer: mcq.correctAnswer || mcq.correct_answer,
-            explanation: mcq.explanation || "",
-            difficulty: mcq.difficulty || "medium"
-        }));
+        const newQuestions = mcqs.map((mcq) => normalizeMCQ(mcq));
 
         mcqSet.questions.push(...newQuestions);
         await mcqSet.save();

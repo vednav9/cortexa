@@ -38,8 +38,13 @@ WHISPER_MODEL = "tiny"  # Options: tiny, base, small, medium, large (tiny=75MB f
 # - large: ~3GB, best accuracy
 
 # Chunking settings
-CHUNK_SIZE = 512
-CHUNK_OVERLAP = 50
+# CHUNK_SIZE: target characters per chunk (~800 chars ≈ 2-4 paragraphs of lecture notes).
+#   Old value was 512 which was too small and split concepts mid-sentence.
+CHUNK_SIZE = 800
+# CHUNK_OVERLAP: characters of text from the previous chunk included at the start
+#   of the next one, so the embedding always sees a coherent context boundary.
+#   Old value was 50 (word count, not chars) — now consistently chars.
+CHUNK_OVERLAP = 150
 MAX_CHUNKS_PER_DOC = 1000
 
 # Retrieval settings

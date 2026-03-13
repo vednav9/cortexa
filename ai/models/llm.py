@@ -60,43 +60,36 @@ class LanguageModel:
     def generate(
         self,
         prompt: str,
-        max_new_tokens: int = MAX_NEW_TOKENS,
+        max_new_tokens: int = 150,
         temperature: float = TEMPERATURE,
         top_p: float = TOP_P
     ) -> str:
         """
-        Generate text from prompt
-        
-        Args:
-            prompt: Input prompt
-            max_new_tokens: Maximum tokens to generate
-            temperature: Sampling temperature
-            top_p: Top-p sampling
-            
-        Returns:
-            Generated text
+        Generate text from prompt using greedy decoding for speed.
         """
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        
+        inputs = self.tokenizer(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=1024,  # cap input to avoid OOM and slow processing
+        ).to(self.model.device)
+
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                do_sample=True,
+                max_length=None,
+                do_sample=False,          # greedy — ~3x faster than sampling
                 pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=self.tokenizer.eos_token_id
+                eos_token_id=self.tokenizer.eos_token_id,
+                repetition_penalty=1.1,   # avoid repetition loops
             )
-        
-        # Decode and remove input prompt
-        generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Remove the input prompt from output
-        if generated_text.startswith(prompt):
-            generated_text = generated_text[len(prompt):].strip()
-        
-        return generated_text
+
+        # Decode only the newly generated tokens (skip input)
+        input_len = inputs["input_ids"].shape[1]
+        generated_ids = outputs[0][input_len:]
+        generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+        return generated_text.strip()
 
 # Singleton instance
 _llm_model = None

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../../../core/constants/app_colors.dart';
 import '../../../../../../core/config/api_config.dart';
 import '../../../../../../core/network/api_client.dart';
@@ -36,6 +37,38 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
     super.initState();
     _aiRepository = TeacherAiRepository(_apiClient);
     _loadCourses();
+  }
+
+  void _showStatusSnackBar({
+    required String message,
+    required IconData icon,
+    required Color color,
+    int seconds = 4,
+  }) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: seconds),
+      ),
+    );
   }
 
   Future<void> _loadCourses() async {
@@ -102,28 +135,12 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
 
   Future<void> _pickDocument() async {
     if (_selectedCourse == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'Please select a course first',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.orange.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Please select a course first',
+        icon: Icons.warning_amber_rounded,
+        color: Colors.orange.shade600,
+        seconds: 3,
+      );
       return;
     }
 
@@ -141,29 +158,11 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
         final extension = file.extension?.toLowerCase();
         final allowedExtensions = ['pdf', 'txt', 'docx', 'doc', 'ppt', 'pptx'];
         if (extension == null || !allowedExtensions.contains(extension)) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Invalid file type. Only PDF, Word, TXT, and PowerPoint files are allowed.',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-                backgroundColor: Colors.red.shade600,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                margin: const EdgeInsets.all(16),
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
+          _showStatusSnackBar(
+            message: 'Invalid file type. Use PDF, Word, TXT, or PowerPoint.',
+            icon: Icons.error_outline,
+            color: Colors.red.shade600,
+          );
           return;
         }
 
@@ -198,28 +197,11 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
         
         // Validate file is not empty
         if (file.size == 0) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        'The selected file is empty. Please choose a valid document.',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-                backgroundColor: Colors.red.shade600,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                margin: const EdgeInsets.all(16),
-              ),
-            );
-          }
+          _showStatusSnackBar(
+            message: 'The selected file is empty. Please choose a valid document.',
+            icon: Icons.error_outline,
+            color: Colors.red.shade600,
+          );
           return;
         }
 
@@ -231,28 +213,11 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
         _showFileNameDialog();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Failed to select file: ${e.toString()}',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Failed to select file: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+      );
     }
   }
 
@@ -404,16 +369,16 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        aiIndexed ? 'Upload Successful!' : 'Saved (AI sync pending)',
+                        aiIndexed ? 'Upload Successful!' : 'Saved (processing pending)',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         aiIndexed
                           ? (statusSynced
-                            ? 'Document "$_displayFileName" is available and indexed for AI search'
-                            : 'Indexed in AI, but status sync is pending. Pull-to-refresh in a few seconds.')
-                          : 'Document saved. AI indexing will retry automatically — students may not see it in AI search yet.',
+                            ? 'Document "$_displayFileName" is uploaded and ready for students'
+                            : 'Document processed. Pull to refresh in a few seconds.')
+                          : 'Document saved. Processing will complete soon — students may not see it in search yet.',
                         style: const TextStyle(fontSize: 12),
                       ),
                     ],
@@ -906,7 +871,7 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
             CircularProgressIndicator(color: AppColors.primary),
             SizedBox(height: 16),
             Text(
-              'Uploading & indexing for AI...',
+              'Uploading and processing document...',
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
@@ -1165,7 +1130,7 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          document.isProcessed ? 'Processed' : 'Processing',
+                          document.isProcessed ? 'Ready' : 'Pending',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -1179,6 +1144,21 @@ class _UploadNotesTabState extends State<UploadNotesTab> {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              icon: const Icon(
+                Icons.download_rounded,
+                size: 20,
+              ),
+              color: AppColors.primary,
+              onPressed: () async {
+                final uri = Uri.tryParse(document.fileUrl);
+                if (uri != null) {
+                  await launchUrl(uri,
+                      mode: LaunchMode.externalApplication);
+                }
+              },
+              tooltip: 'Download',
             ),
             IconButton(
               icon: const Icon(

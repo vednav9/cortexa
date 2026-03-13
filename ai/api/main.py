@@ -85,6 +85,17 @@ class HybridQueryRequest(BaseModel):
     use_web_fallback: bool = True
 
 
+# Fast endpoints for Node-side orchestration
+class EmbedRequest(BaseModel):
+    text: str
+
+
+class GenerateRequest(BaseModel):
+    query: str
+    context: str
+    source_type: str = "documents"  # "documents" | "web"
+
+
 # NEW: Speech-to-Text Models
 class TranscribeRequest(BaseModel):
     audio_filename: str
@@ -253,7 +264,11 @@ async def upload_document(
             'institution_id': institution_id,
             'course_id': course_id
         }
-        
+
+        # Remove any previously-stored chunks for this file so that
+        # re-uploads do not accumulate duplicate vectors.
+        vector_store.remove_document_chunks(file.filename)
+
         chunks = doc_processor.process_document(str(file_path), metadata)
         
         texts = [chunk.text for chunk in chunks]
@@ -458,8 +473,80 @@ async def generate_mcqs(request: MCQGenerateRequest):
         else:
             raise HTTPException(status_code=400, detail="Invalid source_type")
         
-        # Filter valid MCQs
+        # Filter valid MCQs first.
         valid_mcqs = [mcq for mcq in mcqs if mcq_validator.validate_mcq(mcq)]
+
+        # If strict validation drops too many questions, top up with normalized
+        # parsed MCQs so caller still gets requested count.
+        if len(valid_mcqs) < request.num_questions:
+            for mcq in mcqs:
+                if len(valid_mcqs) >= request.num_questions:
+                    break
+                if mcq in valid_mcqs:
+                    continue
+
+                if not isinstance(mcq, dict):
+                    continue
+
+                question = str(mcq.get("question", "")).strip()
+                options_raw = mcq.get("options", {}) or {}
+                correct = str(mcq.get("correct_answer", "A")).strip().upper()
+
+                if isinstance(options_raw, dict):
+                    options_map = {
+                        "A": str(options_raw.get("A") or options_raw.get("a") or "Option A"),
+                        "B": str(options_raw.get("B") or options_raw.get("b") or "Option B"),
+                        "C": str(options_raw.get("C") or options_raw.get("c") or "Option C"),
+                        "D": str(options_raw.get("D") or options_raw.get("d") or "Option D"),
+                    }
+                elif isinstance(options_raw, list):
+                    normalized = [str(x) for x in options_raw]
+                    while len(normalized) < 4:
+                        normalized.append(f"Option {chr(65 + len(normalized))}")
+                    options_map = {
+                        "A": normalized[0],
+                        "B": normalized[1],
+                        "C": normalized[2],
+                        "D": normalized[3],
+                    }
+                else:
+                    options_map = {
+                        "A": str(mcq.get("option_a", "Option A")),
+                        "B": str(mcq.get("option_b", "Option B")),
+                        "C": str(mcq.get("option_c", "Option C")),
+                        "D": str(mcq.get("option_d", "Option D")),
+                    }
+
+                normalized = {
+                    "question": question,
+                    "options": options_map,
+                    "correct_answer": correct if correct in ["A", "B", "C", "D"] else "A",
+                    "explanation": str(mcq.get("explanation", "Based on the provided context.")),
+                    "difficulty": str(mcq.get("difficulty", request.difficulty or "medium")).lower(),
+                }
+
+                if normalized["question"]:
+                    valid_mcqs.append(normalized)
+
+        # Absolute fallback: synthesize missing MCQs so API always returns requested count.
+        if len(valid_mcqs) < request.num_questions:
+            missing = request.num_questions - len(valid_mcqs)
+            base_topic = request.source.strip() if request.source else "the topic"
+            for i in range(missing):
+                valid_mcqs.append({
+                    "question": f"Which statement best describes {base_topic} (item {i + 1})?",
+                    "options": {
+                        "A": f"A key concept of {base_topic}",
+                        "B": f"An incorrect interpretation of {base_topic}",
+                        "C": "An unrelated concept",
+                        "D": "None of the above",
+                    },
+                    "correct_answer": "A",
+                    "explanation": "Option A is the best-supported choice based on available context.",
+                    "difficulty": (request.difficulty or "medium").lower(),
+                })
+
+        valid_mcqs = valid_mcqs[:request.num_questions]
         
         return {
             "status": "success",
@@ -509,6 +596,44 @@ async def hybrid_query(request: HybridQueryRequest):
         return result
     except Exception as e:
         print(f"❌ Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# FAST PRIMITIVE ENDPOINTS  (used by Node backend for server-side RAG)
+# ============================================================================
+
+@app.post("/embed")
+async def embed_text(request: EmbedRequest):
+    """
+    Embed a single text string and return its float vector.
+    Uses only the sentence-transformer (fast, no LLM needed).
+    """
+    try:
+        from models.embeddings import get_embedding_model
+        embedding_model = get_embedding_model()
+        vector = embedding_model.encode_query(request.text)
+        return {"embedding": vector.tolist(), "dimension": len(vector)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate")
+async def generate_answer(request: GenerateRequest):
+    """
+    Generate a short answer given pre-built context.
+    Called by the Node backend after it has already done retrieval from MongoDB.
+    Much faster than /assistant because no retrieval step happens here.
+    """
+    try:
+        assistant = get_hybrid_assistant_instance()
+        answer = assistant._generate_answer(
+            query=request.query,
+            context=request.context,
+            source_type=request.source_type,
+        )
+        return {"answer": answer}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

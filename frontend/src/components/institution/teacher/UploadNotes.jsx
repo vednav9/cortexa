@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { useAuth } from "../../../context/authcontext";
 import toast from "react-hot-toast";
 import api from "../../../services/api";
+import aiService from "../../../services/aiService";
 import {
     FiUpload,
     FiFile,
@@ -30,6 +31,7 @@ export default function UploadNotes() {
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadStep, setUploadStep] = useState(''); // 'uploading' | 'indexing' | 'finalizing'
     const [isDragging, setIsDragging] = useState(false);
 
     // Form state
@@ -150,49 +152,79 @@ export default function UploadNotes() {
         }
     }, [fileName]);
 
-    // Upload document
+    // Upload document — 3-step flow matching the mobile app
     const handleUpload = async () => {
-        if (!selectedFile) {
-            toast.error("Please select a file");
-            return;
-        }
+        if (!selectedFile) { toast.error("Please select a file"); return; }
+        if (!fileName.trim()) { toast.error("Please enter a file name"); return; }
+        if (!selectedCourse) { toast.error("Please select a course"); return; }
 
-        if (!fileName.trim()) {
-            toast.error("Please enter a file name");
-            return;
-        }
-
-        if (!selectedCourse) {
-            toast.error("Please select a course");
-            return;
-        }
+        setUploading(true);
+        setUploadStep('uploading');
 
         try {
-            setUploading(true);
+            // ── Step 1: R2 storage + MongoDB record (backend) ──────────────────
             const formData = new FormData();
             formData.append("file", selectedFile);
-            formData.append("title", fileName.trim());
+            formData.append("fileName", fileName.trim());
             formData.append("courseId", selectedCourse);
 
-            await api.post("/teacher/notes/upload", formData, {
-                headers: {
-                    "Content-Type": "multipart/form-data"
-                }
+            const step1Res = await api.post("/teacher/notes/upload", formData, {
+                headers: { "Content-Type": "multipart/form-data" }
             });
 
-            toast.success("Document uploaded successfully! Processing in background...");
+            const doc = step1Res.data.document;
+            const documentId = doc?._id;
+            const institutionId = doc?.institution;
+            const statusSyncSupported = step1Res.data.statusSyncSupported === true;
+
+            // ── Step 2: AI indexing — direct to HF Space ───────────────────────
+            // Called directly from the browser to avoid Vercel's 60 s timeout.
+            // HF cold-start can take 1-2 minutes; the browser has no limit.
+            setUploadStep('indexing');
+            let chunksAdded = 0;
+            let aiError = null;
+
+            try {
+                const aiRes = await aiService.indexDocument(
+                    selectedFile,
+                    institutionId,
+                    selectedCourse
+                );
+                chunksAdded = aiRes.chunks_added ?? 0;
+            } catch (err) {
+                aiError = err.message;
+            }
+
+            // ── Step 3: Sync status back to MongoDB (backend) ──────────────────
+            if (statusSyncSupported && documentId) {
+                setUploadStep('finalizing');
+                try {
+                    if (aiError) {
+                        await api.patch(`/teacher/notes/${documentId}/mark-failed`, { error: aiError });
+                    } else {
+                        await api.patch(`/teacher/notes/${documentId}/mark-processed`, { chunksCount: chunksAdded });
+                    }
+                } catch (_) {
+                    // Non-fatal — document is saved; status badge will show correctly on next load
+                }
+            }
+
+            if (aiError) {
+                toast.error(`File saved, but processing failed: ${aiError}`, { duration: 6000 });
+            } else {
+                toast.success(`Document uploaded successfully! ${chunksAdded} chunk${chunksAdded !== 1 ? 's' : ''} ready for search.`);
+            }
 
             // Reset form
             setSelectedFile(null);
             setFileName("");
-
-            // Refresh documents list
             fetchDocuments();
         } catch (error) {
             console.error("Upload error:", error);
-            toast.error(error.response?.data?.error || "Failed to upload document");
+            toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to upload document");
         } finally {
             setUploading(false);
+            setUploadStep('');
         }
     };
 
@@ -406,9 +438,10 @@ export default function UploadNotes() {
                                 >
                                     {uploading ? (
                                         <span className="flex items-center justify-center gap-2 text-gray-600">
-                                            <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent 
-                                                        rounded-full animate-spin" />
-                                            Uploading...
+                                            <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                                            {uploadStep === 'uploading' ? 'Saving file...' :
+                                             uploadStep === 'indexing' ? 'Processing document...' :
+                                             'Almost done...'}
                                         </span>
                                     ) : (
                                         <span className="flex items-center justify-center gap-2">
@@ -479,12 +512,17 @@ export default function UploadNotes() {
                                                     {doc.isProcessed ? (
                                                         <span className="flex items-center gap-1" style={{ color: brandColor }}>
                                                             <FiCheckCircle className="w-3.5 h-3.5" />
-                                                            Processed
+                                                            Ready
+                                                        </span>
+                                                    ) : doc.processingError ? (
+                                                        <span className="flex items-center gap-1 text-red-500" title={doc.processingError}>
+                                                            <FiAlertCircle className="w-3.5 h-3.5" />
+                                                            Processing Failed
                                                         </span>
                                                     ) : (
                                                         <span className="flex items-center gap-1 text-yellow-600">
                                                             <FiAlertCircle className="w-3.5 h-3.5" />
-                                                            Processing
+                                                            Pending
                                                         </span>
                                                     )}
                                                 </div>

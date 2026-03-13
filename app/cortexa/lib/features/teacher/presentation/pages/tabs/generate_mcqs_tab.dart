@@ -4,6 +4,7 @@ import '../../../../../../core/network/api_client.dart';
 import '../../../../../../core/config/api_config.dart';
 import '../../../../../../core/di/service_locator.dart';
 import '../../../data/models/course_model.dart';
+import '../../../data/models/document_model.dart';
 import '../../../data/models/mcq_model.dart';
 import '../../../data/repositories/mcq_repository.dart';
 
@@ -17,28 +18,37 @@ class GenerateMCQsTab extends StatefulWidget {
 }
 
 class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
+  // Dependencies
   final _apiClient = getIt<ApiClient>();
   late final MCQRepository _mcqRepository;
-  final _topicController = TextEditingController();
+
+  // Controllers
+  final _sourceInputController = TextEditingController();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  // State variables
+  // State: Courses
   List<CourseModel> _courses = [];
   CourseModel? _selectedCourse;
+  bool _isLoadingCourses = false;
+
+  // State: Documents
+  List<DocumentModel> _documents = [];
+  DocumentModel? _selectedDocument;
+  bool _isLoadingDocuments = false;
+
+  // State: MCQ Generation
   SourceType _sourceType = SourceType.topic;
   int _numberOfQuestions = 5;
   String _difficulty = 'medium';
-  
-  // Loading states
-  bool _isLoadingCourses = false;
   bool _isGenerating = false;
-  bool _isSaving = false;
-  
-  // Generated MCQs
   List<MCQModel> _generatedMCQs = [];
-  
-  // Saved MCQ Sets
+  String? _generationError;
+
+  // State: Saving
+  bool _isSaving = false;
+
+  // State: Saved MCQ Sets
   List<MCQSetModel> _savedMCQSets = [];
   bool _isLoadingSets = false;
 
@@ -51,12 +61,14 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
 
   @override
   void dispose() {
-    _topicController.dispose();
+    _sourceInputController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
 
+  // ─────────────────────────────────────────── Course Loading ───────────────────────────────────────────
+  
   Future<void> _loadCourses() async {
     setState(() => _isLoadingCourses = true);
 
@@ -66,27 +78,28 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
         requiresAuth: true,
       );
 
-      if (response['success'] == true) {
-        final coursesData = response['courses'] as List? ?? [];
-        final courses = coursesData
-            .map((json) => CourseModel.fromJson(json))
+      if (!mounted) return;
+
+      if (response['success'] == true && response['courses'] is List) {
+        final coursesList = (response['courses'] as List)
+            .map((json) => CourseModel.fromJson(json as Map<String, dynamic>))
             .toList();
 
         setState(() {
-          _courses = courses;
+          _courses = coursesList;
           _isLoadingCourses = false;
         });
-      } else {
-        setState(() => _isLoadingCourses = false);
-        if (mounted) {
-          _showErrorSnackBar(response['message'] ?? 'Failed to load courses');
+
+        if (coursesList.isEmpty) {
+          _showWarningToast('No courses assigned. Please contact your administrator.');
         }
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load courses');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoadingCourses = false);
-      if (mounted) {
-        _showErrorSnackBar('Error loading courses');
-      }
+      _showErrorToast('Failed to load courses: ${e.toString()}');
     }
   }
 
@@ -97,85 +110,133 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
 
     try {
       final sets = await _mcqRepository.getMCQSets(courseId: _selectedCourse!.id);
-      setState(() {
-        _savedMCQSets = sets;
-        _isLoadingSets = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingSets = false);
       if (mounted) {
-        _showErrorSnackBar('Failed to load saved MCQ sets');
+        setState(() {
+          _savedMCQSets = sets;
+          _isLoadingSets = false;
+        });
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingSets = false);
+      _showErrorToast('Failed to load MCQ sets');
     }
   }
 
-  Future<void> _generateMCQs() async {
-    if (_selectedCourse == null) {
-      _showErrorSnackBar('Please select a course first');
-      return;
-    }
+  Future<void> _loadDocumentsForCourse() async {
+    if (_selectedCourse == null) return;
 
-    if (_topicController.text.trim().isEmpty) {
-      _showErrorSnackBar(
-        _sourceType == SourceType.topic
-            ? 'Please enter a topic'
-            : 'Please enter a document name',
+    setState(() {
+      _isLoadingDocuments = true;
+      _documents = [];
+      _selectedDocument = null;
+    });
+
+    try {
+      final response = await _apiClient.get(
+        '${ApiConfig.teacherGetDocuments}/${_selectedCourse!.id}',
+        requiresAuth: true,
       );
+
+      if (!mounted) return;
+
+      if (response['success'] == true && response['documents'] is List) {
+        final docs = (response['documents'] as List)
+            .map((json) => DocumentModel.fromJson(json as Map<String, dynamic>))
+            .where((d) => d.isProcessed)
+            .toList();
+
+        setState(() {
+          _documents = docs;
+          _isLoadingDocuments = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingDocuments = false;
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingDocuments = false;
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────── MCQ Generation ───────────────────────────────────────────
+
+  Future<void> _generateMCQs() async {
+    // Validation
+    if (_selectedCourse == null) {
+      _showErrorToast('Please select a course');
       return;
     }
 
-    setState(() => _isGenerating = true);
+    final sourceValue = _sourceType == SourceType.topic
+        ? _sourceInputController.text.trim()
+        : (_selectedDocument?.originalName ?? '');
+
+    if (sourceValue.isEmpty) {
+      _showErrorToast(_sourceType == SourceType.topic
+          ? 'Please enter a topic'
+          : 'Please select a document');
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _generationError = null;
+      _generatedMCQs = [];
+    });
 
     try {
       final mcqs = await _mcqRepository.generateMCQs(
         courseId: _selectedCourse!.id,
-        topic: _topicController.text.trim(),
+        topic: sourceValue,
         sourceType: _sourceType == SourceType.topic ? 'topic' : 'document',
         count: _numberOfQuestions,
         difficulty: _difficulty,
+        documentId: _sourceType == SourceType.document ? _selectedDocument?.id : null,
       );
 
-      setState(() {
-        _generatedMCQs = mcqs;
-        _isGenerating = false;
-      });
+      if (!mounted) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Generated ${mcqs.length} MCQ${mcqs.length != 1 ? 's' : ''} successfully!',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
+      if (mcqs.isEmpty) {
+        setState(() {
+          _isGenerating = false;
+          _generationError = 'AI returned no MCQs. Try a different topic or broader search.';
+        });
+        _showWarningToast(_generationError!);
+      } else {
+        setState(() {
+          _generatedMCQs = mcqs;
+          _isGenerating = false;
+        });
+        _showSuccessToast('Generated ${mcqs.length} MCQ${mcqs.length != 1 ? 's' : ''}');
       }
     } catch (e) {
-      setState(() => _isGenerating = false);
-      _showErrorSnackBar('Failed to generate MCQs: ${e.toString().replaceAll('Exception: ', '')}');
+      if (!mounted) return;
+      final errorMsg = _cleanErrorMessage(e.toString());
+      setState(() {
+        _isGenerating = false;
+        _generationError = errorMsg;
+      });
+      _showErrorToast(errorMsg.isEmpty
+          ? 'Generation failed within 40 seconds. Try a shorter topic or fewer questions.'
+          : errorMsg);
     }
   }
 
+  // ─────────────────────────────────────────── MCQ Saving ───────────────────────────────────────────
+
   Future<void> _saveMCQSet() async {
     if (_generatedMCQs.isEmpty) {
-      _showErrorSnackBar('No MCQs to save');
+      _showErrorToast('No MCQs to save');
       return;
     }
 
     if (_selectedCourse == null) {
-      _showErrorSnackBar('Please select a course first');
+      _showErrorToast('Course selection lost. Please select again.');
       return;
     }
 
@@ -186,10 +247,12 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
     _titleController.clear();
     _descriptionController.clear();
 
-    final result = await showDialog<bool>(
+    final shouldSave = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Save MCQ Set'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Save MCQ Set', style: TextStyle(fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -197,32 +260,28 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
             children: [
               Text(
                 'Saving ${_generatedMCQs.length} MCQ${_generatedMCQs.length != 1 ? 's' : ''}',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               TextField(
                 controller: _titleController,
                 decoration: InputDecoration(
                   labelText: 'Title *',
                   hintText: 'e.g., Data Structures Quiz 1',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.title),
                 ),
                 maxLength: 100,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextField(
                 controller: _descriptionController,
                 decoration: InputDecoration(
-                  labelText: 'Description (Optional)',
-                  hintText: 'Brief description of this MCQ set...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  labelText: 'Description (optional)',
+                  hintText: 'Add notes about this MCQ set...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.description),
+                  alignLabelWithHint: true,
                 ),
                 maxLines: 3,
                 maxLength: 500,
@@ -235,27 +294,26 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             onPressed: () {
               if (_titleController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a title')),
-                );
+                _showWarningToast('Please enter a title');
                 return;
               }
               Navigator.pop(context, true);
             },
+            icon: const Icon(Icons.check),
+            label: const Text('Save'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Save'),
           ),
         ],
       ),
-    );
+    ) ?? false;
 
-    if (result == true) {
+    if (shouldSave) {
       await _performSave();
     }
   }
@@ -271,45 +329,30 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
         mcqs: _generatedMCQs,
       );
 
+      if (!mounted) return;
+
       setState(() {
         _isSaving = false;
         _generatedMCQs = [];
-        _topicController.clear();
+        if (_sourceType == SourceType.topic) {
+          _sourceInputController.clear();
+        } else {
+          _selectedDocument = null;
+        }
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'MCQ set saved successfully!',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
-
-      // Reload saved sets
-      _loadSavedMCQSets();
+      _showSuccessToast('MCQ set saved successfully');
+      await _loadSavedMCQSets();
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isSaving = false);
-      _showErrorSnackBar('Failed to save MCQ set: ${e.toString().replaceAll('Exception: ', '')}');
+      _showErrorToast('Failed to save: ${_cleanErrorMessage(e.toString())}');
     }
   }
 
-  void _showErrorSnackBar(String message) {
-    if (!mounted) return;
+  // ─────────────────────────────────────────── UI Helpers ───────────────────────────────────────────
+
+  void _showErrorToast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -317,10 +360,7 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
             const Icon(Icons.error_outline, color: Colors.white, size: 20),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
+              child: Text(message, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
             ),
           ],
         ),
@@ -333,15 +373,72 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
     );
   }
 
+  void _showSuccessToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showWarningToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  String _cleanErrorMessage(String error) {
+    return error
+        .replaceAll('Exception: ', '')
+        .replaceAll('Error: ', '')
+        .replaceAll(RegExp(r'.*?:\s*'), '')
+        .split('\n')
+        .first
+        .trim();
+  }
+
+  // ─────────────────────────────────────────── Build ───────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
         onRefresh: () async {
-          await  _loadCourses();
+          await _loadCourses();
           if (_selectedCourse != null) {
             await _loadSavedMCQSets();
+            if (_sourceType == SourceType.document) {
+              await _loadDocumentsForCourse();
+            }
           }
         },
         child: SingleChildScrollView(
@@ -355,14 +452,15 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
               _buildCourseSelector(),
               if (_selectedCourse != null) ...[
                 const SizedBox(height: 24),
-                _buildGenerationCard(),
+                _buildGenerationPanel(),
                 if (_generatedMCQs.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  _buildGeneratedMCQsCard(),
+                  _buildGeneratedMCQsPanel(),
                 ],
                 const SizedBox(height: 32),
-                _buildSavedMCQSetsSection(),
+                _buildSavedSetsSection(),
               ],
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -376,8 +474,8 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.primary.withValues(alpha: 0.1),
-            AppColors.primary.withValues(alpha: 0.05),
+            AppColors.primary.withValues(alpha: 0.15),
+            AppColors.primary.withValues(alpha: 0.08),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
@@ -390,11 +488,7 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
               color: AppColors.primary.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.quiz_outlined,
-              color: AppColors.primary,
-              size: 28,
-            ),
+            child: const Icon(Icons.quiz_outlined, color: AppColors.primary, size: 28),
           ),
           const SizedBox(width: 16),
           const Expanded(
@@ -402,20 +496,13 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Generate MCQs',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
+                  'AI MCQ Generator',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Create AI-powered multiple choice questions',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+                  'Generate intelligent multiple-choice questions',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
               ],
             ),
@@ -428,14 +515,9 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
   Widget _buildCourseSelector() {
     if (_isLoadingCourses) {
       return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Center(
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        padding: const EdgeInsets.all(40),
+        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
 
@@ -452,10 +534,7 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
             Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 24),
             const SizedBox(width: 12),
             const Expanded(
-              child: Text(
-                'No courses assigned yet. Please contact your admin.',
-                style: TextStyle(fontSize: 14, color: AppColors.textPrimary),
-              ),
+              child: Text('No courses assigned. Contact your admin.', style: TextStyle(fontSize: 14)),
             ),
           ],
         ),
@@ -465,23 +544,14 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Select Course',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        const Text('Select Course', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.textTertiary.withValues(alpha: 0.3),
-            ),
+            border: Border.all(color: AppColors.textTertiary.withValues(alpha: 0.3)),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<CourseModel>(
@@ -496,9 +566,16 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
                 );
               }).toList(),
               onChanged: (course) {
-                setState(() => _selectedCourse = course);
+                setState(() {
+                  _selectedCourse = course;
+                  _documents = [];
+                  _selectedDocument = null;
+                });
                 if (course != null) {
                   _loadSavedMCQSets();
+                  if (_sourceType == SourceType.document) {
+                    _loadDocumentsForCourse();
+                  }
                 }
               },
             ),
@@ -508,31 +585,18 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
     );
   }
 
-  Widget _buildGenerationCard() {
+  Widget _buildGenerationPanel() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Generate Questions',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
+          const Text('Generate Questions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
           const SizedBox(height: 20),
           _buildSourceTypeToggle(),
           const SizedBox(height: 20),
@@ -540,13 +604,27 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: _buildQuestionCount()),
+              Expanded(child: _buildQuestionCountDropdown()),
               const SizedBox(width: 16),
-              Expanded(child: _buildDifficultySelector()),
+              Expanded(child: _buildDifficultyDropdown()),
             ],
           ),
           const SizedBox(height: 24),
           _buildGenerateButton(),
+          if (_generationError != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_generationError!, style: TextStyle(fontSize: 12, color: Colors.red.shade700))),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -556,32 +634,13 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Source Type',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        const Text('Source Type', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Row(
           children: [
-            Expanded(
-              child: _buildSourceTypeButton(
-                'Topic',
-                SourceType.topic,
-                Icons.lightbulb_outline,
-              ),
-            ),
+            Expanded(child: _buildSourceTypeButton('Topic', SourceType.topic, Icons.lightbulb_outline)),
             const SizedBox(width: 12),
-            Expanded(
-              child: _buildSourceTypeButton(
-                'Document',
-                SourceType.document,
-                Icons.description_outlined,
-              ),
-            ),
+            Expanded(child: _buildSourceTypeButton('Document', SourceType.document, Icons.description_outlined)),
           ],
         ),
       ],
@@ -591,39 +650,35 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
   Widget _buildSourceTypeButton(String label, SourceType type, IconData icon) {
     final isSelected = _sourceType == type;
     return InkWell(
-      onTap: () => setState(() => _sourceType = type),
+      onTap: () {
+        setState(() {
+          _sourceType = type;
+          if (type == SourceType.topic) {
+            _selectedDocument = null;
+          }
+        });
+
+        if (type == SourceType.document && _selectedCourse != null) {
+          _loadDocumentsForCourse();
+        }
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.1)
-              : AppColors.background,
+          color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : AppColors.background,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected
-                ? AppColors.primary
-                : AppColors.textTertiary.withValues(alpha: 0.3),
+            color: isSelected ? AppColors.primary : AppColors.textTertiary.withValues(alpha: 0.3),
             width: isSelected ? 2 : 1,
           ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
-              size: 20,
-            ),
+            Icon(icon, color: isSelected ? AppColors.primary : AppColors.textSecondary, size: 20),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary,
-              ),
-            ),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isSelected ? AppColors.primary : AppColors.textSecondary)),
           ],
         ),
       ),
@@ -631,94 +686,106 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
   }
 
   Widget _buildSourceInput() {
+    if (_sourceType == SourceType.document) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Select Document', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          if (_isLoadingDocuments)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.textTertiary.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  SizedBox(width: 12),
+                  Text('Loading uploaded documents...'),
+                ],
+              ),
+            )
+          else if (_documents.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.shade300),
+              ),
+              child: const Text(
+                'No processed documents found for this course. Upload and process notes first.',
+                style: TextStyle(fontSize: 13),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.textTertiary.withValues(alpha: 0.3)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<DocumentModel>(
+                  value: _selectedDocument,
+                  isExpanded: true,
+                  hint: const Text('Choose uploaded document...'),
+                  icon: const Icon(Icons.keyboard_arrow_down),
+                  items: _documents.map((doc) {
+                    return DropdownMenuItem<DocumentModel>(
+                      value: doc,
+                      child: Text(doc.originalName),
+                    );
+                  }).toList(),
+                  onChanged: (doc) {
+                    setState(() => _selectedDocument = doc);
+                  },
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          _sourceType == SourceType.topic ? 'Enter Topic' : 'Document Name',
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        const Text('Enter Topic', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         TextField(
-          controller: _topicController,
+          controller: _sourceInputController,
           decoration: InputDecoration(
-            hintText: _sourceType == SourceType.topic
-                ? 'e.g., Data Structures and Algorithms'
-                : 'Enter the document name from uploaded notes...',
-            hintStyle: TextStyle(
-              color: AppColors.textSecondary.withValues(alpha: 0.6),
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppColors.textTertiary.withValues(alpha: 0.3),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(
-                color: AppColors.textTertiary.withValues(alpha: 0.3),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppColors.primary,
-                width: 2,
-              ),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
+            hintText: 'e.g., Python Basics, DBMS Joins, OOP in Java',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
-          maxLines: 3,
+          maxLines: 1,
         ),
       ],
     );
   }
 
-  Widget _buildQuestionCount() {
+  Widget _buildQuestionCountDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Question Count',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        const Text('Questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.textTertiary.withValues(alpha: 0.3),
-            ),
-          ),
+          decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.textTertiary.withValues(alpha: 0.3))),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<int>(
               value: _numberOfQuestions,
               isExpanded: true,
               icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-              items: [5, 10, 15, 20].map((count) {
-                return DropdownMenuItem(
-                  value: count,
-                  child: Text('$count MCQs'),
-                );
-              }).toList(),
+              items: [5, 10].map((count) => DropdownMenuItem(value: count, child: Text('$count MCQs'))).toList(),
               onChanged: (value) {
-                if (value != null) {
-                  setState(() => _numberOfQuestions = value);
-                }
+                if (value != null) setState(() => _numberOfQuestions = value);
               },
             ),
           ),
@@ -727,43 +794,23 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
     );
   }
 
-  Widget _buildDifficultySelector() {
+  Widget _buildDifficultyDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Difficulty',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
+        const Text('Difficulty', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.textTertiary.withValues(alpha: 0.3),
-            ),
-          ),
+          decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.textTertiary.withValues(alpha: 0.3))),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _difficulty,
               isExpanded: true,
               icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-              items: ['easy', 'medium', 'hard'].map((diff) {
-                return DropdownMenuItem(
-                  value: diff,
-                  child: Text(diff[0].toUpperCase() + diff.substring(1)),
-                );
-              }).toList(),
+              items: ['easy', 'medium', 'hard'].map((diff) => DropdownMenuItem(value: diff, child: Text(diff[0].toUpperCase() + diff.substring(1)))).toList(),
               onChanged: (value) {
-                if (value != null) {
-                  setState(() => _difficulty = value);
-                }
+                if (value != null) setState(() => _difficulty = value);
               },
             ),
           ),
@@ -776,64 +823,26 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
     return SizedBox(
       width: double.infinity,
       height: 50,
-      child: ElevatedButton(
+      child: ElevatedButton.icon(
         onPressed: _isGenerating ? null : _generateMCQs,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
           disabledBackgroundColor: AppColors.textSecondary.withValues(alpha: 0.3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        child: _isGenerating
-            ? const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Generating...',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              )
-            : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.auto_awesome, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Generate MCQs',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+        icon: _isGenerating ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))) : const Icon(Icons.auto_awesome),
+        label: Text(_isGenerating ? 'Generating...' : 'Generate MCQs', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ),
     );
   }
 
-  Widget _buildGeneratedMCQsCard() {
+  Widget _buildGeneratedMCQsPanel() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -841,35 +850,12 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Generated MCQs (${_generatedMCQs.length})',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
+              Text('Generated MCQs (${_generatedMCQs.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _saveMCQSet,
-                icon: _isSaving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Icon(Icons.save_outlined, size: 18),
+                icon: _isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))) : const Icon(Icons.save_outlined, size: 18),
                 label: const Text('Save'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green.shade600,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
               ),
             ],
           ),
@@ -878,11 +864,8 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: _generatedMCQs.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final mcq = _generatedMCQs[index];
-              return _buildMCQCard(mcq, index + 1);
-            },
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (_, index) => _buildMCQCard(_generatedMCQs[index], index + 1),
           ),
         ],
       ),
@@ -895,64 +878,38 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.textTertiary.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: AppColors.textTertiary.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Question header
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 24,
                 height: 24,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '$number',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
+                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
+                child: Center(child: Text('$number', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary))),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  mcq.question,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
+              Expanded(child: Text(mcq.question, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: _getDifficultyColor(mcq.difficulty ?? 'medium')
-                      .withValues(alpha: 0.1),
+                  color: _getDifficultyColor(mcq.difficulty ?? 'medium').withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   mcq.difficultyDisplay,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _getDifficultyColor(mcq.difficulty ?? 'medium'),
-                  ),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _getDifficultyColor(mcq.difficulty ?? 'medium')),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
+          // Options
           ...List.generate(mcq.options.length, (index) {
             final isCorrect = index == mcq.correctAnswer;
             return Padding(
@@ -964,33 +921,21 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
                     height: 20,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: isCorrect
-                          ? Colors.green.withValues(alpha: 0.1)
-                          : Colors.transparent,
+                      color: isCorrect ? Colors.green.withValues(alpha: 0.1) : Colors.transparent,
                       border: Border.all(
-                        color: isCorrect
-                            ? Colors.green
-                            : AppColors.textSecondary.withValues(alpha: 0.3),
+                        color: isCorrect ? Colors.green : AppColors.textSecondary.withValues(alpha: 0.3),
                         width: isCorrect ? 2 : 1,
                       ),
                     ),
-                    child: isCorrect
-                        ? const Icon(
-                            Icons.check,
-                            size: 14,
-                            color: Colors.green,
-                          )
-                        : null,
+                    child: isCorrect ? const Icon(Icons.check, size: 14, color: Colors.green) : null,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${ String.fromCharCode(65 + index)}. ${mcq.options[index]}',
+                      '${String.fromCharCode(65 + index)}. ${mcq.options[index]}',
                       style: TextStyle(
                         fontSize: 13,
-                        color: isCorrect
-                            ? Colors.green.shade700
-                            : AppColors.textPrimary,
+                        color: isCorrect ? Colors.green.shade700 : AppColors.textPrimary,
                         fontWeight: isCorrect ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
@@ -999,31 +944,102 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
               ),
             );
           }),
+          // Explanation
           if (mcq.explanation != null && mcq.explanation!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: Colors.blue.shade50.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(8)),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      mcq.explanation!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade900,
-                      ),
-                    ),
-                  ),
+                  Expanded(child: Text(mcq.explanation!, style: TextStyle(fontSize: 12, color: Colors.blue.shade900))),
                 ],
               ),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSavedSetsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Saved MCQ Sets', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        const SizedBox(height: 12),
+        if (_isLoadingSets)
+          Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
+            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else if (_savedMCQSets.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.quiz, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                  const SizedBox(height: 12),
+                  Text('No saved MCQ sets yet', style: TextStyle(fontSize: 14, color: AppColors.textSecondary.withValues(alpha: 0.8), fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _savedMCQSets.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (_, index) => _buildMCQSetCard(_savedMCQSets[index]),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMCQSetCard(MCQSetModel set) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.textTertiary.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(set.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary), maxLines: 2),
+                    const SizedBox(height: 4),
+                    Text('${set.questionCount} questions', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: () {
+                  // TODO: Assign MCQ action
+                },
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
+                child: const Text('Assign', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          if (set.description != null && set.description!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(set.description!, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
         ],
       ),
@@ -1039,177 +1055,5 @@ class _GenerateMCQsTabState extends State<GenerateMCQsTab> {
       default:
         return Colors.orange;
     }
-  }
-
-  Widget _buildSavedMCQSetsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Saved MCQ Sets',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_isLoadingSets)
-          Container(
-            padding: const EdgeInsets.all(40),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          )
-        else if (_savedMCQSets.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.quiz,
-                    size: 48,
-                    color: AppColors.textSecondary.withValues(alpha: 0.4),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'No saved MCQ sets yet',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary.withValues(alpha: 0.8),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Generated MCQ sets will appear here',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _savedMCQSets.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final set = _savedMCQSets[index];
-              return _buildMCQSetCard(set);
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildMCQSetCard(MCQSetModel set) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.textTertiary.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      set.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    if (set.description != null && set.description!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        set.description!,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              _buildInfoChip(
-                Icons.quiz_outlined,
-                '${set.questionCount} MCQs',
-                Colors.blue,
-              ),
-              _buildInfoChip(
-                Icons.calendar_today_outlined,
-                set.formattedDate,
-                Colors.green,
-              ),
-              if (set.totalAttempts > 0)
-                _buildInfoChip(
-                  Icons.people_outline,
-                  '${set.totalAttempts} attempt${set.totalAttempts != 1 ? 's' : ''}',
-                  Colors.purple,
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoChip(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
