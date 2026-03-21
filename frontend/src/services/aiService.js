@@ -154,7 +154,7 @@ class AIService {
       console.log('Sending upload request to backend /api/ai/upload...');
 
       // Send through backend API to handle R2 + MongoDB + AI processing
-      const response = await apiAxios.post('/ai/upload', formData, {
+      const response = await aiAxios.post('/ai/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
@@ -177,34 +177,34 @@ class AIService {
   // Returns { filename, chunks_added, status } from the AI server.
  // Index Document — direct to HF Space (avoids Vercel 60s serverless timeout).
 // Now returns { filename, chunks_added, status, chunks, embedding_model }
-async indexDocument(file, institutionId = null, courseId = null) {
-  try {
-    const formData = new FormData();
-    formData.append('file', file, file.name);
-    if (institutionId) formData.append('institution_id', String(institutionId));
-    if (courseId) formData.append('course_id', String(courseId));
+// async indexDocument(file, institutionId = null, courseId = null) {
+//   try {
+//     const formData = new FormData();
+//     formData.append('file', file, file.name);
+//     if (institutionId) formData.append('institution_id', String(institutionId));
+//     if (courseId) formData.append('course_id', String(courseId));
 
-    const response = await aiDirectAxios.post('/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000,
-    });
+//     const response = await aiDirectAxios.post('/upload', formData, {
+//       headers: { 'Content-Type': 'multipart/form-data' },
+//       timeout: 300000,
+//     });
 
-    // response.data now includes: { filename, chunks_added, status, chunks[], embedding_model }
-    return response.data;
-  } catch (error) {
-    if (error.code === 'ECONNABORTED') {
-      throw new Error(
-        'Document processing timed out. The file was saved but may not be available for search yet.'
-      );
-    }
-    throw new Error(
-      error.response?.data?.detail ||
-      error.response?.data?.error ||
-      error.message ||
-      'Document processing failed'
-    );
-  }
-}
+//     // response.data now includes: { filename, chunks_added, status, chunks[], embedding_model }
+//     return response.data;
+//   } catch (error) {
+//     if (error.code === 'ECONNABORTED') {
+//       throw new Error(
+//         'Document processing timed out. The file was saved but may not be available for search yet.'
+//       );
+//     }
+//     throw new Error(
+//       error.response?.data?.detail ||
+//       error.response?.data?.error ||
+//       error.message ||
+//       'Document processing failed'
+//     );
+//   }
+// }
 
   // Check AI Health - Direct to AI server
   async checkHealth() {

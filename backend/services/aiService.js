@@ -72,45 +72,41 @@ class AIService {
     }
   }
 
-  // Upload Document
-  async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
-    try {
-      const formData = new FormData();
-      // Append buffer as blob with proper options
-      formData.append('file', fileBuffer, {
-        filename: fileName,
-        contentType: 'application/octet-stream'
-      });
-      if (institutionId) formData.append('institution_id', institutionId);
-      if (courseId) formData.append('course_id', courseId);
+// Upload Document
+async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
+  try {
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: fileName,
+      contentType: 'application/octet-stream'
+    });
+    if (institutionId) formData.append('institution_id', institutionId);
+    if (courseId) formData.append('course_id', courseId);
 
-      const response = await axios.post(`${AI_API_URL}/upload`, formData, {
-        headers: {
-          ...formData.getHeaders() // Get proper headers from form-data
-        },
-        timeout: UPLOAD_TIMEOUT,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Backend upload error:', error.response?.data || error.message);
-      throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
-    }
+    const response = await axios.post(`${AI_API_URL}/upload`, formData, {
+      headers: { ...formData.getHeaders() },
+      timeout: UPLOAD_TIMEOUT,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
+
+    // ✅ Returns full payload: { filename, chunks_added, status, chunks[], embedding_model }
+    return response.data;
+  } catch (error) {
+    console.error('Backend upload error:', error.response?.data || error.message);
+    throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
   }
+}
 
   // Get document chunks with embeddings
-  async getDocumentChunks(fileName) {
-    try {
-      const response = await axios.get(`${AI_API_URL}/documents/${encodeURIComponent(fileName)}/chunks`, {
-        timeout: LONG_TIMEOUT
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Get chunks error:', error.response?.data || error.message);
-      throw new Error(`Failed to get document chunks: ${error.response?.data?.detail || error.message}`);
-    }
-  }
+// DEPRECATED — chunks are now returned directly from /upload response
+// This method is no longer called in the main pipeline
+async getDocumentChunks(fileName) {
+  throw new Error(
+    `getDocumentChunks("${fileName}") is deprecated. ` +
+    `Chunks are now returned inline from the /upload response.`
+  );
+}
 
   // Health Check
   async checkHealth() {
