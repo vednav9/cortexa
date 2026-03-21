@@ -279,16 +279,20 @@ async def upload_document(
 
         vector_store.add_documents(texts, metadatas, ids)
 
-        # ✅ FIX: Return full chunks+embeddings in upload response
+        # ✅ Return full chunks+embeddings in upload response
         # so Node doesn't need a second GET call to a potentially reset store
         embedding_model_name = vector_store.data['metadata'].get('embedding_model', 'paraphrase-MiniLM-L3-v2')
+
+        # Get the chunks we just added (last len(texts) items in the store)
+        stored_docs = vector_store.data['documents']
+        just_added = stored_docs[-len(texts):]
+
         chunks_payload = []
-        for i, (text, meta) in enumerate(zip(texts, metadatas)):
-            doc = vector_store.data['documents'][-(len(texts)) + i]
+        for i, (doc, meta) in enumerate(zip(just_added, metadatas)):
             embedding = doc['embedding']
             chunks_payload.append({
-                "text": text,
-                "embedding": embedding.tolist() if hasattr(embedding, 'tolist') else embedding,
+                "text": doc['text'],
+                "embedding": embedding.tolist() if hasattr(embedding, 'tolist') else list(embedding),
                 "metadata": {
                     **meta,
                     "chunk_index": i,

@@ -190,6 +190,10 @@ export default function UploadNotes() {
       // ✅ Grab chunks directly from upload response — no second GET needed
       aiChunks = Array.isArray(aiRes?.chunks) ? aiRes.chunks : [];
       aiEmbeddingModel = aiRes?.embedding_model || 'paraphrase-MiniLM-L3-v2';
+
+       console.log('AI Response:', aiRes);
+  console.log('chunks_added:', chunksAdded, '| aiChunks.length:', aiChunks.length);
+
     } catch (err) {
       aiError = err.message;
     }
