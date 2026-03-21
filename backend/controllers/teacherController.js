@@ -186,17 +186,10 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
         .slice(0, 8000);
 
     // Fallback when DB chunks are missing or stale: ask AI service for document chunks by name.
-    if (!text) {
-        try {
-            const aiChunks = await aiService.getDocumentChunks(document.originalName || document.fileName || documentName);
-            const normalized = Array.isArray(aiChunks)
-                ? aiChunks.map((c) => String(c?.text || c?.content || c || "").trim()).filter(Boolean)
-                : [];
-            text = normalized.join("\n\n").slice(0, 8000);
-        } catch (_) {
-            // Keep text empty and let caller fallback to broad topic context.
-        }
-    }
+// Fallback: chunks not in MongoDB yet — use document title as minimal context
+if (!text) {
+  text = `Document title: ${document.originalName || document.fileName || documentName || 'Uploaded document'}`;
+}
 
     if (!text) {
         text = `Document title: ${document.originalName || document.fileName || documentName || "Uploaded document"}`;
