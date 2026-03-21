@@ -152,7 +152,7 @@ export default function UploadNotes() {
         }
     }, [fileName]);
 
-    // Upload document — 3-step flow matching the mobile app
+    // Upload document — resilient 3-step flow
     const handleUpload = async () => {
         if (!selectedFile) { toast.error("Please select a file"); return; }
         if (!fileName.trim()) { toast.error("Please enter a file name"); return; }
@@ -162,7 +162,7 @@ export default function UploadNotes() {
         setUploadStep('uploading');
 
         try {
-            // ── Step 1: R2 storage + MongoDB record (backend) ──────────────────
+            // Step 1: Store original file + Document row
             const formData = new FormData();
             formData.append("file", selectedFile);
             formData.append("fileName", fileName.trim());
@@ -177,9 +177,7 @@ export default function UploadNotes() {
             const institutionId = doc?.institution;
             const statusSyncSupported = step1Res.data.statusSyncSupported === true;
 
-            // ── Step 2: AI indexing — direct to HF Space ───────────────────────
-            // Called directly from the browser to avoid Vercel's 60 s timeout.
-            // HF cold-start can take 1-2 minutes; the browser has no limit.
+            // Step 2: AI indexing on HF directly (avoids backend timeout)
             setUploadStep('indexing');
             let chunksAdded = 0;
             let aiError = null;
@@ -190,22 +188,32 @@ export default function UploadNotes() {
                     institutionId,
                     selectedCourse
                 );
-                chunksAdded = aiRes.chunks_added ?? 0;
+                chunksAdded = Number(aiRes?.chunks_added || 0);
             } catch (err) {
                 aiError = err.message;
             }
 
-            // ── Step 3: Sync status back to MongoDB (backend) ──────────────────
+            // Step 3: Sync final status to MongoDB
             if (statusSyncSupported && documentId) {
                 setUploadStep('finalizing');
                 try {
                     if (aiError) {
                         await api.patch(`/teacher/notes/${documentId}/mark-failed`, { error: aiError });
                     } else {
-                        await api.patch(`/teacher/notes/${documentId}/mark-processed`, { chunksCount: chunksAdded });
+                        const syncRes = await api.patch(`/teacher/notes/${documentId}/mark-processed`, { chunksCount: chunksAdded });
+                        const persistedChunks = Number(syncRes?.data?.chunksPersisted || 0);
+                        const persistedEmbeddings = Number(syncRes?.data?.embeddingsPersisted || 0);
+
+                        if (chunksAdded > 0 && (persistedChunks <= 0 || persistedEmbeddings <= 0)) {
+                            throw new Error("Mongo persistence incomplete: chunks/embeddings were not stored");
+                        }
                     }
-                } catch (_) {
-                    // Non-fatal — document is saved; status badge will show correctly on next load
+                } catch (syncErr) {
+                    console.error('Status sync error:', syncErr);
+                    aiError = syncErr?.response?.data?.error
+                        || syncErr?.response?.data?.message
+                        || syncErr?.message
+                        || 'Failed to persist processed chunks and embeddings';
                 }
             }
 

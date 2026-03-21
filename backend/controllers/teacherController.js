@@ -295,9 +295,14 @@ const persistDocumentVectorsToMongo = async (document) => {
         await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
     }
 
+    const [dbChunkCount, dbEmbeddingCount] = await Promise.all([
+        DocumentChunk.countDocuments({ document: document._id }),
+        EmbeddingStore.countDocuments({ documentId: document._id }),
+    ]);
+
     return {
-        chunkCount: insertedChunks.length,
-        embeddingCount: embeddingDocs.length,
+        chunkCount: dbChunkCount,
+        embeddingCount: dbEmbeddingCount,
         sourceName: usedName || '',
     };
 };
@@ -721,52 +726,13 @@ export const uploadNotes = async (req, res) => {
             isProcessed: false
         });
 
-        // Backend-owned pipeline:
-        // 1) Upload to AI /upload for chunking + embeddings
-        // 2) Persist AI chunks into Mongo DocumentChunk + EmbeddingStore
-        try {
-            const aiUpload = await aiService.uploadDocument(
-                file.buffer,
-                file.originalname,
-                teacher.institution?.toString(),
-                courseId
-            );
-
-            const persisted = await persistDocumentVectorsToMongo(document);
-
-            await Document.findByIdAndUpdate(document._id, {
-                isProcessed: true,
-                processingError: null,
-                chunksCount: persisted.chunkCount,
-            });
-
-            const updatedDocument = await Document.findById(document._id);
-
-            return res.status(201).json({
-                success: true,
-                message: "Document uploaded and indexed successfully",
-                document: updatedDocument?.toObject?.() || document.toObject(),
-                aiIndexed: true,
-                chunksAddedByAi: Number(aiUpload?.chunks_added || 0),
-                chunksPersisted: persisted.chunkCount,
-                embeddingsPersisted: persisted.embeddingCount,
-            });
-        } catch (indexErr) {
-            const errMsg = indexErr?.message || "AI indexing pipeline failed";
-
-            await Document.findByIdAndUpdate(document._id, {
-                isProcessed: false,
-                processingError: errMsg,
-            });
-
-            return res.status(502).json({
-                success: false,
-                message: "Document uploaded to storage, but AI indexing failed",
-                document: document.toObject(),
-                error: errMsg,
-                aiIndexed: false,
-            });
-        }
+        return res.status(201).json({
+            success: true,
+            message: "Document uploaded successfully. Processing has started.",
+            document: document.toObject(),
+            statusSyncSupported: true,
+            aiIndexed: false,
+        });
     } catch (error) {
         console.error("Upload notes error:", error);
         res.status(500).json({
@@ -917,22 +883,33 @@ export const markDocumentProcessed = async (req, res) => {
             : null;
 
         try {
-            // Always attempt persistence so we don't depend on client chunk parsing.
             persisted = await persistDocumentVectorsToMongo(document);
         } catch (persistErr) {
-            // If client reported chunks were added, treat persistence failure as hard error.
-            if ((requestedChunks ?? 0) > 0) {
-                throw persistErr;
-            }
+            throw persistErr;
+        }
+
+        // If AI reported chunks but Mongo persistence didn't store them, do not mark as processed.
+        if ((requestedChunks ?? 0) > 0 && persisted.chunkCount <= 0) {
+            throw new Error(
+                `AI reported ${requestedChunks} chunks but Mongo persistence stored 0 chunks`
+            );
+        }
+
+        // Chunks and embeddings should move in lockstep; enforce consistency.
+        if (persisted.chunkCount > 0 && persisted.embeddingCount <= 0) {
+            throw new Error("Chunks were stored but embeddings were not stored");
+        }
+
+        if (persisted.chunkCount !== persisted.embeddingCount) {
+            throw new Error(
+                `Chunk and embedding count mismatch: ${persisted.chunkCount} chunks vs ${persisted.embeddingCount} embeddings`
+            );
         }
 
         const update = {
             isProcessed: true,
             processingError: null,
-            chunksCount: Math.max(
-                0,
-                persisted.chunkCount || (requestedChunks ?? 0)
-            ),
+            chunksCount: Math.max(0, persisted.chunkCount),
         };
 
         await Document.findByIdAndUpdate(documentId, update);
