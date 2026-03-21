@@ -59,6 +59,8 @@ class DocumentUploadResponse(BaseModel):
     filename: str
     chunks_added: int
     status: str
+    chunks: Optional[List[dict]] = []
+    embedding_model: Optional[str] = "paraphrase-MiniLM-L3-v2"
 
 
 class DocumentChunksResponse(BaseModel):
@@ -255,33 +257,53 @@ async def upload_document(
     try:
         doc_processor = get_doc_processor()
         vector_store = get_vector_store()
-        
+
         file_path = DOCUMENTS_DIR / file.filename
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        
+
         metadata = {
             'institution_id': institution_id,
-            'course_id': course_id
+            'course_id': course_id,
+            'source': file.filename,
         }
 
-        # Remove any previously-stored chunks for this file so that
-        # re-uploads do not accumulate duplicate vectors.
+        # Remove previously-stored chunks for this file (re-upload safe)
         vector_store.remove_document_chunks(file.filename)
 
         chunks = doc_processor.process_document(str(file_path), metadata)
-        
+
         texts = [chunk.text for chunk in chunks]
         metadatas = [chunk.metadata for chunk in chunks]
         ids = [f"{file.filename}_{i}" for i in range(len(chunks))]
-        
+
         vector_store.add_documents(texts, metadatas, ids)
-        
-        return DocumentUploadResponse(
-            filename=file.filename,
-            chunks_added=len(chunks),
-            status="success"
-        )
+
+        # ✅ FIX: Return full chunks+embeddings in upload response
+        # so Node doesn't need a second GET call to a potentially reset store
+        embedding_model_name = vector_store.data['metadata'].get('embedding_model', 'paraphrase-MiniLM-L3-v2')
+        chunks_payload = []
+        for i, (text, meta) in enumerate(zip(texts, metadatas)):
+            doc = vector_store.data['documents'][-(len(texts)) + i]
+            embedding = doc['embedding']
+            chunks_payload.append({
+                "text": text,
+                "embedding": embedding.tolist() if hasattr(embedding, 'tolist') else embedding,
+                "metadata": {
+                    **meta,
+                    "chunk_index": i,
+                    "total_chunks": len(texts),
+                }
+            })
+
+        return {
+            "filename": file.filename,
+            "chunks_added": len(chunks),
+            "status": "success",
+            "chunks": chunks_payload,
+            "embedding_model": embedding_model_name,
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

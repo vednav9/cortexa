@@ -175,30 +175,36 @@ class AIService {
   // Index Document — direct to HF Space (avoids Vercel 60 s serverless timeout).
   // Mirrors the Flutter app's Step 2: POST {aiRoot}/upload with the raw File.
   // Returns { filename, chunks_added, status } from the AI server.
-  async indexDocument(file, institutionId = null, courseId = null) {
-    try {
-      const formData = new FormData();
-      formData.append('file', file, file.name);
-      if (institutionId) formData.append('institution_id', String(institutionId));
-      if (courseId) formData.append('course_id', String(courseId));
+ // Index Document — direct to HF Space (avoids Vercel 60s serverless timeout).
+// Now returns { filename, chunks_added, status, chunks, embedding_model }
+async indexDocument(file, institutionId = null, courseId = null) {
+  try {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    if (institutionId) formData.append('institution_id', String(institutionId));
+    if (courseId) formData.append('course_id', String(courseId));
 
-      const response = await aiDirectAxios.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 300000, // 5 minutes — HF Space can be slow on cold start
-      });
-      return response.data; // { filename, chunks_added, status }
-    } catch (error) {
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Document processing timed out. The file was saved but may not be available for search yet. Please try again later.');
-      }
+    const response = await aiDirectAxios.post('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    });
+
+    // response.data now includes: { filename, chunks_added, status, chunks[], embedding_model }
+    return response.data;
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
       throw new Error(
-        error.response?.data?.detail ||
-        error.response?.data?.error ||
-        error.message ||
-        'Document processing failed'
+        'Document processing timed out. The file was saved but may not be available for search yet.'
       );
     }
+    throw new Error(
+      error.response?.data?.detail ||
+      error.response?.data?.error ||
+      error.message ||
+      'Document processing failed'
+    );
   }
+}
 
   // Check AI Health - Direct to AI server
   async checkHealth() {
