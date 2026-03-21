@@ -208,103 +208,72 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
     };
 };
 
-const persistDocumentVectorsToMongo = async (document) => {
-    const candidateNames = [
-        document?.originalName,
-        document?.fileName,
-        document?.fileName && document?.fileType ? `${document.fileName}.${document.fileType}` : null,
-    ].filter(Boolean);
+// ✅ FIX: Accept chunks directly from request body — no HF GET call needed
+const persistChunksToMongo = async (document, chunks, embeddingModel = 'paraphrase-MiniLM-L3-v2') => {
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    throw new Error('No chunks provided for persistence');
+  }
 
-    let chunksData = null;
-    let usedName = null;
+  // Clean slate — remove any stale data for this document
+  await Promise.all([
+    DocumentChunk.deleteMany({ document: document._id }),
+    EmbeddingStore.deleteMany({ documentId: document._id }),
+  ]);
 
-    for (const name of candidateNames) {
-        try {
-            const result = await aiService.getDocumentChunks(name);
-            const chunks = Array.isArray(result?.chunks) ? result.chunks : [];
-            if (chunks.length > 0) {
-                chunksData = result;
-                usedName = name;
-                break;
-            }
-        } catch (_) {
-            // Try next candidate file name.
-        }
-    }
-
-    if (!chunksData) {
-        throw new Error(`No chunks available in AI store for document names: ${candidateNames.join(", ")}`);
-    }
-
-    const chunks = Array.isArray(chunksData.chunks) ? chunksData.chunks : [];
-
-    if (!chunks.length) {
-        return { chunkCount: 0, embeddingCount: 0, sourceName: usedName || "" };
-    }
-
-    await Promise.all([
-        DocumentChunk.deleteMany({ document: document._id }),
-        EmbeddingStore.deleteMany({ documentId: document._id }),
-    ]);
-
-    const chunkDocs = chunks.map((chunk, i) => {
-        const metadata = chunk?.metadata || {};
-        const embedding = Array.isArray(chunk?.embedding)
-            ? chunk.embedding.map((value) => Number(value)).filter((n) => Number.isFinite(n))
-            : [];
-
-        return {
-            document: document._id,
-            chunkIndex: Number.isFinite(Number(metadata?.chunk_index))
-                ? Number(metadata.chunk_index)
-                : i,
-            text: String(chunk?.text || "").trim(),
-            embedding,
-            embeddingModel: chunksData?.embedding_model || 'paraphrase-MiniLM-L3-v2',
-            metadata: {
-                institution_id: document.institution?.toString() ?? '',
-                course_id: document.course?.toString() ?? '',
-                fileName: document.originalName,
-                fileType: document.fileType,
-                uploadedBy: document.uploadedBy?.toString() ?? '',
-            },
-        };
-    }).filter((doc) => doc.text.length > 0);
-
-    const insertedChunks = chunkDocs.length
-        ? await DocumentChunk.insertMany(chunkDocs, { ordered: false })
+  const chunkDocs = chunks
+    .map((chunk, i) => {
+      const meta = chunk?.metadata || {};
+      const embedding = Array.isArray(chunk?.embedding)
+        ? chunk.embedding.map((v) => Number(v)).filter((n) => Number.isFinite(n))
         : [];
 
-    const embeddingDocs = insertedChunks.map((chunkDoc) => ({
-        documentId: document._id,
-        chunkId: chunkDoc._id,
-        text: chunkDoc.text,
-        embedding: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding : [],
-        embeddingDimension: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding.length : 0,
-        embeddingModel: chunkDoc.embeddingModel || 'paraphrase-MiniLM-L3-v2',
+      return {
+        document: document._id,
+        chunkIndex: Number.isFinite(Number(meta?.chunk_index)) ? Number(meta.chunk_index) : i,
+        text: String(chunk?.text || '').trim(),
+        embedding,
+        embeddingModel,
         metadata: {
-            institution_id: document.institution,
-            course_id: document.course,
-            fileName: document.originalName,
-            fileType: document.fileType,
-            chunkIndex: chunkDoc.chunkIndex,
+          institution_id: document.institution?.toString() ?? '',
+          course_id: document.course?.toString() ?? '',
+          fileName: document.originalName,
+          fileType: document.fileType,
+          uploadedBy: document.uploadedBy?.toString() ?? '',
         },
-    }));
+      };
+    })
+    .filter((doc) => doc.text.length > 0);
 
-    if (embeddingDocs.length) {
-        await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
-    }
+  if (chunkDocs.length === 0) {
+    throw new Error('All chunks were empty after filtering — nothing to persist');
+  }
 
-    const [dbChunkCount, dbEmbeddingCount] = await Promise.all([
-        DocumentChunk.countDocuments({ document: document._id }),
-        EmbeddingStore.countDocuments({ documentId: document._id }),
-    ]);
+  const insertedChunks = await DocumentChunk.insertMany(chunkDocs, { ordered: false });
 
-    return {
-        chunkCount: dbChunkCount,
-        embeddingCount: dbEmbeddingCount,
-        sourceName: usedName || '',
-    };
+  const embeddingDocs = insertedChunks.map((chunkDoc) => ({
+    documentId: document._id,
+    chunkId: chunkDoc._id,
+    text: chunkDoc.text,
+    embedding: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding : [],
+    embeddingDimension: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding.length : 0,
+    embeddingModel: chunkDoc.embeddingModel || embeddingModel,
+    metadata: {
+      institution_id: document.institution,
+      course_id: document.course,
+      fileName: document.originalName,
+      fileType: document.fileType,
+      chunkIndex: chunkDoc.chunkIndex,
+    },
+  }));
+
+  await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
+
+  const [dbChunkCount, dbEmbeddingCount] = await Promise.all([
+    DocumentChunk.countDocuments({ document: document._id }),
+    EmbeddingStore.countDocuments({ documentId: document._id }),
+  ]);
+
+  return { chunkCount: dbChunkCount, embeddingCount: dbEmbeddingCount };
 };
 
 
@@ -856,79 +825,73 @@ export const deleteDocument = async (req, res) => {
    MARK DOCUMENT PROCESSED
 ========================= */
 export const markDocumentProcessed = async (req, res) => {
-    try {
-        const { documentId } = req.params;
-        const { chunksCount } = req.body || {};
-        const teacherId = req.user.id;
+  try {
+    const { documentId } = req.params;
+    // ✅ FIX: chunks + embeddingModel now come from the request body directly
+    const { chunksCount, chunks, embeddingModel } = req.body || {};
+    const teacherId = req.user.id;
 
-        const document = await Document.findById(documentId);
-
-        if (!document) {
-            return res.status(404).json({
-                success: false,
-                message: "Document not found"
-            });
-        }
-
-        if (document.uploadedBy.toString() !== teacherId) {
-            return res.status(403).json({
-                success: false,
-                message: "Not authorized"
-            });
-        }
-
-        let persisted = { chunkCount: 0, embeddingCount: 0, sourceName: "" };
-        const requestedChunks = Number.isFinite(Number(chunksCount))
-            ? Math.max(0, Math.floor(Number(chunksCount)))
-            : null;
-
-        try {
-            persisted = await persistDocumentVectorsToMongo(document);
-        } catch (persistErr) {
-            throw persistErr;
-        }
-
-        // If AI reported chunks but Mongo persistence didn't store them, do not mark as processed.
-        if ((requestedChunks ?? 0) > 0 && persisted.chunkCount <= 0) {
-            throw new Error(
-                `AI reported ${requestedChunks} chunks but Mongo persistence stored 0 chunks`
-            );
-        }
-
-        // Chunks and embeddings should move in lockstep; enforce consistency.
-        if (persisted.chunkCount > 0 && persisted.embeddingCount <= 0) {
-            throw new Error("Chunks were stored but embeddings were not stored");
-        }
-
-        if (persisted.chunkCount !== persisted.embeddingCount) {
-            throw new Error(
-                `Chunk and embedding count mismatch: ${persisted.chunkCount} chunks vs ${persisted.embeddingCount} embeddings`
-            );
-        }
-
-        const update = {
-            isProcessed: true,
-            processingError: null,
-            chunksCount: Math.max(0, persisted.chunkCount),
-        };
-
-        await Document.findByIdAndUpdate(documentId, update);
-
-        res.status(200).json({
-            success: true,
-            message: "Document marked as processed",
-            chunksPersisted: persisted.chunkCount,
-            embeddingsPersisted: persisted.embeddingCount,
-            aiChunkSource: persisted.sourceName,
-        });
-    } catch (error) {
-        console.error("Mark processed error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update document",
-            error: error.message
-        });
+    const document = await Document.findById(documentId);
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
     }
+    if (document.uploadedBy.toString() !== teacherId) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const incomingChunks = Array.isArray(chunks) ? chunks : [];
+    const requestedCount = Number.isFinite(Number(chunksCount))
+      ? Math.max(0, Math.floor(Number(chunksCount)))
+      : 0;
+
+    // Guard: if frontend says chunks were added but sent none, reject early
+    if (requestedCount > 0 && incomingChunks.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: `AI reported ${requestedCount} chunks but none were included in the request body`,
+      });
+    }
+
+    let persisted = { chunkCount: 0, embeddingCount: 0 };
+
+    if (incomingChunks.length > 0) {
+      persisted = await persistChunksToMongo(
+        document,
+        incomingChunks,
+        embeddingModel || 'paraphrase-MiniLM-L3-v2'
+      );
+    }
+
+    // Consistency checks
+    if (persisted.chunkCount > 0 && persisted.embeddingCount <= 0) {
+      throw new Error('Chunks were stored but embeddings were not stored');
+    }
+    if (persisted.chunkCount !== persisted.embeddingCount) {
+      throw new Error(
+        `Chunk/embedding count mismatch: ${persisted.chunkCount} chunks vs ${persisted.embeddingCount} embeddings`
+      );
+    }
+
+    await Document.findByIdAndUpdate(documentId, {
+      isProcessed: true,
+      processingError: null,
+      chunksCount: Math.max(0, persisted.chunkCount),
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Document marked as processed',
+      chunksPersisted: persisted.chunkCount,
+      embeddingsPersisted: persisted.embeddingCount,
+    });
+  } catch (error) {
+    console.error('Mark processed error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update document',
+      error: error.message,
+    });
+  }
 };
 
 /* =========================
