@@ -293,11 +293,11 @@ const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
         embeddingDimension: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding.length : 0,
         embeddingModel: chunkDoc.embeddingModel || 'paraphrase-MiniLM-L3-v2',
         metadata: {
-            institution_id: document.institution,
-            course_id: document.course,
-            fileName: document.originalName,
-            fileType: document.fileType,
-            chunkIndex: chunkDoc.chunkIndex,
+          institution_id: document.institution?.toString() ?? '',
+          course_id: document.course?.toString() ?? '',
+          fileName: document.originalName,
+          fileType: document.fileType,
+          uploadedBy: document.uploadedBy?.toString() ?? '',
         },
     }));
 
@@ -960,41 +960,42 @@ export const deleteDocument = async (req, res) => {
    MARK DOCUMENT PROCESSED
 ========================= */
 export const markDocumentProcessed = async (req, res) => {
-    try {
-        const { documentId } = req.params;
-        const { chunksCount } = req.body || {};
-        const teacherId = req.user.id;
+  try {
+    const { documentId } = req.params;
+    // ✅ FIX: chunks + embeddingModel now come from the request body directly
+    const { chunksCount, chunks, embeddingModel } = req.body || {};
+    const teacherId = req.user.id;
 
-        const document = await Document.findById(documentId);
+    const document = await Document.findById(documentId);
+    if (!document) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+    if (document.uploadedBy.toString() !== teacherId) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
 
-        if (!document) {
-            return res.status(404).json({
-                success: false,
-                message: "Document not found"
-            });
-        }
+    const incomingChunks = Array.isArray(chunks) ? chunks : [];
+    const requestedCount = Number.isFinite(Number(chunksCount))
+      ? Math.max(0, Math.floor(Number(chunksCount)))
+      : 0;
 
-        if (document.uploadedBy.toString() !== teacherId) {
-            return res.status(403).json({
-                success: false,
-                message: "Not authorized"
-            });
-        }
+    // Guard: if frontend says chunks were added but sent none, reject early
+    if (requestedCount > 0 && incomingChunks.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: `AI reported ${requestedCount} chunks but none were included in the request body`,
+      });
+    }
 
-        let persisted = { chunkCount: 0, embeddingCount: 0, sourceName: "" };
-        const requestedChunks = Number.isFinite(Number(chunksCount))
-            ? Math.max(0, Math.floor(Number(chunksCount)))
-            : null;
+    let persisted = { chunkCount: 0, embeddingCount: 0 };
 
-        try {
-            // Always attempt persistence so we don't depend on client chunk parsing.
-            persisted = await persistDocumentVectorsToMongo(document);
-        } catch (persistErr) {
-            // If client reported chunks were added, treat persistence failure as hard error.
-            if ((requestedChunks ?? 0) > 0) {
-                throw persistErr;
-            }
-        }
+    if (incomingChunks.length > 0) {
+      persisted = await persistChunksToMongo(
+        document,
+        incomingChunks,
+        embeddingModel || 'paraphrase-MiniLM-L3-v2'
+      );
+    }
 
         if ((requestedChunks ?? 0) > 0 && persisted.chunkCount === 0) {
             throw new Error("Document marked processed but no chunks were persisted in DocumentChunk.");
@@ -1006,23 +1007,26 @@ export const markDocumentProcessed = async (req, res) => {
             chunksCount: Math.max(0, persisted.chunkCount),
         };
 
-        await Document.findByIdAndUpdate(documentId, update);
+    await Document.findByIdAndUpdate(documentId, {
+      isProcessed: true,
+      processingError: null,
+      chunksCount: Math.max(0, persisted.chunkCount),
+    });
 
-        res.status(200).json({
-            success: true,
-            message: "Document marked as processed",
-            chunksPersisted: persisted.chunkCount,
-            embeddingsPersisted: persisted.embeddingCount,
-            aiChunkSource: persisted.sourceName,
-        });
-    } catch (error) {
-        console.error("Mark processed error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update document",
-            error: error.message
-        });
-    }
+    return res.status(200).json({
+      success: true,
+      message: 'Document marked as processed',
+      chunksPersisted: persisted.chunkCount,
+      embeddingsPersisted: persisted.embeddingCount,
+    });
+  } catch (error) {
+    console.error('Mark processed error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update document',
+      error: error.message,
+    });
+  }
 };
 
 /* =========================
