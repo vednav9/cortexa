@@ -208,6 +208,33 @@ function formatChunkContext(chunks) {
     ).join("\n\n");
 }
 
+function cleanSnippet(text = "") {
+    return String(text)
+        .replace(/[\u2022\u25CF\u25AA\u25AB\u00B7\uF0B7]/g, " ")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function buildFallbackDocumentAnswer(chunks = []) {
+    const lines = chunks
+        .slice(0, 3)
+        .map((c) => cleanSnippet(c?.text || ""))
+        .filter(Boolean)
+        .map((text) => text.slice(0, 280));
+
+    if (lines.length === 0) {
+        return "I found relevant material in your notes, but I could not generate a full answer right now. Please try again in a moment.";
+    }
+
+    return [
+        "Based on your course notes, here is a concise summary:",
+        ...lines.map((line) => `- ${line}`),
+        "",
+        "If you want, ask a narrower follow-up and I will answer point-by-point.",
+    ].join("\n");
+}
+
 // ──────────────────────────────────────────────────────────
 //  Main query function
 // ──────────────────────────────────────────────────────────
@@ -292,12 +319,8 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
             answer = await generateAnswer(query, context, "documents");
         } catch (genErr) {
             console.error("⚠️  LLM /generate failed:", genErr.message);
-            // /generate is down (404 or timeout) — format chunks directly as the answer
-            // This is still useful: student sees the actual relevant paragraphs from their notes
-            answer = `Here is what I found in your course materials:\n\n` +
-                topChunks.map((c, i) =>
-                    `**[${c.metadata?.fileName || `Source ${i + 1}`}]**\n${c.text.trim()}`
-                ).join("\n\n---\n\n");
+            // Keep fallback readable and concise instead of dumping raw chunk text.
+            answer = buildFallbackDocumentAnswer(topChunks);
         }
 
         const sources = topChunks.map((c) => ({

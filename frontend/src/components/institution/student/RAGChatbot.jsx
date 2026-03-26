@@ -140,6 +140,13 @@ export default function RAGChatbot() {
   const [selectedCourse, setSelectedCourse] = useState("");
   const [selectedDocIds, setSelectedDocIds] = useState([]);
 
+  const normalizeCourse = (course = {}) => ({
+    ...course,
+    _id: String(course?._id || course?.id || ""),
+    code: String(course?.code || ""),
+    name: String(course?.name || ""),
+  });
+
   useEffect(() => {
     const fetchTeacherCourses = async () => {
       if (user?.role !== "teacher") return;
@@ -159,30 +166,75 @@ export default function RAGChatbot() {
   }, [user?.role]);
 
   useEffect(() => {
-    const fetchDocuments = async () => {
-      if (!selectedCourse || user?.role !== "teacher") {
-        setDocuments([]);
-        return;
-      }
+    const fetchStudentCourses = async () => {
+      if (user?.role !== "student" || !inst?.slug) return;
       try {
-        setDocsLoading(true);
-        const res = await api.get(`/teacher/notes/${selectedCourse}`, {
-          params: { _ts: Date.now() },
-          headers: { 'Cache-Control': 'no-cache' },
-        });
-        const list = Array.isArray(res?.data?.documents) ? res.data.documents : [];
-        setDocuments(list);
-        setSelectedDocIds(list.map((doc) => String(doc._id)));
-      } catch {
+        const res = await api.get(`/institutions/slug/${inst.slug}/courses`);
+        const raw = Array.isArray(res?.data?.courses) ? res.data.courses : [];
+        const list = raw.map(normalizeCourse).filter((c) => c._id);
+        setCourses(list);
+        setSelectedCourse((prev) => prev || (list[0]?._id || ""));
+      } catch (_) {
+        setCourses([]);
+        setSelectedCourse("");
+      }
+    };
+
+    fetchStudentCourses();
+  }, [user?.role, inst?.slug]);
+
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      if (!selectedCourse || !user?.role) {
         setDocuments([]);
         setSelectedDocIds([]);
-      } finally {
-        setDocsLoading(false);
+        return;
+      }
+
+      if (user.role === "teacher") {
+        try {
+          setDocsLoading(true);
+          const res = await api.get(`/teacher/notes/${selectedCourse}`, {
+            params: { _ts: Date.now() },
+            headers: { 'Cache-Control': 'no-cache' },
+          });
+          const list = Array.isArray(res?.data?.documents) ? res.data.documents : [];
+          setDocuments(list);
+          setSelectedDocIds(list.map((doc) => String(doc._id)));
+        } catch {
+          setDocuments([]);
+          setSelectedDocIds([]);
+        } finally {
+          setDocsLoading(false);
+        }
+        return;
+      }
+
+      if (user.role === "student") {
+        const selectedCourseObj = courses.find((c) => String(c._id) === String(selectedCourse));
+        if (!selectedCourseObj?.code || !inst?.slug) {
+          setDocuments([]);
+          setSelectedDocIds([]);
+          return;
+        }
+
+        try {
+          setDocsLoading(true);
+          const res = await api.get(`/institutions/slug/${inst.slug}/courses/${selectedCourseObj.code}`);
+          const list = Array.isArray(res?.data?.documents) ? res.data.documents : [];
+          setDocuments(list);
+          setSelectedDocIds(list.map((doc) => String(doc._id)));
+        } catch {
+          setDocuments([]);
+          setSelectedDocIds([]);
+        } finally {
+          setDocsLoading(false);
+        }
       }
     };
 
     fetchDocuments();
-  }, [selectedCourse, user?.role]);
+  }, [selectedCourse, user?.role, courses, inst?.slug]);
 
   useEffect(() => {
     if (!chatScrollRef.current || (!loading && messages.length === 0)) return;
@@ -512,7 +564,7 @@ export default function RAGChatbot() {
                             className="mt-0.5"
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="text-[12px] font-semibold text-gray-800 truncate">{doc.fileName}</p>
+                            <p className="text-[12px] font-semibold text-gray-800 truncate">{doc.fileName || doc.originalName || "Document"}</p>
                             <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
                               <span>{formatFileSize(doc.fileSize || 0)}</span>
                               <span>•</span>

@@ -9,8 +9,57 @@ import Teacher from '../models/teacher.js';
 import Course from '../models/course.js';
 import Department from '../models/department.js';
 import Semester from '../models/semester.js';
+import Document from '../models/document.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
+
+const getTokenFromRequest = (req) => {
+  const authHeader = req.headers.authorization || '';
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  return req.cookies?.token || bearer || null;
+};
+
+const getOptionalRequestUser = (req) => {
+  try {
+    const token = getTokenFromRequest(req);
+    if (!token) return null;
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch (_) {
+    return null;
+  }
+};
+
+const resolveCourseAccessIds = async ({ user, institutionId }) => {
+  const userId = user?.id || user?._id || user?.userId;
+  if (!userId || !user?.role) return null;
+
+  if (user.role === 'admin') {
+    const admin = await Admin.findById(userId).select('institution');
+    if (!admin?.institution || admin.institution.toString() !== institutionId.toString()) {
+      return [];
+    }
+    return null;
+  }
+
+  if (user.role === 'teacher') {
+    const teacher = await Teacher.findById(userId).select('institution authorizedCourses');
+    if (!teacher?.institution || teacher.institution.toString() !== institutionId.toString()) {
+      return [];
+    }
+    return (teacher.authorizedCourses || []).map((id) => id.toString());
+  }
+
+  if (user.role === 'student') {
+    const student = await Student.findById(userId).select('institution enrolledCourses');
+    if (!student?.institution || student.institution.toString() !== institutionId.toString()) {
+      return [];
+    }
+    return (student.enrolledCourses || []).map((id) => id.toString());
+  }
+
+  return [];
+};
 
 // ============================================
 // PUBLIC ROUTES (More specific routes FIRST)
@@ -116,76 +165,187 @@ router.get('/slug/:slug', async (req, res) => {
   }
 });
 
-// Get courses for institution (PUBLIC)
+// Get courses for institution (PUBLIC + role-aware when authenticated)
 router.get('/slug/:slug/courses', async (req, res) => {
   try {
-    // Mock courses data
-    const courses = [
-      {
-        id: 1,
-        code: 'CS101',
-        name: 'Introduction to Computer Science',
-        description: 'Fundamental concepts of computer science and programming',
-        credits: 3,
-        instructor: 'Dr. Rajesh Sharma',
-        duration: '14 weeks',
-        rating: 4.5,
-        department: 'CS'
-      },
-      {
-        id: 2,
-        code: 'CS201',
-        name: 'Data Structures and Algorithms',
-        description: 'Advanced data structures and algorithmic techniques',
-        credits: 4,
-        instructor: 'Dr. Priya Deshmukh',
-        duration: '14 weeks',
-        rating: 4.7,
-        department: 'CS'
-      }
-    ];
+    const { slug } = req.params;
+    let institution = await Institution.findOne({ slug }).select('_id code slug');
 
-    res.json({ courses });
+    if (!institution) {
+      institution = await Institution.findOne({
+        code: new RegExp(`^${slug}$`, 'i')
+      }).select('_id code slug');
+    }
+
+    if (!institution) {
+      return res.status(404).json({
+        success: false,
+        message: 'Institution not found'
+      });
+    }
+
+    const decoded = getOptionalRequestUser(req);
+    const allowedCourseIds = await resolveCourseAccessIds({
+      user: decoded,
+      institutionId: institution._id
+    });
+
+    const query = { institution: institution._id, isActive: true };
+    if (Array.isArray(allowedCourseIds)) {
+      query._id = { $in: allowedCourseIds };
+    }
+
+    const courses = await Course.find(query)
+      .populate('department', 'name code')
+      .populate('instructor', 'fullName')
+      .sort({ code: 1, name: 1 });
+
+    res.json({
+      success: true,
+      count: courses.length,
+      courses: courses.map((course) => ({
+        id: course._id,
+        code: course.code,
+        name: course.name,
+        description: course.description,
+        credits: course.credits,
+        instructor: course.instructor?.fullName || '',
+        department: course.department?.code || course.department?.name || '',
+        semester: course.semester,
+      }))
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching courses', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching courses', error: error.message });
   }
 });
 
-// Get course details (PUBLIC)
+// Get course details (PUBLIC + role-aware when authenticated)
 router.get('/slug/:slug/courses/:courseCode', async (req, res) => {
   try {
-    // Mock course detail
-    const course = {
-      id: 1,
-      code: req.params.courseCode,
-      name: 'Introduction to Computer Science',
-      description: 'Fundamental concepts of computer science and programming',
-      fullDescription: 'This comprehensive course introduces students to the foundational concepts of computer science, including programming fundamentals, computational thinking, and problem-solving strategies.',
-      credits: 3,
-      instructor: 'Dr. Rajesh Sharma',
-      duration: '14 weeks',
-      schedule: 'Mon, Wed, Fri - 10:00 AM',
-      rating: 4.5,
-      department: 'Computer Science',
-      outcomes: [
-        'Understand fundamental programming concepts',
-        'Apply computational thinking to solve problems',
-        'Design and implement basic algorithms',
-        'Write clean and efficient code'
-      ],
-      topics: [
-        'Programming Basics',
-        'Data Types & Variables',
-        'Control Structures',
-        'Functions & Modules',
-        'Object-Oriented Programming',
-        'Algorithm Design'
-      ]
+    const { slug, courseCode } = req.params;
+
+    let institution = await Institution.findOne({ slug }).select('_id code slug');
+    if (!institution) {
+      institution = await Institution.findOne({
+        code: new RegExp(`^${slug}$`, 'i')
+      }).select('_id code slug');
+    }
+
+    if (!institution) {
+      return res.status(404).json({ success: false, message: 'Institution not found' });
+    }
+
+    const decoded = getOptionalRequestUser(req);
+    const allowedCourseIds = await resolveCourseAccessIds({
+      user: decoded,
+      institutionId: institution._id
+    });
+
+    const courseQuery = {
+      institution: institution._id,
+      code: String(courseCode || '').toUpperCase(),
+      isActive: true
     };
 
-    res.json({ course });
+    if (Array.isArray(allowedCourseIds)) {
+      courseQuery._id = { $in: allowedCourseIds };
+    }
+
+    const course = await Course.findOne(courseQuery)
+      .populate('department', 'name code')
+      .populate('instructor', 'fullName');
+
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Course not found' });
+    }
+
+    const documents = await Document.find({
+      institution: institution._id,
+      course: course._id
+    })
+      .populate('uploadedBy', 'fullName')
+      .sort({ createdAt: -1 })
+      .select('originalName fileType fileSize isProcessed chunksCount downloadCount createdAt fileUrl uploadedBy');
+
+    res.json({
+      success: true,
+      course: {
+        id: course._id,
+        code: course.code,
+        name: course.name,
+        description: course.description,
+        fullDescription: course.syllabus || course.description,
+        credits: course.credits,
+        instructor: course.instructor?.fullName || '',
+        department: course.department?.name || course.department?.code || '',
+        semester: course.semester,
+      },
+      documents: documents.map((doc) => ({
+        _id: doc._id,
+        originalName: doc.originalName,
+        fileType: doc.fileType,
+        fileSize: doc.fileSize,
+        isProcessed: doc.isProcessed,
+        chunksCount: doc.chunksCount,
+        downloadCount: doc.downloadCount || 0,
+        createdAt: doc.createdAt,
+        uploadedBy: doc.uploadedBy?.fullName || 'Unknown',
+        fileUrl: doc.fileUrl,
+        downloadUrl: `/institutions/slug/${institution.slug || institution.code}/documents/${doc._id}/download`
+      }))
+    });
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching course', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching course', error: error.message });
+  }
+});
+
+// Download a course document with access check + tracked download count
+router.get('/slug/:slug/documents/:documentId/download', async (req, res) => {
+  try {
+    const { slug, documentId } = req.params;
+    const decoded = getOptionalRequestUser(req);
+
+    if (!decoded?.role) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    if (decoded.role !== 'student') {
+      return res.status(403).json({ success: false, message: 'Only students can download course documents' });
+    }
+
+    let institution = await Institution.findOne({ slug }).select('_id code slug');
+    if (!institution) {
+      institution = await Institution.findOne({
+        code: new RegExp(`^${slug}$`, 'i')
+      }).select('_id code slug');
+    }
+
+    if (!institution) {
+      return res.status(404).json({ success: false, message: 'Institution not found' });
+    }
+
+    const document = await Document.findOne({
+      _id: documentId,
+      institution: institution._id
+    }).select('fileUrl course');
+
+    if (!document?.fileUrl) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    const allowedCourseIds = await resolveCourseAccessIds({
+      user: decoded,
+      institutionId: institution._id
+    });
+
+    if (Array.isArray(allowedCourseIds) && !allowedCourseIds.includes(document.course.toString())) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to download this document' });
+    }
+
+    await Document.updateOne({ _id: document._id }, { $inc: { downloadCount: 1 } });
+    return res.redirect(document.fileUrl);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to download document', error: error.message });
   }
 });
 

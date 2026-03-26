@@ -5,9 +5,12 @@ import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../../../context/authcontext';
 
 function Calendar() {
-  const { hasAccess, institution } = useOutletContext();
+  const { institution } = useOutletContext();
+  const { user } = useAuth();
+  const hasAccess = user?.role === 'admin';
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
