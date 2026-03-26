@@ -149,6 +149,61 @@ const buildTopicWebContext = async (topic) => {
     return `Topic: ${safeTopic}`;
 };
 
+const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildSourceCandidates = (document, preferredNames = []) => {
+    const raw = [
+        ...(Array.isArray(preferredNames) ? preferredNames : []),
+        document?.originalName,
+        document?.fileName,
+        document?.fileName && document?.fileType ? `${document.fileName}.${document.fileType}` : null,
+    ]
+        .map((x) => String(x || "").trim())
+        .filter(Boolean);
+
+    const withStems = raw.flatMap((name) => {
+        const stem = name.includes(".") ? name.split(".").slice(0, -1).join(".") : "";
+        return stem && stem !== name ? [name, stem] : [name];
+    });
+
+    return Array.from(new Set(withStems));
+};
+
+const getNativeVectorCollections = () => {
+    const db = mongoose?.connection?.db;
+    if (!db) {
+        throw new Error("MongoDB connection is not ready for vector collection reads.");
+    }
+    return {
+        chunksCollection: db.collection("documentchunks"),
+        embeddingsCollection: db.collection("embeddingstores"),
+    };
+};
+
+const buildChunkQuery = ({ sourceCandidates = [], institutionId, courseId }) => {
+    const sourceClauses = sourceCandidates.flatMap((name) => {
+        const safe = escapeRegex(name);
+        return [
+            { "metadata.source": { $regex: `^${safe}$`, $options: "i" } },
+            { "metadata.fileName": { $regex: `^${safe}$`, $options: "i" } },
+            { "metadata.filename": { $regex: `^${safe}$`, $options: "i" } },
+        ];
+    });
+
+    const filters = [];
+    if (sourceClauses.length) {
+        filters.push({ $or: sourceClauses });
+    }
+    if (institutionId) {
+        filters.push({ "metadata.institution_id": String(institutionId) });
+    }
+    if (courseId) {
+        filters.push({ "metadata.course_id": String(courseId) });
+    }
+
+    return filters.length > 1 ? { $and: filters } : (filters[0] || {});
+};
+
 const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, courseId }) => {
     let document = null;
 
@@ -186,14 +241,24 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
         .join("\n\n")
         .slice(0, 8000);
 
-    // Fallback when DB chunks are missing or stale: ask AI service for document chunks by name.
+    // Fallback when model-linked chunks are missing: read native proxy chunks.
     if (!text) {
         try {
-            const aiChunkResp = await aiService.getDocumentChunks(document.originalName || document.fileName || documentName);
-            const aiChunks = Array.isArray(aiChunkResp?.chunks) ? aiChunkResp.chunks : [];
-            const normalized = Array.isArray(aiChunks)
-                ? aiChunks.map((c) => String(c?.text || c?.content || c || "").trim()).filter(Boolean)
-                : [];
+            const { chunksCollection } = getNativeVectorCollections();
+            const query = buildChunkQuery({
+                sourceCandidates: buildSourceCandidates(document, [documentName]),
+                institutionId: document?.institution,
+                courseId: document?.course,
+            });
+            const nativeChunks = await chunksCollection
+                .find(query, { projection: { text: 1, metadata: 1 } })
+                .sort({ "metadata.chunk_index": 1 })
+                .limit(25)
+                .toArray();
+
+            const normalized = nativeChunks
+                .map((c) => String(c?.text || "").trim())
+                .filter(Boolean);
             text = normalized.join("\n\n").slice(0, 8000);
         } catch (_) {
             // Keep text empty and let caller fallback to broad topic context.
@@ -211,110 +276,70 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
 };
 
 const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
-    const candidateNames = Array.from(new Set([
-        ...(Array.isArray(preferredNames) ? preferredNames : []),
-        document?.originalName,
-        document?.fileName,
-        document?.fileName && document?.fileType ? `${document.fileName}.${document.fileType}` : null,
-    ].filter((name) => String(name || '').trim().length > 0)));
+    const sourceCandidates = buildSourceCandidates(document, preferredNames);
+    const { chunksCollection, embeddingsCollection } = getNativeVectorCollections();
 
-    let chunksData = null;
-    let usedName = null;
+    const chunkQuery = buildChunkQuery({
+        sourceCandidates,
+        institutionId: document?.institution,
+        courseId: document?.course,
+    });
 
-    for (const name of candidateNames) {
-        try {
-            const result = await aiService.getDocumentChunksWithRetry(name, 5, 1200);
-            const chunks = Array.isArray(result?.chunks) ? result.chunks : [];
-            if (chunks.length > 0) {
-                chunksData = result;
-                usedName = name;
-                break;
-            }
-        } catch (_) {
-            // Try next candidate file name.
-        }
-    }
+    const chunkRows = await chunksCollection
+        .find(chunkQuery, { projection: { chunk_id: 1, metadata: 1 } })
+        .sort({ "metadata.chunk_index": 1 })
+        .toArray();
 
-    if (!chunksData) {
+    if (!chunkRows.length) {
         console.error("Chunk persistence lookup failed", {
             documentId: String(document?._id || ""),
-            candidateNames,
+            sourceCandidates,
+            chunkQuery,
         });
-        throw new Error(`No chunks available in AI store for document names: ${candidateNames.join(", ")}`);
+        throw new Error(`No chunks available in AI store for document names: ${sourceCandidates.join(", ")}`);
     }
 
-    const chunks = Array.isArray(chunksData.chunks) ? chunksData.chunks : [];
+    const chunkIds = Array.from(new Set(
+        chunkRows
+            .map((row) => String(row?.chunk_id || "").trim())
+            .filter(Boolean)
+    ));
 
-    if (!chunks.length) {
-        return { chunkCount: 0, embeddingCount: 0, sourceName: usedName || "" };
-    }
-
-    await Promise.all([
-        DocumentChunk.deleteMany({ document: document._id }),
-        EmbeddingStore.deleteMany({ documentId: document._id }),
-    ]);
-
-    const chunkDocs = chunks.map((chunk, i) => {
-        const metadata = chunk?.metadata || {};
-        const embedding = Array.isArray(chunk?.embedding)
-            ? chunk.embedding.map((value) => Number(value)).filter((n) => Number.isFinite(n))
-            : [];
-
-        return {
-            document: document._id,
-            chunkIndex: Number.isFinite(Number(metadata?.chunk_index))
-                ? Number(metadata.chunk_index)
-                : i,
-            text: String(chunk?.text || "").trim(),
-            embedding,
-            embeddingModel: chunksData?.embedding_model || 'paraphrase-MiniLM-L3-v2',
-            metadata: {
-                institution_id: document.institution?.toString() ?? '',
-                course_id: document.course?.toString() ?? '',
-                fileName: document.originalName,
-                fileType: document.fileType,
-                uploadedBy: document.uploadedBy?.toString() ?? '',
+    // Link proxy records to the app document for easier future cleanup/debug.
+    await chunksCollection.updateMany(
+        { chunk_id: { $in: chunkIds } },
+        {
+            $set: {
+                "metadata.document_id": String(document._id),
+                "metadata.fileName": document.originalName,
+                "metadata.fileType": document.fileType,
+                "metadata.uploadedBy": String(document.uploadedBy || ""),
             },
-        };
-    }).filter((doc) => doc.text.length > 0);
+        }
+    );
 
-    const insertedChunks = chunkDocs.length
-        ? await DocumentChunk.insertMany(chunkDocs, { ordered: false })
-        : [];
-
-    // Verify actual persistence from DB (not just in-memory insert result).
-    const persistedChunkCount = await DocumentChunk.countDocuments({ document: document._id });
-
-    const embeddingDocs = insertedChunks.map((chunkDoc) => ({
-        documentId: document._id,
-        chunkId: chunkDoc._id,
-        text: chunkDoc.text,
-        embedding: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding : [],
-        embeddingDimension: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding.length : 0,
-        embeddingModel: chunkDoc.embeddingModel || 'paraphrase-MiniLM-L3-v2',
-        metadata: {
-            institution_id: document.institution,
-            course_id: document.course,
-            fileName: document.originalName,
-            fileType: document.fileType,
-            chunkIndex: chunkDoc.chunkIndex,
-        },
-    }));
-
-    if (embeddingDocs.length) {
-        await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
+    if (chunkIds.length) {
+        await embeddingsCollection.updateMany(
+            { chunk_id: { $in: chunkIds } },
+            {
+                $set: {
+                    "metadata.document_id": String(document._id),
+                    "metadata.fileName": document.originalName,
+                    "metadata.fileType": document.fileType,
+                },
+            }
+        );
     }
 
-    const persistedEmbeddingCount = await EmbeddingStore.countDocuments({ documentId: document._id });
+    const embeddingCount = chunkIds.length
+        ? await embeddingsCollection.countDocuments({ chunk_id: { $in: chunkIds } })
+        : 0;
 
-    if (chunks.length > 0 && persistedChunkCount === 0) {
-        throw new Error("Chunk persistence verification failed: no DocumentChunk rows were saved.");
-    }
-
+    const sourceName = String(chunkRows[0]?.metadata?.source || sourceCandidates[0] || "");
     return {
-        chunkCount: persistedChunkCount,
-        embeddingCount: persistedEmbeddingCount,
-        sourceName: usedName || '',
+        chunkCount: chunkRows.length,
+        embeddingCount,
+        sourceName,
     };
 };
 

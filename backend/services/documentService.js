@@ -5,6 +5,40 @@ import { uploadDocument as uploadToR2 } from './cloudflareR2.js';
 import aiService from './aiService.js';
 import mongoose from 'mongoose';
 
+const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildSourceCandidates = (fileName, aiFilename = null) => {
+  const raw = [aiFilename, fileName]
+    .map((x) => String(x || '').trim())
+    .filter(Boolean);
+
+  const withStems = raw.flatMap((name) => {
+    const stem = name.includes('.') ? name.split('.').slice(0, -1).join('.') : '';
+    return stem && stem !== name ? [name, stem] : [name];
+  });
+
+  return Array.from(new Set(withStems));
+};
+
+const buildChunkQuery = ({ sourceCandidates, institutionId, courseId }) => {
+  const sourceClauses = sourceCandidates.flatMap((name) => {
+    const safe = escapeRegex(name);
+    return [
+      { 'metadata.source': { $regex: `^${safe}$`, $options: 'i' } },
+      { 'metadata.fileName': { $regex: `^${safe}$`, $options: 'i' } },
+      { 'metadata.filename': { $regex: `^${safe}$`, $options: 'i' } },
+    ];
+  });
+
+  return {
+    $and: [
+      { $or: sourceClauses },
+      { 'metadata.institution_id': String(institutionId) },
+      { 'metadata.course_id': String(courseId) },
+    ],
+  };
+};
+
 /**
  * Complete document upload and processing workflow
  * 1. Upload file to Cloudflare R2
@@ -45,30 +79,28 @@ export async function processAndStoreDocument(fileBuffer, fileName, fileInfo) {
     );
     console.log(`[Document Service] AI processing complete: ${aiResponse.chunks_added} chunks`);
 
-    // Step 3: Get detailed chunks and embeddings from AI server
-    console.log('[Document Service] Fetching chunks and embeddings from AI server...');
-    const candidateNames = [
-      aiResponse?.filename,
-      fileName,
-      fileName.includes('.') ? fileName.split('.').slice(0, -1).join('.') : null,
-    ].filter((n, idx, arr) => n && arr.indexOf(n) === idx);
+    // Step 3: Validate chunks directly from Mongo proxy collections.
+    console.log('[Document Service] Verifying chunks in Mongo proxy collections...');
+    const db = mongoose.connection.db;
+    const chunksCollection = db.collection('documentchunks');
+    const embeddingsCollection = db.collection('embeddingstores');
 
-    let chunksData = null;
-    for (const candidate of candidateNames) {
-      try {
-        const result = await aiService.getDocumentChunksWithRetry(candidate, 5, 1200);
-        if (Array.isArray(result?.chunks) && result.chunks.length > 0) {
-          chunksData = result;
-          break;
-        }
-      } catch (_) {
-        // Try next candidate
-      }
+    const sourceCandidates = buildSourceCandidates(fileName, aiResponse?.filename);
+    const chunkQuery = buildChunkQuery({ sourceCandidates, institutionId, courseId });
+    const chunkRows = await chunksCollection
+      .find(chunkQuery, { projection: { chunk_id: 1, metadata: 1 } })
+      .sort({ 'metadata.chunk_index': 1 })
+      .toArray();
+
+    if (!chunkRows.length) {
+      throw new Error(`No chunks available in AI store for document names: ${sourceCandidates.join(', ')}`);
     }
-    
-    if (!chunksData || !chunksData.chunks) {
-      throw new Error('Failed to retrieve chunks from AI server');
-    }
+
+    const chunkIds = Array.from(new Set(
+      chunkRows
+        .map((row) => String(row?.chunk_id || '').trim())
+        .filter(Boolean)
+    ));
 
     // Step 4: Create Document record
     console.log('[Document Service] Creating Document record...');
@@ -82,62 +114,41 @@ export async function processAndStoreDocument(fileBuffer, fileName, fileInfo) {
       course: new mongoose.Types.ObjectId(courseId),
       uploadedBy: new mongoose.Types.ObjectId(uploadedBy),
       isProcessed: true,
-      chunksCount: chunksData.chunks.length
+      chunksCount: chunkRows.length
     });
     await document.save();
     console.log(`[Document Service] Document record created: ${document._id}`);
 
-    // Step 5: Save chunks to MongoDB
-    console.log('[Document Service] Saving chunks to MongoDB...');
-    const chunkDocuments = [];
-    for (let i = 0; i < chunksData.chunks.length; i++) {
-      const chunk = chunksData.chunks[i];
-      const chunkDoc = new DocumentChunk({
-        text: chunk.text,
-        chunkIndex: i,
-        document: document._id,
-        embedding: chunk.embedding,
-        embeddingModel: chunksData.embedding_model || 'paraphrase-MiniLM-L3-v2',
-        metadata: {
-          institution_id: institutionId,
-          course_id: courseId,
-          fileName: fileName,
-          fileType: fileType,
-          uploadedBy: uploadedBy
-        }
-      });
-      chunkDocuments.push(chunkDoc);
-    }
-    await DocumentChunk.insertMany(chunkDocuments);
-    console.log(`[Document Service] ${chunkDocuments.length} chunks saved to MongoDB`);
+    // Step 5: Link proxy rows to this document for cleanup/debugging.
+    await chunksCollection.updateMany(
+      { chunk_id: { $in: chunkIds } },
+      {
+        $set: {
+          'metadata.document_id': String(document._id),
+          'metadata.fileName': fileName,
+          'metadata.fileType': fileType,
+          'metadata.uploadedBy': String(uploadedBy),
+        },
+      }
+    );
 
-    // Step 6: Save embeddings to EmbeddingStore
-    console.log('[Document Service] Saving embeddings to EmbeddingStore...');
-    const embeddingDocuments = [];
-    for (let i = 0; i < chunkDocuments.length; i++) {
-      const chunkDoc = chunkDocuments[i];
-      const embeddingDoc = new EmbeddingStore({
-        documentId: document._id,
-        chunkId: chunkDoc._id,
-        text: chunkDoc.text,
-        embedding: chunkDoc.embedding,
-        embeddingDimension: chunkDoc.embedding.length,
-        embeddingModel: chunkDoc.embeddingModel,
-        metadata: {
-          institution_id: new mongoose.Types.ObjectId(institutionId),
-          course_id: new mongoose.Types.ObjectId(courseId),
-          fileName: fileName,
-          fileType: fileType,
-          chunkIndex: i
+    if (chunkIds.length) {
+      await embeddingsCollection.updateMany(
+        { chunk_id: { $in: chunkIds } },
+        {
+          $set: {
+            'metadata.document_id': String(document._id),
+            'metadata.fileName': fileName,
+            'metadata.fileType': fileType,
+          },
         }
-      });
-      embeddingDocuments.push(embeddingDoc);
+      );
     }
-    await EmbeddingStore.insertMany(embeddingDocuments);
-    console.log(`[Document Service] ${embeddingDocuments.length} embeddings saved to EmbeddingStore`);
 
-    const verifiedChunkCount = await DocumentChunk.countDocuments({ document: document._id });
-    const verifiedEmbeddingCount = await EmbeddingStore.countDocuments({ documentId: document._id });
+    const verifiedChunkCount = chunkRows.length;
+    const verifiedEmbeddingCount = chunkIds.length
+      ? await embeddingsCollection.countDocuments({ chunk_id: { $in: chunkIds } })
+      : 0;
 
     if (verifiedChunkCount === 0) {
       throw new Error('Chunk persistence verification failed: no DocumentChunk rows found');
