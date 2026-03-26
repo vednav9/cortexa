@@ -84,17 +84,16 @@ class AIService {
     }
   }
 
-  // Upload Document
-  async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
-    try {
-      const formData = new FormData();
-      // Append buffer as blob with proper options
-      formData.append('file', fileBuffer, {
-        filename: fileName,
-        contentType: 'application/octet-stream'
-      });
-      if (institutionId) formData.append('institution_id', institutionId);
-      if (courseId) formData.append('course_id', courseId);
+// Upload Document
+async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
+  try {
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: fileName,
+      contentType: 'application/octet-stream'
+    });
+    if (institutionId) formData.append('institution_id', institutionId);
+    if (courseId) formData.append('course_id', courseId);
 
       const response = await axios.post(`${AI_API_URL}/upload`, formData, {
         headers: getHeaders(formData.getHeaders()),
@@ -108,6 +107,7 @@ class AIService {
       throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
     }
   }
+}
 
   // // Get document chunks with embeddings
   // async getDocumentChunks(fileName) {

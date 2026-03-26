@@ -152,81 +152,103 @@ export default function UploadNotes() {
         }
     }, [fileName]);
 
-    // Upload document — 3-step flow matching the mobile app
-    const handleUpload = async () => {
-        if (!selectedFile) { toast.error("Please select a file"); return; }
-        if (!fileName.trim()) { toast.error("Please enter a file name"); return; }
-        if (!selectedCourse) { toast.error("Please select a course"); return; }
+    // Upload document — resilient 3-step flow
+   const handleUpload = async () => {
+  if (!selectedFile) { toast.error("Please select a file"); return; }
+  if (!fileName.trim()) { toast.error("Please enter a file name"); return; }
+  if (!selectedCourse) { toast.error("Please select a course"); return; }
 
-        setUploading(true);
-        setUploadStep('uploading');
+  setUploading(true);
+  setUploadStep('uploading');
 
-        try {
-            // ── Step 1: R2 storage + MongoDB record (backend) ──────────────────
-            const formData = new FormData();
-            formData.append("file", selectedFile);
-            formData.append("fileName", fileName.trim());
-            formData.append("courseId", selectedCourse);
+  try {
+    // Step 1: Upload file to R2 + create Document record in MongoDB
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("fileName", fileName.trim());
+    formData.append("courseId", selectedCourse);
 
-            const step1Res = await api.post("/teacher/notes/upload", formData, {
-                headers: { "Content-Type": "multipart/form-data" }
-            });
+    const step1Res = await api.post("/teacher/notes/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
 
-            const doc = step1Res.data.document;
-            const documentId = doc?._id;
-            const institutionId = doc?.institution;
-            const statusSyncSupported = step1Res.data.statusSyncSupported === true;
+    const doc = step1Res.data.document;
+    const documentId = doc?._id;
+    const institutionId = doc?.institution;
+    const statusSyncSupported = step1Res.data.statusSyncSupported === true;
 
-            // ── Step 2: AI indexing — direct to HF Space ───────────────────────
-            // Called directly from the browser to avoid Vercel's 60 s timeout.
-            // HF cold-start can take 1-2 minutes; the browser has no limit.
-            setUploadStep('indexing');
-            let chunksAdded = 0;
-            let aiError = null;
+    // Step 2: AI indexing on HF Space — returns chunks + embeddings directly
+    setUploadStep('indexing');
+    let chunksAdded = 0;
+    let aiChunks = [];
+    let aiEmbeddingModel = 'paraphrase-MiniLM-L3-v2';
+    let aiError = null;
 
-            try {
-                const aiRes = await aiService.indexDocument(
-                    selectedFile,
-                    institutionId,
-                    selectedCourse
-                );
-                chunksAdded = aiRes.chunks_added ?? 0;
-            } catch (err) {
-                aiError = err.message;
-            }
+    try {
+      const aiRes = await aiService.indexDocument(selectedFile, institutionId, selectedCourse);
+      chunksAdded = Number(aiRes?.chunks_added || 0);
+      // ✅ Grab chunks directly from upload response — no second GET needed
+      aiChunks = Array.isArray(aiRes?.chunks) ? aiRes.chunks : [];
+      aiEmbeddingModel = aiRes?.embedding_model || 'paraphrase-MiniLM-L3-v2';
 
-            // ── Step 3: Sync status back to MongoDB (backend) ──────────────────
-            if (statusSyncSupported && documentId) {
-                setUploadStep('finalizing');
-                try {
-                    if (aiError) {
-                        await api.patch(`/teacher/notes/${documentId}/mark-failed`, { error: aiError });
-                    } else {
-                        await api.patch(`/teacher/notes/${documentId}/mark-processed`, { chunksCount: chunksAdded });
-                    }
-                } catch (_) {
-                    // Non-fatal — document is saved; status badge will show correctly on next load
-                }
-            }
+       console.log('AI Response:', aiRes);
+  console.log('chunks_added:', chunksAdded, '| aiChunks.length:', aiChunks.length);
 
-            if (aiError) {
-                toast.error(`File saved, but processing failed: ${aiError}`, { duration: 6000 });
-            } else {
-                toast.success(`Document uploaded successfully! ${chunksAdded} chunk${chunksAdded !== 1 ? 's' : ''} ready for search.`);
-            }
+    } catch (err) {
+      aiError = err.message;
+    }
 
-            // Reset form
-            setSelectedFile(null);
-            setFileName("");
-            fetchDocuments();
-        } catch (error) {
-            console.error("Upload error:", error);
-            toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to upload document");
-        } finally {
-            setUploading(false);
-            setUploadStep('');
+    // Step 3: Sync final status + persist chunks to MongoDB
+    if (statusSyncSupported && documentId) {
+      setUploadStep('finalizing');
+      try {
+        if (aiError) {
+          await api.patch(`/teacher/notes/${documentId}/mark-failed`, { error: aiError });
+        } else {
+          const syncRes = await api.patch(`/teacher/notes/${documentId}/mark-processed`, {
+            chunksCount: chunksAdded,
+            // ✅ Pass chunks directly so Node never calls HF GET endpoint
+            chunks: aiChunks,
+            embeddingModel: aiEmbeddingModel,
+          });
+
+          const persistedChunks = Number(syncRes?.data?.chunksPersisted || 0);
+          const persistedEmbeddings = Number(syncRes?.data?.embeddingsPersisted || 0);
+
+          if (chunksAdded > 0 && (persistedChunks <= 0 || persistedEmbeddings <= 0)) {
+            throw new Error("Mongo persistence incomplete: chunks/embeddings were not stored");
+          }
         }
-    };
+      } catch (syncErr) {
+        console.error('Status sync error:', syncErr);
+        aiError =
+          syncErr?.response?.data?.error ||
+          syncErr?.response?.data?.message ||
+          syncErr?.message ||
+          'Failed to persist processed chunks and embeddings';
+      }
+    }
+
+    if (aiError) {
+      toast.error(`File saved, but processing failed: ${aiError}`, { duration: 6000 });
+    } else {
+      toast.success(
+        `Document uploaded successfully! ${chunksAdded} chunk${chunksAdded !== 1 ? 's' : ''} ready for search.`
+      );
+      setSelectedFile(null);
+      setFileName("");
+      fetchDocuments();
+    }
+  } catch (error) {
+    console.error("Upload error:", error);
+    toast.error(
+      error.response?.data?.message || error.response?.data?.error || "Failed to upload document"
+    );
+  } finally {
+    setUploading(false);
+    setUploadStep('');
+  }
+};
 
     // Delete document
     const handleDelete = async (documentId) => {
