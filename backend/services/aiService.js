@@ -107,7 +107,6 @@ async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null
       throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
     }
   }
-}
 
   // // Get document chunks with embeddings
   // async getDocumentChunks(fileName) {
