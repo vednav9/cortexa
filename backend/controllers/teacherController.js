@@ -1,4 +1,5 @@
 // controllers/teacherController.js
+import mongoose from "mongoose"; // Needed for native DB chunk verification
 import Teacher from "../models/teacher.js";
 import Student from "../models/student.js";
 import Admin from "../models/admin.js";
@@ -883,20 +884,54 @@ export const deleteDocument = async (req, res) => {
             }
         }
 
-        // Best-effort cleanup in AI JSON store as well so deleted documents do
-        // not remain queryable from stale vectors.
-        const aiNames = [
-            document.originalName,
-            document.fileName,
-            document.fileName && document.fileType ? `${document.fileName}.${document.fileType}` : null,
-        ].filter(Boolean);
-        for (const name of aiNames) {
-            try {
-                await aiService.deleteDocumentChunks(name);
-            } catch (_) {
-                // Non-fatal: continue with core delete in R2 + MongoDB.
+        try {
+            const db = mongoose.connection.db;
+            const chunksCollection = db.collection('documentchunks');
+            const embeddingsCollection = db.collection('embeddingstores');
+
+            // Escape strings for safe RegEx searches
+            const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const safeOriginalName = escapeRegex(document.originalName || "");
+            const safeFileName = escapeRegex(document.fileName || "");
+
+            const query = {
+                $or: [
+                    { "metadata.document_id": document._id.toString() },
+                    ...(safeOriginalName ? [{ "metadata.source": { $regex: safeOriginalName, $options: "i" } }] : []),
+                    ...(safeFileName ? [{ "metadata.source": { $regex: safeFileName, $options: "i" } }] : [])
+                ]
+            };
+
+            const chunksToDelete = await chunksCollection.find(query, { projection: { chunk_id: 1 } }).toArray();
+
+            if (chunksToDelete.length > 0) {
+                const chunkIds = chunksToDelete.map(c => c.chunk_id);
+                // Wipe massive vector arrays first
+                const embResult = await embeddingsCollection.deleteMany({ chunk_id: { $in: chunkIds } });
+                // Wipe text chunks
+                const chunkResult = await chunksCollection.deleteMany(query);
+                
+                console.log(`✓ Cleaned up ${chunkResult.deletedCount} chunks and ${embResult.deletedCount} vectors for ${document.originalName}`);
             }
+        } catch (aiDeleteErr) {
+            console.error("Warning: DB AI Chunk Cleanup Failed:", aiDeleteErr);
+            // We proceed to delete document record even if this fails to prevent orphan UI blocks
         }
+
+        // // Best-effort cleanup in AI JSON store as well so deleted documents do
+        // // not remain queryable from stale vectors.
+        // const aiNames = [
+        //     document.originalName,
+        //     document.fileName,
+        //     document.fileName && document.fileType ? `${document.fileName}.${document.fileType}` : null,
+        // ].filter(Boolean);
+        // for (const name of aiNames) {
+        //     try {
+        //         await aiService.deleteDocumentChunks(name);
+        //     } catch (_) {
+        //         // Non-fatal: continue with core delete in R2 + MongoDB.
+        //     }
+        // }
 
         // Delete from MongoDB only after storage deletion succeeds
         await Document.findByIdAndDelete(documentId);
@@ -1013,6 +1048,44 @@ export const markDocumentFailed = async (req, res) => {
                 success: false,
                 message: "Not authorized"
             });
+        }
+
+        // 👉 THE FIX: Intercept False Positives!
+        // We manually check the DB using RegEx. If we find the chunks, we force it to Success.
+        try {
+            const db = mongoose.connection.db;
+            const chunksCollection = db.collection('documentchunks');
+            
+            const escapeRegex = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const safeOriginalName = escapeRegex(document.originalName || "");
+            const safeFileName = escapeRegex(document.fileName || "");
+
+            const query = {
+                $or: [
+                    { "metadata.document_id": document._id.toString() },
+                    ...(safeOriginalName ? [{ "metadata.source": { $regex: safeOriginalName, $options: "i" } }] : []),
+                    ...(safeFileName ? [{ "metadata.source": { $regex: safeFileName, $options: "i" } }] : [])
+                ]
+            };
+
+            const actualChunksCount = await chunksCollection.countDocuments(query);
+
+            if (actualChunksCount > 0) {
+                console.log(`✅ Intercepted false failure! Found ${actualChunksCount} chunks in DB for ${document.originalName}. Forcing success state.`);
+                
+                await Document.findByIdAndUpdate(documentId, {
+                    isProcessed: true,
+                    processingError: null,
+                    chunksCount: actualChunksCount
+                });
+
+                return res.status(200).json({
+                    success: true,
+                    message: "Document uploaded successfully" // App will show this exact success message
+                });
+            }
+        } catch (dbErr) {
+            console.error("Error during manual chunk verification intercept:", dbErr);
         }
 
         const message = typeof error === "string" && error.trim().length > 0
