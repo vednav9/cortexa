@@ -64,22 +64,8 @@ export default function InstitutionLayout() {
 
                     const accessGranted = hasAccessById || hasAccessBySlug || hasAccessBySlugParam;
 
-                    console.log('🔍 Access Check:', {
-                        userRole: user.role,
-                        userInstitutionId,
-                        userInstitutionSlug,
-                        currentInstitutionId,
-                        currentSlug,
-                        urlSlug: slug,
-                        hasAccessById,
-                        hasAccessBySlug,
-                        hasAccessBySlugParam,
-                        finalAccess: accessGranted
-                    });
-
                     setHasAccess(accessGranted);
                 } else {
-                    console.log('🔍 No user or no institution on user object');
                     setHasAccess(false);
                 }
             } catch (err) {
