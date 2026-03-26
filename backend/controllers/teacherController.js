@@ -188,7 +188,8 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
     // Fallback when DB chunks are missing or stale: ask AI service for document chunks by name.
     if (!text) {
         try {
-            const aiChunks = await aiService.getDocumentChunks(document.originalName || document.fileName || documentName);
+            const aiChunkResp = await aiService.getDocumentChunks(document.originalName || document.fileName || documentName);
+            const aiChunks = Array.isArray(aiChunkResp?.chunks) ? aiChunkResp.chunks : [];
             const normalized = Array.isArray(aiChunks)
                 ? aiChunks.map((c) => String(c?.text || c?.content || c || "").trim()).filter(Boolean)
                 : [];
@@ -208,19 +209,20 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
     };
 };
 
-const persistDocumentVectorsToMongo = async (document) => {
-    const candidateNames = [
+const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
+    const candidateNames = Array.from(new Set([
+        ...(Array.isArray(preferredNames) ? preferredNames : []),
         document?.originalName,
         document?.fileName,
         document?.fileName && document?.fileType ? `${document.fileName}.${document.fileType}` : null,
-    ].filter(Boolean);
+    ].filter((name) => String(name || '').trim().length > 0)));
 
     let chunksData = null;
     let usedName = null;
 
     for (const name of candidateNames) {
         try {
-            const result = await aiService.getDocumentChunks(name);
+            const result = await aiService.getDocumentChunksWithRetry(name, 5, 1200);
             const chunks = Array.isArray(result?.chunks) ? result.chunks : [];
             if (chunks.length > 0) {
                 chunksData = result;
@@ -233,6 +235,10 @@ const persistDocumentVectorsToMongo = async (document) => {
     }
 
     if (!chunksData) {
+        console.error("Chunk persistence lookup failed", {
+            documentId: String(document?._id || ""),
+            candidateNames,
+        });
         throw new Error(`No chunks available in AI store for document names: ${candidateNames.join(", ")}`);
     }
 
@@ -275,6 +281,9 @@ const persistDocumentVectorsToMongo = async (document) => {
         ? await DocumentChunk.insertMany(chunkDocs, { ordered: false })
         : [];
 
+    // Verify actual persistence from DB (not just in-memory insert result).
+    const persistedChunkCount = await DocumentChunk.countDocuments({ document: document._id });
+
     const embeddingDocs = insertedChunks.map((chunkDoc) => ({
         documentId: document._id,
         chunkId: chunkDoc._id,
@@ -295,9 +304,15 @@ const persistDocumentVectorsToMongo = async (document) => {
         await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
     }
 
+    const persistedEmbeddingCount = await EmbeddingStore.countDocuments({ documentId: document._id });
+
+    if (chunks.length > 0 && persistedChunkCount === 0) {
+        throw new Error("Chunk persistence verification failed: no DocumentChunk rows were saved.");
+    }
+
     return {
-        chunkCount: insertedChunks.length,
-        embeddingCount: embeddingDocs.length,
+        chunkCount: persistedChunkCount,
+        embeddingCount: persistedEmbeddingCount,
         sourceName: usedName || '',
     };
 };
@@ -732,7 +747,10 @@ export const uploadNotes = async (req, res) => {
                 courseId
             );
 
-            const persisted = await persistDocumentVectorsToMongo(document);
+            const persisted = await persistDocumentVectorsToMongo(document, [
+                aiUpload?.filename,
+                file.originalname,
+            ]);
 
             await Document.findByIdAndUpdate(document._id, {
                 isProcessed: true,
@@ -747,6 +765,7 @@ export const uploadNotes = async (req, res) => {
                 message: "Document uploaded and indexed successfully",
                 document: updatedDocument?.toObject?.() || document.toObject(),
                 aiIndexed: true,
+                statusSynced: true,
                 chunksAddedByAi: Number(aiUpload?.chunks_added || 0),
                 chunksPersisted: persisted.chunkCount,
                 embeddingsPersisted: persisted.embeddingCount,
@@ -765,6 +784,7 @@ export const uploadNotes = async (req, res) => {
                 document: document.toObject(),
                 error: errMsg,
                 aiIndexed: false,
+                statusSynced: false,
             });
         }
     } catch (error) {
@@ -863,6 +883,21 @@ export const deleteDocument = async (req, res) => {
             }
         }
 
+        // Best-effort cleanup in AI JSON store as well so deleted documents do
+        // not remain queryable from stale vectors.
+        const aiNames = [
+            document.originalName,
+            document.fileName,
+            document.fileName && document.fileType ? `${document.fileName}.${document.fileType}` : null,
+        ].filter(Boolean);
+        for (const name of aiNames) {
+            try {
+                await aiService.deleteDocumentChunks(name);
+            } catch (_) {
+                // Non-fatal: continue with core delete in R2 + MongoDB.
+            }
+        }
+
         // Delete from MongoDB only after storage deletion succeeds
         await Document.findByIdAndDelete(documentId);
 
@@ -926,13 +961,14 @@ export const markDocumentProcessed = async (req, res) => {
             }
         }
 
+        if ((requestedChunks ?? 0) > 0 && persisted.chunkCount === 0) {
+            throw new Error("Document marked processed but no chunks were persisted in DocumentChunk.");
+        }
+
         const update = {
             isProcessed: true,
             processingError: null,
-            chunksCount: Math.max(
-                0,
-                persisted.chunkCount || (requestedChunks ?? 0)
-            ),
+            chunksCount: Math.max(0, persisted.chunkCount),
         };
 
         await Document.findByIdAndUpdate(documentId, update);

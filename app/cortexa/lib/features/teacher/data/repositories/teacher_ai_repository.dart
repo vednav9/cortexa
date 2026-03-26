@@ -203,7 +203,46 @@ class TeacherAiRepository {
       throw Exception(response['message'] ?? 'Failed to upload document');
     }
 
-    return response;
+    // Robust fallback: if backend upload succeeds but does not report
+    // persisted chunks yet (mixed backend versions or race), force a
+    // mark-processed sync so Mongo DocumentChunk/EmbeddingStore are populated.
+    final doc = response['document'] as Map<String, dynamic>?;
+    final documentId = (doc?['_id'] ?? '').toString();
+    final chunksPersisted = (response['chunksPersisted'] is num)
+        ? (response['chunksPersisted'] as num).toInt()
+        : 0;
+    final chunksAddedByAi = (response['chunksAddedByAi'] is num)
+        ? (response['chunksAddedByAi'] as num).toInt()
+        : 0;
+
+    var statusSynced = response['statusSynced'] == true;
+    if (documentId.isNotEmpty && chunksPersisted <= 0) {
+      try {
+        await _markDocumentProcessed(
+          documentId,
+          chunksCount: chunksAddedByAi > 0 ? chunksAddedByAi : 1,
+        );
+        statusSynced = true;
+      } catch (_) {
+        // Keep original response and let caller display partial-success message.
+      }
+    }
+
+    return {
+      ...response,
+      'statusSynced': statusSynced,
+    };
+  }
+
+  Future<void> _markDocumentProcessed(
+    String documentId, {
+    required int chunksCount,
+  }) async {
+    await _apiClient.patch(
+      '/teacher/notes/$documentId/mark-processed',
+      body: {'chunksCount': chunksCount},
+      requiresAuth: true,
+    );
   }
 
   String _mimeForExtension(String ext) {

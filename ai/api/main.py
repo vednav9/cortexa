@@ -1,7 +1,7 @@
 """
 FastAPI server for RAG system with Voice-to-Text
 """
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -23,6 +23,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# === ADD THIS MIDDLEWARE IMMEDIATELY AFTER CORS ===
+@app.middleware("http")
+async def intercept_mongo_uri(request: Request, call_next):
+    """
+    Dynamically captures the secure Mongo URI from the Railway backend request headers
+    and initializes the vector store context, keeping the HF Space strictly stateless.
+    """
+    mongo_uri = request.headers.get("x-mongo-uri")
+    if mongo_uri:
+        store = get_vector_store()
+        if hasattr(store, 'set_mongo_uri'):
+            store.set_mongo_uri(mongo_uri)
+    
+    response = await call_next(request)
+    return response
+# ===================================================
 
 
 # @app.on_event("startup")
@@ -291,18 +308,61 @@ async def get_document_chunks(filename: str):
     """Get all chunks and embeddings for a specific document"""
     try:
         vector_store = get_vector_store()
+
+        requested_raw = str(filename or "").strip()
+        requested_name = Path(requested_raw).name
+        requested_stem = Path(requested_name).stem
+        requested_lower = requested_name.lower()
+        requested_stem_lower = requested_stem.lower()
         
         # Get all documents from the vector store
         all_docs = vector_store.data['documents']
         
-        # Filter chunks for this filename
-        doc_chunks = [
-            doc for doc in all_docs 
-            if doc.get('id', '').startswith(f"{filename}_")
-        ]
+        def _matches_document(doc: dict) -> bool:
+            doc_id = str(doc.get('id', ''))
+            doc_id_lower = doc_id.lower()
+
+            metadata = doc.get('metadata', {}) or {}
+            source_raw = str(
+                metadata.get('source')
+                or metadata.get('fileName')
+                or metadata.get('file_name')
+                or ''
+            ).strip()
+            source_name = Path(source_raw).name
+            source_lower = source_name.lower()
+            source_stem_lower = Path(source_name).stem.lower()
+
+            # Primary historical convention from /upload IDs.
+            if requested_name and doc_id_lower.startswith(f"{requested_lower}_"):
+                return True
+
+            # Allow exact source filename match.
+            if requested_name and source_lower == requested_lower:
+                return True
+
+            # Allow extension-agnostic match as fallback.
+            if requested_stem and source_stem_lower == requested_stem_lower:
+                return True
+
+            return False
+
+        # Filter chunks for this filename (robust to id/source format differences)
+        doc_chunks = [doc for doc in all_docs if _matches_document(doc)]
         
         if not doc_chunks:
             raise HTTPException(status_code=404, detail=f"No chunks found for {filename}")
+
+        # Keep stable order for downstream persistence and debugging.
+        def _chunk_sort_key(doc: dict) -> int:
+            metadata = doc.get('metadata', {}) or {}
+            idx = metadata.get('chunk_index', metadata.get('chunkIndex'))
+            try:
+                return int(idx)
+            except Exception:
+                return 10**9
+
+        doc_chunks.sort(key=_chunk_sort_key)
         
         # Format chunks with embeddings
         chunks = []
@@ -321,6 +381,21 @@ async def get_document_chunks(filename: str):
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/documents/{filename}")
+async def delete_document_chunks(filename: str):
+    """Delete all chunks for a specific document from the JSON vector store."""
+    try:
+        vector_store = get_vector_store()
+        removed = vector_store.remove_document_chunks(filename)
+        return {
+            "status": "success",
+            "filename": filename,
+            "removed_chunks": int(removed),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

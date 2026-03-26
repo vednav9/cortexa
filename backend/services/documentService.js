@@ -21,6 +21,8 @@ export async function processAndStoreDocument(fileBuffer, fileName, fileInfo) {
     fileSize
   } = fileInfo;
 
+  let document = null;
+
   try {
     console.log(`[Document Service] Processing ${fileName}...`);
 
@@ -45,7 +47,24 @@ export async function processAndStoreDocument(fileBuffer, fileName, fileInfo) {
 
     // Step 3: Get detailed chunks and embeddings from AI server
     console.log('[Document Service] Fetching chunks and embeddings from AI server...');
-    const chunksData = await aiService.getDocumentChunks(fileName);
+    const candidateNames = [
+      aiResponse?.filename,
+      fileName,
+      fileName.includes('.') ? fileName.split('.').slice(0, -1).join('.') : null,
+    ].filter((n, idx, arr) => n && arr.indexOf(n) === idx);
+
+    let chunksData = null;
+    for (const candidate of candidateNames) {
+      try {
+        const result = await aiService.getDocumentChunksWithRetry(candidate, 5, 1200);
+        if (Array.isArray(result?.chunks) && result.chunks.length > 0) {
+          chunksData = result;
+          break;
+        }
+      } catch (_) {
+        // Try next candidate
+      }
+    }
     
     if (!chunksData || !chunksData.chunks) {
       throw new Error('Failed to retrieve chunks from AI server');
@@ -53,7 +72,7 @@ export async function processAndStoreDocument(fileBuffer, fileName, fileInfo) {
 
     // Step 4: Create Document record
     console.log('[Document Service] Creating Document record...');
-    const document = new Document({
+    document = new Document({
       fileName: fileName,
       originalName: fileName,
       fileUrl: r2Url,
@@ -117,23 +136,30 @@ export async function processAndStoreDocument(fileBuffer, fileName, fileInfo) {
     await EmbeddingStore.insertMany(embeddingDocuments);
     console.log(`[Document Service] ${embeddingDocuments.length} embeddings saved to EmbeddingStore`);
 
+    const verifiedChunkCount = await DocumentChunk.countDocuments({ document: document._id });
+    const verifiedEmbeddingCount = await EmbeddingStore.countDocuments({ documentId: document._id });
+
+    if (verifiedChunkCount === 0) {
+      throw new Error('Chunk persistence verification failed: no DocumentChunk rows found');
+    }
+
     console.log('[Document Service] ✅ Complete pipeline finished successfully');
 
     return {
       success: true,
       document: document,
-      chunksCount: chunkDocuments.length,
-      embeddingsCount: embeddingDocuments.length,
+      chunksCount: verifiedChunkCount,
+      embeddingsCount: verifiedEmbeddingCount,
       r2Url: r2Url,
-      message: `Successfully processed ${fileName}: ${chunkDocuments.length} chunks created`
+      message: `Successfully processed ${fileName}: ${verifiedChunkCount} chunks created`
     };
 
   } catch (error) {
     console.error('[Document Service] ❌ Error:', error);
     
     // If Document was created but processing failed, mark it as failed
-    if (error.documentId) {
-      await Document.findByIdAndUpdate(error.documentId, {
+    if (document?._id) {
+      await Document.findByIdAndUpdate(document._id, {
         isProcessed: false,
         processingError: error.message
       });

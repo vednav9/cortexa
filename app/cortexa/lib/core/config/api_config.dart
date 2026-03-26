@@ -13,7 +13,7 @@ class ApiConfig {
    // - BackendConnectionMode.ngrok       -> tunnel to local backend
    // - BackendConnectionMode.local       -> emulator/local direct
    // - BackendConnectionMode.production  -> deployed backend
-   static const BackendConnectionMode _backendMode = BackendConnectionMode.ngrok;
+   static const BackendConnectionMode _backendMode = BackendConnectionMode.production;
 
   // ─── Platform channel (Android side provides BuildConfig values) ───────────
   static const _channel = MethodChannel('com.example.cortexa/secrets');
@@ -55,7 +55,7 @@ class ApiConfig {
    // ── NGROK TEST MODE ──────────────────────────────────────────────────────
    // Example:
    // static const String _ngrokBackendUrl = 'https://abcd-12-34-56-78.ngrok-free.app/api';
-   static const String _ngrokBackendUrl = 'https://5f85-106-222-210-19.ngrok-free.app';
+   static const String _ngrokBackendUrl = 'https://0b5a-223-228-133-168.ngrok-free.app';
 
    // If you run AI locally and expose it via ngrok, set that here.
    // If you want to keep using HF while testing backend locally, leave this as HF URL.

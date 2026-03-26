@@ -154,7 +154,7 @@ class AIService {
       console.log('Sending upload request to backend /api/ai/upload...');
 
       // Send through backend API to handle R2 + MongoDB + AI processing
-      const response = await apiAxios.post('/ai/upload', formData, {
+      const response = await aiAxios.post('/ai/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
