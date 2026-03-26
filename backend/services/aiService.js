@@ -108,47 +108,46 @@ async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null
     }
   }
 
-  // // Get document chunks with embeddings
-  // async getDocumentChunks(fileName) {
-  //   try {
-  //     const response = await axios.get(`${AI_API_URL}/documents/${encodeURIComponent(fileName)}/chunks`, {
-  //       timeout: LONG_TIMEOUT
-  //     });
-  //     return response.data;
-  //   } catch (error) {
-  //     console.error('Get chunks error:', error.response?.data || error.message);
-  //     throw new Error(`Failed to get document chunks: ${error.response?.data?.detail || error.message}`);
-  //   }
-  // }
+  // Get document chunks with embeddings
+  async getDocumentChunks(fileName) {
+    try {
+      const response = await axios.get(`${AI_API_URL}/documents/${encodeURIComponent(fileName)}/chunks`, {
+        timeout: LONG_TIMEOUT,
+        headers: getHeaders(),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to get document chunks: ${error.response?.data?.detail || error.message}`);
+    }
+  }
 
-  // async getDocumentChunksOnce(fileName) {
-  //   return this.getDocumentChunks(fileName);
-  // }
+  async getDocumentChunksOnce(fileName) {
+    return this.getDocumentChunks(fileName);
+  }
 
   // Retry wrapper to avoid race between /upload completion and chunks availability.
-  // async getDocumentChunksWithRetry(fileName, retries = 5, delayMs = 1200) {
-  //   let lastError = null;
+  async getDocumentChunksWithRetry(fileName, retries = 5, delayMs = 1200) {
+    let lastError = null;
 
-  //   for (let attempt = 1; attempt <= retries; attempt++) {
-  //     try {
-  //       const data = await this.getDocumentChunks(fileName);
-  //       const chunks = Array.isArray(data?.chunks) ? data.chunks : [];
-  //       if (chunks.length > 0) {
-  //         return data;
-  //       }
-  //       lastError = new Error(`No chunks returned for '${fileName}' on attempt ${attempt}`);
-  //     } catch (error) {
-  //       console.warn(`Chunk fetch attempt ${attempt}/${retries} failed for '${fileName}':`, error.message);
-  //       lastError = error;
-  //     }
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const data = await this.getDocumentChunks(fileName);
+        const chunks = Array.isArray(data?.chunks) ? data.chunks : [];
+        if (chunks.length > 0) {
+          return data;
+        }
+        lastError = new Error(`No chunks returned for '${fileName}' on attempt ${attempt}`);
+      } catch (error) {
+        lastError = error;
+      }
 
-  //     if (attempt < retries) {
-  //       await sleep(delayMs * attempt);
-  //     }
-  //   }
+      if (attempt < retries) {
+        await sleep(delayMs * attempt);
+      }
+    }
 
-  //   throw lastError || new Error(`Failed to get document chunks for '${fileName}'`);
-  // }
+    throw lastError || new Error(`Failed to get document chunks for '${fileName}'`);
+  }
 
   // Delete all chunks for a document from AI JSON store.
   // async deleteDocumentChunks(fileName) {

@@ -210,13 +210,181 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
     };
 };
 
+const expandDocumentNameCandidates = (name) => {
+    const base = String(name || "").trim();
+    if (!base) return [];
+
+    const noExt = base.replace(/\.[^.]+$/, "");
+    const withHyphen = base.replace(/[\u2010-\u2015]/g, "-");
+    const withEnDash = base.replace(/-/g, "\u2013");
+    const noExtHyphen = noExt.replace(/[\u2010-\u2015]/g, "-");
+    const noExtEnDash = noExt.replace(/-/g, "\u2013");
+
+    return [base, noExt, withHyphen, withEnDash, noExtHyphen, noExtEnDash]
+        .map((v) => String(v || "").trim())
+        .filter(Boolean);
+};
+
 const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
-    const candidateNames = Array.from(new Set([
+    const normalizeDocumentKey = (value) =>
+        String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/[\u2010-\u2015]/g, "-")
+            .replace(/\.[^.]+$/, "");
+
+    const persistFromChunksPayload = async (chunks, embeddingModel, sourceName = "") => {
+        const normalizedChunks = Array.isArray(chunks) ? chunks : [];
+
+        if (!normalizedChunks.length) {
+            return { chunkCount: 0, embeddingCount: 0, sourceName };
+        }
+
+        await Promise.all([
+            DocumentChunk.deleteMany({ document: document._id }),
+            EmbeddingStore.deleteMany({ documentId: document._id }),
+        ]);
+
+        const chunkDocs = normalizedChunks.map((chunk, i) => {
+            const metadata = chunk?.metadata || {};
+            const embedding = Array.isArray(chunk?.embedding)
+                ? chunk.embedding.map((value) => Number(value)).filter((n) => Number.isFinite(n))
+                : [];
+
+            return {
+                document: document._id,
+                chunkIndex: Number.isFinite(Number(metadata?.chunk_index))
+                    ? Number(metadata.chunk_index)
+                    : i,
+                text: String(chunk?.text || "").trim(),
+                embedding,
+                embeddingModel: embeddingModel || 'paraphrase-MiniLM-L3-v2',
+                metadata: {
+                    institution_id: document.institution?.toString() ?? '',
+                    course_id: document.course?.toString() ?? '',
+                    fileName: document.originalName,
+                    fileType: document.fileType,
+                    uploadedBy: document.uploadedBy?.toString() ?? '',
+                },
+            };
+        }).filter((doc) => doc.text.length > 0);
+
+        const insertedChunks = chunkDocs.length
+            ? await DocumentChunk.insertMany(chunkDocs, { ordered: false })
+            : [];
+
+        const embeddingDocs = insertedChunks.map((chunkDoc) => ({
+            documentId: document._id,
+            chunkId: chunkDoc._id,
+            text: chunkDoc.text,
+            embedding: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding : [],
+            embeddingDimension: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding.length : 0,
+            embeddingModel: chunkDoc.embeddingModel || 'paraphrase-MiniLM-L3-v2',
+            metadata: {
+                institution_id: document.institution?.toString() ?? '',
+                course_id: document.course?.toString() ?? '',
+                fileName: document.originalName,
+                fileType: document.fileType,
+                uploadedBy: document.uploadedBy?.toString() ?? '',
+            },
+        }));
+
+        if (embeddingDocs.length) {
+            await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
+        }
+
+        const persistedChunkCount = await DocumentChunk.countDocuments({ document: document._id });
+        const persistedEmbeddingCount = await EmbeddingStore.countDocuments({ documentId: document._id });
+
+        if (normalizedChunks.length > 0 && persistedChunkCount === 0) {
+            throw new Error("Chunk persistence verification failed: no DocumentChunk rows were saved.");
+        }
+
+        return {
+            chunkCount: persistedChunkCount,
+            embeddingCount: persistedEmbeddingCount,
+            sourceName,
+        };
+    };
+
+    const tryRecoverFromMongoAiStore = async (candidateNames) => {
+        const db = mongoose.connection?.db;
+        if (!db) return null;
+
+        const chunksCollection = db.collection("documentchunks");
+        const embeddingsCollection = db.collection("embeddingstores");
+
+        const chunkRows = await chunksCollection.find(
+            {
+                "metadata.institution_id": document.institution?.toString?.() ?? "",
+                "metadata.course_id": document.course?.toString?.() ?? "",
+            },
+            {
+                projection: {
+                    chunk_id: 1,
+                    text: 1,
+                    metadata: 1,
+                },
+            }
+        ).toArray();
+
+        if (!chunkRows.length) return null;
+
+        const candidateSet = new Set(candidateNames.map((name) => normalizeDocumentKey(name)).filter(Boolean));
+        const matchedChunks = chunkRows.filter((row) => {
+            const source = row?.metadata?.source || row?.metadata?.fileName || row?.metadata?.file_name || "";
+            return candidateSet.has(normalizeDocumentKey(source));
+        });
+
+        if (!matchedChunks.length) return null;
+
+        const chunkIds = matchedChunks
+            .map((row) => String(row?.chunk_id || "").trim())
+            .filter(Boolean);
+
+        const embeddingRows = await embeddingsCollection.find(
+            { chunk_id: { $in: chunkIds } },
+            { projection: { chunk_id: 1, embedding: 1 } }
+        ).toArray();
+
+        const embeddingMap = new Map(
+            embeddingRows.map((row) => [String(row?.chunk_id || ""), Array.isArray(row?.embedding) ? row.embedding : []])
+        );
+
+        const normalized = matchedChunks
+            .map((row, index) => ({
+                text: String(row?.text || "").trim(),
+                embedding: embeddingMap.get(String(row?.chunk_id || "")) || [],
+                metadata: {
+                    ...(row?.metadata || {}),
+                    chunk_index: Number.isFinite(Number(row?.metadata?.chunk_index))
+                        ? Number(row.metadata.chunk_index)
+                        : index,
+                },
+            }))
+            .filter((row) => row.text.length > 0 && Array.isArray(row.embedding) && row.embedding.length > 0);
+
+        if (!normalized.length) return null;
+
+        return persistFromChunksPayload(normalized, 'paraphrase-MiniLM-L3-v2', 'mongo-ai-fallback');
+    };
+
+    const seedChunks = Array.isArray(preferredNames?.seedChunks) ? preferredNames.seedChunks : [];
+    const seedEmbeddingModel = preferredNames?.seedEmbeddingModel || 'paraphrase-MiniLM-L3-v2';
+    if (seedChunks.length > 0) {
+        return persistFromChunksPayload(seedChunks, seedEmbeddingModel, "upload-response");
+    }
+
+    const rawNames = [
         ...(Array.isArray(preferredNames) ? preferredNames : []),
         document?.originalName,
         document?.fileName,
         document?.fileName && document?.fileType ? `${document.fileName}.${document.fileType}` : null,
-    ].filter((name) => String(name || '').trim().length > 0)));
+    ];
+
+    const candidateNames = Array.from(new Set(
+        rawNames.flatMap((name) => expandDocumentNameCandidates(name))
+    ));
 
     let chunksData = null;
     let usedName = null;
@@ -236,6 +404,11 @@ const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
     }
 
     if (!chunksData) {
+        const mongoRecovered = await tryRecoverFromMongoAiStore(candidateNames);
+        if (mongoRecovered) {
+            return mongoRecovered;
+        }
+
         console.error("Chunk persistence lookup failed", {
             documentId: String(document?._id || ""),
             candidateNames,
@@ -244,78 +417,7 @@ const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
     }
 
     const chunks = Array.isArray(chunksData.chunks) ? chunksData.chunks : [];
-
-    if (!chunks.length) {
-        return { chunkCount: 0, embeddingCount: 0, sourceName: usedName || "" };
-    }
-
-    await Promise.all([
-        DocumentChunk.deleteMany({ document: document._id }),
-        EmbeddingStore.deleteMany({ documentId: document._id }),
-    ]);
-
-    const chunkDocs = chunks.map((chunk, i) => {
-        const metadata = chunk?.metadata || {};
-        const embedding = Array.isArray(chunk?.embedding)
-            ? chunk.embedding.map((value) => Number(value)).filter((n) => Number.isFinite(n))
-            : [];
-
-        return {
-            document: document._id,
-            chunkIndex: Number.isFinite(Number(metadata?.chunk_index))
-                ? Number(metadata.chunk_index)
-                : i,
-            text: String(chunk?.text || "").trim(),
-            embedding,
-            embeddingModel: chunksData?.embedding_model || 'paraphrase-MiniLM-L3-v2',
-            metadata: {
-                institution_id: document.institution?.toString() ?? '',
-                course_id: document.course?.toString() ?? '',
-                fileName: document.originalName,
-                fileType: document.fileType,
-                uploadedBy: document.uploadedBy?.toString() ?? '',
-            },
-        };
-    }).filter((doc) => doc.text.length > 0);
-
-    const insertedChunks = chunkDocs.length
-        ? await DocumentChunk.insertMany(chunkDocs, { ordered: false })
-        : [];
-
-    // Verify actual persistence from DB (not just in-memory insert result).
-    const persistedChunkCount = await DocumentChunk.countDocuments({ document: document._id });
-
-    const embeddingDocs = insertedChunks.map((chunkDoc) => ({
-        documentId: document._id,
-        chunkId: chunkDoc._id,
-        text: chunkDoc.text,
-        embedding: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding : [],
-        embeddingDimension: Array.isArray(chunkDoc.embedding) ? chunkDoc.embedding.length : 0,
-        embeddingModel: chunkDoc.embeddingModel || 'paraphrase-MiniLM-L3-v2',
-        metadata: {
-          institution_id: document.institution?.toString() ?? '',
-          course_id: document.course?.toString() ?? '',
-          fileName: document.originalName,
-          fileType: document.fileType,
-          uploadedBy: document.uploadedBy?.toString() ?? '',
-        },
-    }));
-
-    if (embeddingDocs.length) {
-        await EmbeddingStore.insertMany(embeddingDocs, { ordered: false });
-    }
-
-    const persistedEmbeddingCount = await EmbeddingStore.countDocuments({ documentId: document._id });
-
-    if (chunks.length > 0 && persistedChunkCount === 0) {
-        throw new Error("Chunk persistence verification failed: no DocumentChunk rows were saved.");
-    }
-
-    return {
-        chunkCount: persistedChunkCount,
-        embeddingCount: persistedEmbeddingCount,
-        sourceName: usedName || '',
-    };
+    return persistFromChunksPayload(chunks, chunksData?.embedding_model || 'paraphrase-MiniLM-L3-v2', usedName || '');
 };
 
 
@@ -748,10 +850,10 @@ export const uploadNotes = async (req, res) => {
                 courseId
             );
 
-            const persisted = await persistDocumentVectorsToMongo(document, [
-                aiUpload?.filename,
-                file.originalname,
-            ]);
+            const persisted = await persistDocumentVectorsToMongo(document, {
+                seedChunks: Array.isArray(aiUpload?.chunks) ? aiUpload.chunks : [],
+                seedEmbeddingModel: aiUpload?.embedding_model || 'paraphrase-MiniLM-L3-v2',
+            });
 
             await Document.findByIdAndUpdate(document._id, {
                 isProcessed: true,
@@ -997,7 +1099,7 @@ export const markDocumentProcessed = async (req, res) => {
       );
     }
 
-        if ((requestedChunks ?? 0) > 0 && persisted.chunkCount === 0) {
+        if ((requestedCount ?? 0) > 0 && persisted.chunkCount === 0) {
             throw new Error("Document marked processed but no chunks were persisted in DocumentChunk.");
         }
 

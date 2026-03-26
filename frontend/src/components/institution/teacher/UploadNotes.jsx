@@ -41,6 +41,13 @@ export default function UploadNotes() {
 
     const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
     const rgb = hexToRgb(brandColor);
+    const isDocReady = (doc) => Boolean(doc?.isProcessed) || Number(doc?.chunksCount || 0) > 0;
+    const isDocFailed = (doc) => !isDocReady(doc) && Boolean(doc?.processingError);
+    const isDocPending = (doc) => !isDocReady(doc) && !isDocFailed(doc);
+
+    const processedCount = documents.filter((doc) => isDocReady(doc)).length;
+    const failedCount = documents.filter((doc) => isDocFailed(doc)).length;
+    const pendingCount = documents.filter((doc) => isDocPending(doc)).length;
 
     // Fetch courses
     useEffect(() => {
@@ -55,6 +62,17 @@ export default function UploadNotes() {
             fetchDocuments();
         }
     }, [selectedCourse]);
+
+    // Auto-refresh while any document is pending so UI converges to final status.
+    useEffect(() => {
+        if (!selectedCourse || pendingCount === 0) return;
+
+        const timer = setInterval(() => {
+            fetchDocuments();
+        }, 4000);
+
+        return () => clearInterval(timer);
+    }, [selectedCourse, pendingCount]);
 
     const fetchCourses = async () => {
         try {
@@ -75,7 +93,10 @@ export default function UploadNotes() {
     const fetchDocuments = async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/teacher/notes/${selectedCourse}`);
+            const response = await api.get(`/teacher/notes/${selectedCourse}`, {
+                params: { _ts: Date.now() },
+                headers: { 'Cache-Control': 'no-cache' },
+            });
             setDocuments(response.data.documents || []);
         } catch (error) {
             console.error("Fetch documents error:", error);
@@ -168,38 +189,39 @@ export default function UploadNotes() {
     formData.append("fileName", fileName.trim());
     formData.append("courseId", selectedCourse);
 
-    const step1Res = await api.post("/teacher/notes/upload", formData, {
+        const step1Res = await api.post("/teacher/notes/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
     const doc = step1Res.data.document;
     const documentId = doc?._id;
     const institutionId = doc?.institution;
-    const statusSyncSupported = step1Res.data.statusSyncSupported === true;
+        const statusSyncSupported =
+            step1Res.data.statusSyncSupported === true ||
+            step1Res.data.statusSynced === true;
+        const backendAlreadyIndexed =
+            step1Res.data.aiIndexed === true && step1Res.data.statusSynced === true;
 
-    // Step 2: AI indexing on HF Space — returns chunks + embeddings directly
-    setUploadStep('indexing');
-    let chunksAdded = 0;
-    let aiChunks = [];
-    let aiEmbeddingModel = 'paraphrase-MiniLM-L3-v2';
-    let aiError = null;
+        // Step 2: Optional direct AI indexing (only if backend did not already complete indexing)
+        let chunksAdded = Number(step1Res.data?.chunksPersisted || 0);
+        let aiChunks = [];
+        let aiEmbeddingModel = 'paraphrase-MiniLM-L3-v2';
+        let aiError = null;
 
-    try {
-      const aiRes = await aiService.indexDocument(selectedFile, institutionId, selectedCourse);
-      chunksAdded = Number(aiRes?.chunks_added || 0);
-      // ✅ Grab chunks directly from upload response — no second GET needed
-      aiChunks = Array.isArray(aiRes?.chunks) ? aiRes.chunks : [];
-      aiEmbeddingModel = aiRes?.embedding_model || 'paraphrase-MiniLM-L3-v2';
-
-       console.log('AI Response:', aiRes);
-  console.log('chunks_added:', chunksAdded, '| aiChunks.length:', aiChunks.length);
-
-    } catch (err) {
-      aiError = err.message;
-    }
+        if (!backendAlreadyIndexed) {
+            setUploadStep('indexing');
+            try {
+                const aiRes = await aiService.indexDocument(selectedFile, institutionId, selectedCourse);
+                chunksAdded = Number(aiRes?.chunks_added || 0);
+                aiChunks = Array.isArray(aiRes?.chunks) ? aiRes.chunks : [];
+                aiEmbeddingModel = aiRes?.embedding_model || 'paraphrase-MiniLM-L3-v2';
+            } catch (err) {
+                aiError = err.message;
+            }
+        }
 
     // Step 3: Sync final status + persist chunks to MongoDB
-    if (statusSyncSupported && documentId) {
+        if (statusSyncSupported && documentId && !backendAlreadyIndexed) {
       setUploadStep('finalizing');
       try {
         if (aiError) {
@@ -237,7 +259,6 @@ export default function UploadNotes() {
       );
       setSelectedFile(null);
       setFileName("");
-      fetchDocuments();
     }
   } catch (error) {
     console.error("Upload error:", error);
@@ -247,6 +268,9 @@ export default function UploadNotes() {
   } finally {
     setUploading(false);
     setUploadStep('');
+        if (selectedCourse) {
+            fetchDocuments();
+        }
   }
 };
 
@@ -484,6 +508,21 @@ export default function UploadNotes() {
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-6 md:p-8"
                     >
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Ready</p>
+                                <p className="text-2xl font-black text-emerald-800 mt-1">{processedCount}</p>
+                            </div>
+                            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Pending</p>
+                                <p className="text-2xl font-black text-amber-800 mt-1">{pendingCount}</p>
+                            </div>
+                            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">Failed</p>
+                                <p className="text-2xl font-black text-red-800 mt-1">{failedCount}</p>
+                            </div>
+                        </div>
+
                         <div className="flex items-center gap-3 mb-6">
                             <h2 className="text-xl font-black text-gray-900">
                                 Uploaded Documents
@@ -531,12 +570,12 @@ export default function UploadNotes() {
                                                     <span className="hidden sm:inline">•</span>
                                                     <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
                                                     <span className="hidden sm:inline">•</span>
-                                                    {doc.isProcessed ? (
+                                                    {isDocReady(doc) ? (
                                                         <span className="flex items-center gap-1" style={{ color: brandColor }}>
                                                             <FiCheckCircle className="w-3.5 h-3.5" />
                                                             Ready
                                                         </span>
-                                                    ) : doc.processingError ? (
+                                                    ) : isDocFailed(doc) ? (
                                                         <span className="flex items-center gap-1 text-red-500" title={doc.processingError}>
                                                             <FiAlertCircle className="w-3.5 h-3.5" />
                                                             Processing Failed
