@@ -22,9 +22,9 @@ import studentRagRoutes from './routes/studentRagRoutes.js';
 
 dotenv.config();
 
-// Keep backend terminal output error-focused by default.
-// Set LOG_LEVEL=debug to re-enable standard console logs.
-if (process.env.LOG_LEVEL !== "debug" && !global.__cortexaLogsMinimized) {
+// Keep normal logs enabled by default.
+// Set LOG_LEVEL=silent only when you explicitly want to mute logs.
+if (process.env.LOG_LEVEL === "silent" && !global.__cortexaLogsMinimized) {
     global.__cortexaLogsMinimized = true;
     console.log = () => {};
     console.info = () => {};

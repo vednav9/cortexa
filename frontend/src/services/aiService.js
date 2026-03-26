@@ -83,12 +83,25 @@ class AIService {
       }
       const formData = new FormData();
       formData.append('file', validFile, validFile.name);
-      if (institutionId) formData.append('institution_id', String(institutionId));
-      if (courseId) formData.append('course_id', String(courseId));
-      if (uploadedBy) formData.append('uploaded_by', String(uploadedBy));
+      
+      if (institutionId) {
+        formData.append('institution_id', String(institutionId));
+      }
+      if (courseId) {
+        formData.append('course_id', String(courseId));
+      }
+      if (uploadedBy) {
+        formData.append('uploaded_by', String(uploadedBy));
+      }
+
+      console.log('Sending upload request to backend /api/ai/upload...');
+
+      // Send through backend API to handle R2 + MongoDB + AI processing
       const response = await aiAxios.post('/ai/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 300000,
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        timeout: 300000, // 5 minutes for file uploads
       });
       return response.data;
     } catch (error) {
