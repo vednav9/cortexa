@@ -24,14 +24,19 @@ const router = express.Router();
  *   Web source:      { type:"web", document_name (title), url, chunk_text (snippet) }
  */
 router.post("/query", authenticate, async (req, res) => {
-    const { query, institutionId } = req.body;
+    const { query, institutionId, courseId, documentIds } = req.body;
 
     if (!query || typeof query !== "string" || query.trim().length === 0) {
         return res.status(400).json({ error: "query is required and must be a non-empty string" });
     }
 
     try {
-        const result = await queryRAG(query.trim(), institutionId || null);
+        const result = await queryRAG(
+            query.trim(),
+            institutionId || null,
+            courseId || null,
+            Array.isArray(documentIds) ? documentIds : []
+        );
 
         res.json({
             query,

@@ -6,6 +6,7 @@ const AI_DIRECT_URL = AI_URL;
 const aiAxios = axios.create({
   baseURL: API_BASE_URL,
   timeout: 180000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 });
 
@@ -15,7 +16,36 @@ const aiDirectAxios = axios.create({
   headers: { 'Content-Type': 'application/json' }
 });
 
+aiAxios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 class AIService {
+
+  async queryStudentRAG(query, institutionId = null, courseId = null, documentIds = []) {
+    try {
+      const response = await aiAxios.post('/student/rag/query', {
+        query,
+        institutionId,
+        courseId,
+        documentIds,
+      });
+      return response.data;
+    } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timeout - AI is taking longer than expected.');
+      }
+      throw new Error(
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        'RAG query failed'
+      );
+    }
+  }
 
   async queryRAG(query, institutionId = null) {
     try {

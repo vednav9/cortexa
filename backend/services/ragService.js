@@ -135,7 +135,7 @@ async function webSearch(query, maxResults = WEB_RESULTS_COUNT) {
  * directly against the stored chunk text.  Slower than cosine similarity but
  * requires NO AI server, so it always works as long as MongoDB is up.
  */
-async function keywordSearch(query, institutionId) {
+async function keywordSearch(query, institutionId, courseId = null, documentIds = []) {
     const keywords = query
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, " ")
@@ -148,6 +148,10 @@ async function keywordSearch(query, institutionId) {
     const pattern = keywords.slice(0, 6).join("|");
     const filter = { text: { $regex: pattern, $options: "i" } };
     if (institutionId) filter["metadata.institution_id"] = institutionId;
+    if (courseId) filter["metadata.course_id"] = courseId;
+    if (Array.isArray(documentIds) && documentIds.length > 0) {
+        filter.document = { $in: documentIds };
+    }
 
     try {
         const chunks = await DocumentChunk.find(filter)
@@ -211,9 +215,11 @@ function formatChunkContext(chunks) {
 /**
  * @param {string} query          - Student question
  * @param {string} institutionId  - Restrict chunks to this institution
+ * @param {string} courseId       - Restrict chunks to this course (optional)
+ * @param {string[]} documentIds  - Restrict chunks to selected documents (optional)
  * @returns {{ answer, sources, searchMethod, usedWebSearch }}
  */
-export async function queryRAG(query, institutionId) {
+export async function queryRAG(query, institutionId, courseId = null, documentIds = []) {
     // ── Step 1: Embed the query ──────────────────────────────────────────
     const queryEmbedding = await embedQuery(query);
 
@@ -224,9 +230,12 @@ export async function queryRAG(query, institutionId) {
     if (queryEmbedding) {
         try {
             // Fetch chunks for this institution (limit 200 to keep it fast)
-            const filter = institutionId
-                ? { "metadata.institution_id": institutionId }
-                : {};
+            const filter = {};
+            if (institutionId) filter["metadata.institution_id"] = institutionId;
+            if (courseId) filter["metadata.course_id"] = courseId;
+            if (Array.isArray(documentIds) && documentIds.length > 0) {
+                filter.document = { $in: documentIds };
+            }
 
             const allChunks = await DocumentChunk.find(filter)
                 .select("text embedding chunkIndex metadata document")
@@ -263,7 +272,7 @@ export async function queryRAG(query, institutionId) {
     // ── Step 2b: Keyword fallback — runs when embedding failed OR cosine returned nothing ──
     if (topChunks.length === 0) {
         console.log("🔑 Trying keyword-based search in teacher notes...");
-        topChunks = await keywordSearch(query, institutionId);
+        topChunks = await keywordSearch(query, institutionId, courseId, documentIds);
         if (topChunks.length > 0) {
             console.log(`✅ Keyword search found ${topChunks.length} chunks`);
             searchMethod = "keyword";
