@@ -1222,13 +1222,13 @@ export const markDocumentFailed = async (req, res) => {
 ========================= */
 export const generateMCQs = async (req, res) => {
     try {
-        const { courseId, topic, count, difficulty, sourceType, documentId } = req.body;
+        const { courseId, topic, count, difficulty, sourceType, documentId, documentIds } = req.body;
         const teacherId = req.user.id;
 
-        if (!courseId || !topic) {
+        if (!courseId) {
             return res.status(400).json({
                 success: false,
-                message: "Course and topic are required"
+                message: "Course is required"
             });
         }
 
@@ -1256,6 +1256,14 @@ export const generateMCQs = async (req, res) => {
         const normalizedSourceType = ["topic", "document"].includes(sourceType)
             ? sourceType
             : "topic";
+
+        if (normalizedSourceType === "topic" && !String(topic || "").trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Topic is required for topic mode"
+            });
+        }
+
         const normalizedDifficulty = ["easy", "medium", "hard"].includes((difficulty || "").toLowerCase())
             ? difficulty.toLowerCase()
             : "medium";
@@ -1267,20 +1275,59 @@ export const generateMCQs = async (req, res) => {
         let sourceMeta = topic;
 
         if (normalizedSourceType === "document") {
-            const docContext = await buildDocumentChunkContext({
-                documentId,
-                documentName: topic,
-                teacherId,
-                courseId,
-            });
-            contextText = docContext.contextText;
-            sourceMeta = docContext.document?.originalName || topic;
+            const normalizedDocIds = Array.isArray(documentIds)
+                ? Array.from(new Set(documentIds.map((id) => String(id)).filter(Boolean)))
+                : [];
+
+            const idsToUse = normalizedDocIds.length > 0
+                ? normalizedDocIds.slice(0, 8)
+                : (documentId ? [String(documentId)] : []);
+
+            if (idsToUse.length > 0) {
+                const docContexts = [];
+                for (const id of idsToUse) {
+                    try {
+                        const ctx = await buildDocumentChunkContext({
+                            documentId: id,
+                            documentName: null,
+                            teacherId,
+                            courseId,
+                        });
+                        if (ctx?.contextText) docContexts.push(ctx);
+                    } catch (docErr) {
+                        console.warn("Skipping selected document for MCQ context:", id, docErr?.message || docErr);
+                    }
+                }
+
+                if (docContexts.length > 0) {
+                    contextText = docContexts
+                        .map((ctx) => String(ctx.contextText || "").trim())
+                        .filter(Boolean)
+                        .join("\n\n");
+                    sourceMeta = docContexts
+                        .map((ctx) => ctx?.document?.originalName || ctx?.document?.fileName)
+                        .filter(Boolean)
+                        .join(", ");
+                }
+            }
+
+            if (!contextText) {
+                const docContext = await buildDocumentChunkContext({
+                    documentId,
+                    documentName: topic,
+                    teacherId,
+                    courseId,
+                });
+                contextText = docContext.contextText;
+                sourceMeta = docContext.document?.originalName || topic;
+            }
         } else {
             // Topic mode: build context from web first, no document/chunk lookup.
             contextText = await buildTopicWebContext(topic);
         }
 
-        const aiPrompt = `Topic: ${topic}\n\nUse the following reference context to create accurate MCQs:\n${contextText}`;
+        const promptTopic = String(topic || "").trim() || sourceMeta || "Selected course documents";
+        const aiPrompt = `Topic: ${promptTopic}\n\nUse the following reference context to create accurate MCQs:\n${contextText}`;
 
         let firstPass = null;
         try {

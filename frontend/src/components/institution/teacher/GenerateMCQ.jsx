@@ -39,6 +39,9 @@ export default function GenerateMCQ() {
     const [numQuestions, setNumQuestions] = useState(5);
     const [difficulty, setDifficulty] = useState("medium");
     const [selectedCourse, setSelectedCourse] = useState("");
+    const [courseDocuments, setCourseDocuments] = useState([]);
+    const [documentsLoading, setDocumentsLoading] = useState(false);
+    const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
 
     // Generated MCQs
     const [generatedMCQs, setGeneratedMCQs] = useState([]);
@@ -67,6 +70,35 @@ export default function GenerateMCQ() {
             fetchSavedMCQSets();
         }
     }, [user]);
+
+    useEffect(() => {
+        const fetchCourseDocuments = async () => {
+            if (!selectedCourse || user?.role !== 'teacher') {
+                setCourseDocuments([]);
+                setSelectedDocumentIds([]);
+                return;
+            }
+
+            try {
+                setDocumentsLoading(true);
+                const response = await api.get(`/teacher/notes/${selectedCourse}`, {
+                    params: { _ts: Date.now() },
+                    headers: { 'Cache-Control': 'no-cache' },
+                });
+                const docs = Array.isArray(response.data?.documents) ? response.data.documents : [];
+                setCourseDocuments(docs);
+                setSelectedDocumentIds([]);
+            } catch (error) {
+                console.error("Fetch course documents error:", error);
+                setCourseDocuments([]);
+                setSelectedDocumentIds([]);
+            } finally {
+                setDocumentsLoading(false);
+            }
+        };
+
+        fetchCourseDocuments();
+    }, [selectedCourse, user?.role]);
 
     const fetchCourses = async () => {
         try {
@@ -107,18 +139,27 @@ export default function GenerateMCQ() {
     };
 
     const handleGenerateMCQs = async () => {
-        if (!source.trim()) {
-            toast.error("Please enter source content");
+        if (sourceType === "topic" && !source.trim()) {
+            toast.error("Please enter topic details");
+            return;
+        }
+
+        if (sourceType === "document" && selectedDocumentIds.length === 0) {
+            toast.error("Please select at least one document");
             return;
         }
 
         try {
             setGenerating(true);
+            const normalizedTopic = source.trim();
             const response = await api.post("/teacher/mcq/generate", {
                 courseId: selectedCourse,
-                topic: source.trim(),
+                topic: normalizedTopic || "Generate MCQs from selected documents",
                 count: parseInt(numQuestions),
-                difficulty
+                difficulty,
+                sourceType,
+                documentId: selectedDocumentIds[0] || null,
+                documentIds: selectedDocumentIds,
             });
 
             setGeneratedMCQs(response.data.mcqs || []);
@@ -230,6 +271,21 @@ export default function GenerateMCQ() {
         setShowAssignModal(true);
     };
 
+    const toggleDocument = (docId) => {
+        const id = String(docId);
+        setSelectedDocumentIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+        );
+    };
+
+    const selectAllDocuments = () => {
+        setSelectedDocumentIds(courseDocuments.map((doc) => String(doc._id)));
+    };
+
+    const clearSelectedDocuments = () => {
+        setSelectedDocumentIds([]);
+    };
+
     return (
         <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: `rgba(${rgb},0.02)` }}>
             <div className="max-w-7xl mx-auto">
@@ -326,24 +382,90 @@ export default function GenerateMCQ() {
                                 </div>
                             </div>
 
-                            {/* Source Input */}
-                            <div className="mb-5">
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                                    {sourceType === "document" ? "Document Details" : "Topic Details"}
-                                </label>
-                                <textarea
-                                    value={source}
-                                    onChange={(e) => setSource(e.target.value)}
-                                    placeholder={
-                                        sourceType === "document"
-                                            ? "Enter the document name from uploaded notes..."
-                                            : "Enter a topic (e.g., 'Data Structures')..."
-                                    }
-                                    rows={4}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all resize-none"
-                                    style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
-                                />
-                            </div>
+                            {/* Source Input (Topic mode only) */}
+                            {sourceType === "topic" && (
+                                <div className="mb-5">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                        Topic Details
+                                    </label>
+                                    <textarea
+                                        value={source}
+                                        onChange={(e) => setSource(e.target.value)}
+                                        placeholder="Enter a topic (e.g., 'Data Structures')..."
+                                        rows={4}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all resize-none"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                    />
+                                </div>
+                            )}
+
+                            {sourceType === "document" && (
+                                <div className="mb-5">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">
+                                            Available Documents
+                                        </label>
+                                        {courseDocuments.length > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={selectAllDocuments}
+                                                    className="text-[11px] font-semibold text-gray-500 hover:text-gray-800"
+                                                >
+                                                    Select all
+                                                </button>
+                                                <button
+                                                    onClick={clearSelectedDocuments}
+                                                    className="text-[11px] font-semibold text-gray-500 hover:text-gray-800"
+                                                >
+                                                    Clear
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {documentsLoading ? (
+                                        <div className="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-[12px] text-gray-500">
+                                            Loading course documents...
+                                        </div>
+                                    ) : courseDocuments.length === 0 ? (
+                                        <div className="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-[12px] text-gray-500">
+                                            No uploaded documents found for selected course.
+                                        </div>
+                                    ) : (
+                                        <div className="max-h-52 overflow-y-auto border border-gray-200 rounded-xl bg-gray-50 p-2 space-y-1.5">
+                                            {courseDocuments.map((doc) => {
+                                                const id = String(doc._id);
+                                                const checked = selectedDocumentIds.includes(id);
+                                                return (
+                                                    <label
+                                                        key={id}
+                                                        className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer border transition-all ${checked ? "bg-white border-emerald-200" : "border-transparent hover:bg-white"}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={() => toggleDocument(id)}
+                                                            className="mt-0.5"
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-[12px] font-semibold text-gray-800 truncate">
+                                                                {doc.originalName || doc.fileName || "Document"}
+                                                            </p>
+                                                            <p className="text-[11px] text-gray-500 mt-0.5">
+                                                                {Number(doc.chunksCount || 0)} chunks
+                                                            </p>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <p className="mt-2 text-[11px] text-gray-500 font-medium">
+                                        {selectedDocumentIds.length} document(s) selected
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Settings */}
                             <div className="grid grid-cols-2 gap-4 mb-8">
