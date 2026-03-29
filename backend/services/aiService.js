@@ -5,7 +5,16 @@ const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
 
 // Increased timeouts for AI operations
 const DEFAULT_TIMEOUT = 180000; // 3 minutes
-const LONG_TIMEOUT = 300000; // 5 minutes
+const LONG_TIMEOUT = 600000; // 10 minutes — matches getMcqTimeoutProfile primary limit
+const UPLOAD_TIMEOUT = 300000; // 5 minutes for document indexing uploads
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Helper to inject the Railway MongoDB URI securely into HF requests
+const getHeaders = (additionalHeaders = {}) => ({
+  'x-mongo-uri': process.env.MONGO_URI || process.env.MONGODB_URI,
+  ...additionalHeaders
+});
 
 class AIService {
   // RAG Query
@@ -16,6 +25,7 @@ class AIService {
         top_k: 5,
         institution_id: institutionId
       }, {
+        headers: getHeaders(),
         timeout: DEFAULT_TIMEOUT // 3 minutes timeout
       });
       return response.data;
@@ -31,6 +41,7 @@ class AIService {
         query,
         use_web_fallback: useWebFallback
       }, {
+        headers: getHeaders(),
         timeout: DEFAULT_TIMEOUT // 3 minutes timeout
       });
       return response.data;
@@ -48,11 +59,27 @@ class AIService {
         num_questions: numQuestions,
         difficulty: difficulty
       }, {
+        headers: getHeaders(),
         timeout: LONG_TIMEOUT // 5 minutes - MCQ generation can take longer
       });
       return response.data;
     } catch (error) {
       throw new Error(`MCQ generation failed: ${error.message}`);
+    }
+  }
+
+  // Embed text/query for semantic retrieval
+  async embedText(text) {
+    try {
+      const response = await axios.post(`${AI_API_URL}/embed`, {
+        text: String(text || "")
+      }, {
+        headers: getHeaders(),
+        timeout: 30000
+      });
+      return Array.isArray(response?.data?.embedding) ? response.data.embedding : null;
+    } catch (error) {
+      return null;
     }
   }
 
@@ -63,6 +90,7 @@ class AIService {
         mcqs,
         user_answers: userAnswers
       }, {
+        headers: getHeaders(),
         timeout: 30000 // 30 seconds for scoring
       });
       return response.data;
@@ -71,23 +99,20 @@ class AIService {
     }
   }
 
-  // Upload Document
-  async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
-    try {
-      const formData = new FormData();
-      // Append buffer as blob with proper options
-      formData.append('file', fileBuffer, {
-        filename: fileName,
-        contentType: 'application/octet-stream'
-      });
-      if (institutionId) formData.append('institution_id', institutionId);
-      if (courseId) formData.append('course_id', courseId);
+// Upload Document
+async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null) {
+  try {
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: fileName,
+      contentType: 'application/octet-stream'
+    });
+    if (institutionId) formData.append('institution_id', institutionId);
+    if (courseId) formData.append('course_id', courseId);
 
       const response = await axios.post(`${AI_API_URL}/upload`, formData, {
-        headers: {
-          ...formData.getHeaders() // Get proper headers from form-data
-        },
-        timeout: LONG_TIMEOUT, // 5 minutes for file upload
+        headers: getHeaders(formData.getHeaders()),
+        timeout: UPLOAD_TIMEOUT,
         maxContentLength: Infinity,
         maxBodyLength: Infinity
       });
@@ -102,14 +127,55 @@ class AIService {
   async getDocumentChunks(fileName) {
     try {
       const response = await axios.get(`${AI_API_URL}/documents/${encodeURIComponent(fileName)}/chunks`, {
-        timeout: LONG_TIMEOUT
+        timeout: LONG_TIMEOUT,
+        headers: getHeaders(),
       });
       return response.data;
     } catch (error) {
-      console.error('Get chunks error:', error.response?.data || error.message);
       throw new Error(`Failed to get document chunks: ${error.response?.data?.detail || error.message}`);
     }
   }
+
+  async getDocumentChunksOnce(fileName) {
+    return this.getDocumentChunks(fileName);
+  }
+
+  // Retry wrapper to avoid race between /upload completion and chunks availability.
+  async getDocumentChunksWithRetry(fileName, retries = 5, delayMs = 1200) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const data = await this.getDocumentChunks(fileName);
+        const chunks = Array.isArray(data?.chunks) ? data.chunks : [];
+        if (chunks.length > 0) {
+          return data;
+        }
+        lastError = new Error(`No chunks returned for '${fileName}' on attempt ${attempt}`);
+      } catch (error) {
+        lastError = error;
+      }
+
+      if (attempt < retries) {
+        await sleep(delayMs * attempt);
+      }
+    }
+
+    throw lastError || new Error(`Failed to get document chunks for '${fileName}'`);
+  }
+
+  // Delete all chunks for a document from AI JSON store.
+  // async deleteDocumentChunks(fileName) {
+  //   try {
+  //     const response = await axios.delete(`${AI_API_URL}/documents/${encodeURIComponent(fileName)}`, {
+  //       timeout: LONG_TIMEOUT,
+  //     });
+  //     return response.data;
+  //   } catch (error) {
+  //     console.error('Delete AI chunks error:', error.response?.data || error.message);
+  //     throw new Error(`Failed to delete AI chunks: ${error.response?.data?.detail || error.message}`);
+  //   }
+  // }
 
   // Health Check
   async checkHealth() {
@@ -134,7 +200,7 @@ class AIService {
       const formData = new FormData();
       formData.append('audio_file', fileBuffer, {
         filename: fileName,
-        contentType: 'audio/wav' // or detect from file
+        contentType: 'audio/wav'
       });
       
       // Add metadata
@@ -144,10 +210,8 @@ class AIService {
       if (metadata.course_id) formData.append('course_id', metadata.course_id);
 
       const response = await axios.post(`${AI_API_URL}/speech/transcribe-and-upload`, formData, {
-        headers: {
-          ...formData.getHeaders()
-        },
-        timeout: LONG_TIMEOUT, // 5 minutes for audio processing
+        headers: getHeaders(formData.getHeaders()),
+        timeout: LONG_TIMEOUT, 
         maxContentLength: Infinity,
         maxBodyLength: Infinity
       });
@@ -173,10 +237,8 @@ class AIService {
       if (metadata.lecture_title) formData.append('lecture_title', metadata.lecture_title);
 
       const response = await axios.post(`${AI_API_URL}/speech/upload-audio`, formData, {
-        headers: {
-          ...formData.getHeaders()
-        },
-        timeout: 60000, // 1 minute for upload
+        headers: getHeaders(formData.getHeaders()),
+        timeout: 60000,
         maxContentLength: Infinity,
         maxBodyLength: Infinity
       });
@@ -197,6 +259,7 @@ class AIService {
         format_text: options.format_text !== false,
         export_format: options.export_format || 'both'
       }, {
+        headers: getHeaders(),
         timeout: LONG_TIMEOUT
       });
       return response.data;
@@ -210,7 +273,7 @@ class AIService {
    */
   async listTranscripts() {
     try {
-      const response = await axios.get(`${AI_API_URL}/speech/transcripts`);
+      const response = await axios.get(`${AI_API_URL}/speech/transcripts`, { headers: getHeaders() });
       return response.data;
     } catch (error) {
       throw new Error('Failed to fetch transcripts');
@@ -222,7 +285,7 @@ class AIService {
    */
   async listAudioFiles() {
     try {
-      const response = await axios.get(`${AI_API_URL}/speech/audio-files`);
+      const response = await axios.get(`${AI_API_URL}/speech/audio-files`, { headers: getHeaders() });
       return response.data;
     } catch (error) {
       throw new Error('Failed to fetch audio files');
@@ -241,7 +304,7 @@ class AIService {
    */
   async deleteAudio(filename) {
     try {
-      const response = await axios.delete(`${AI_API_URL}/speech/audio/${filename}`);
+      const response = await axios.delete(`${AI_API_URL}/speech/audio/${filename}`, { headers: getHeaders() });
       return response.data;
     } catch (error) {
       throw new Error('Failed to delete audio');
@@ -253,7 +316,7 @@ class AIService {
    */
   async deleteTranscript(filename) {
     try {
-      const response = await axios.delete(`${AI_API_URL}/speech/transcript/${filename}`);
+      const response = await axios.delete(`${AI_API_URL}/speech/transcript/${filename}`, { headers: getHeaders() });
       return response.data;
     } catch (error) {
       throw new Error('Failed to delete transcript');

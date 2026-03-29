@@ -1,60 +1,72 @@
 import axios from 'axios';
 import { API_BASE_URL, AI_URL } from '../config/api';
 
-const AI_DIRECT_URL = AI_URL; // Direct AI connection
+const AI_DIRECT_URL = AI_URL;
 
-// Create axios instance for backend routes
 const aiAxios = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 180000, // 3 minutes timeout for AI operations (increased from 2 min)
-  headers: {
-    'Content-Type': 'application/json',
-  }
+  timeout: 180000,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' }
 });
 
-// Create axios instance for direct AI server connection (RAG chatbot)
 const aiDirectAxios = axios.create({
   baseURL: AI_DIRECT_URL,
   timeout: 180000,
-  headers: {
-    'Content-Type': 'application/json',
+  headers: { 'Content-Type': 'application/json' }
+});
+
+aiAxios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
+  return config;
 });
 
 class AIService {
-  // RAG Query - Direct to AI server (no backend)
-  async queryRAG(query, institutionId = null) {
+
+  async queryStudentRAG(query, institutionId = null, courseId = null, documentIds = []) {
     try {
-      const response = await aiDirectAxios.post('/query', {
+      const response = await aiAxios.post('/student/rag/query', {
         query,
-        institution_id: institutionId
+        institutionId,
+        courseId,
+        documentIds,
       });
       return response.data;
     } catch (error) {
       if (error.code === 'ECONNABORTED') {
-        throw new Error('Request timeout - AI is taking longer than expected. Please try a simpler query or restart the AI server.');
+        throw new Error('Request timeout - AI is taking longer than expected.');
       }
+      throw new Error(
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        'RAG query failed'
+      );
+    }
+  }
+
+  async queryRAG(query, institutionId = null) {
+    try {
+      const response = await aiDirectAxios.post('/query', { query, institution_id: institutionId });
+      return response.data;
+    } catch (error) {
+      if (error.code === 'ECONNABORTED') throw new Error('Request timeout - AI is taking longer than expected.');
       throw new Error(error.response?.data?.error || 'Query failed');
     }
   }
 
-  // Hybrid Assistant - Direct to AI server (no backend, no refresh)
   async queryAssistant(query, useWebFallback = true) {
     try {
-      const response = await aiDirectAxios.post('/assistant', {
-        query,
-        use_web_fallback: useWebFallback
-      });
+      const response = await aiDirectAxios.post('/assistant', { query, use_web_fallback: useWebFallback });
       return response.data;
     } catch (error) {
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Request timeout - AI is taking longer than expected. Please try a simpler query or restart the AI server.');
-      }
+      if (error.code === 'ECONNABORTED') throw new Error('Request timeout - AI is taking longer than expected.');
       throw new Error(error.response?.data?.error || 'Assistant query failed');
     }
   }
 
-  // Generate MCQs - Through backend (for teacher features)
   async generateMCQs(sourceType, source, numQuestions = 5, difficulty = 'medium') {
     try {
       const response = await aiAxios.post('/ai/mcq/generate', {
@@ -65,79 +77,40 @@ class AIService {
       });
       return response.data;
     } catch (error) {
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Request timeout - MCQ generation taking too long. Try fewer questions.');
-      }
+      if (error.code === 'ECONNABORTED') throw new Error('Request timeout - MCQ generation taking too long.');
       throw new Error(error.response?.data?.error || 'MCQ generation failed');
     }
   }
 
-  // Score MCQs - Direct to AI server
   async scoreMCQs(mcqs, userAnswers) {
     try {
-      const response = await aiDirectAxios.post('/mcq/score', {
-        mcqs,
-        user_answers: userAnswers
-      });
+      const response = await aiDirectAxios.post('/mcq/score', { mcqs, user_answers: userAnswers });
       return response.data;
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Scoring failed');
     }
   }
 
-  // Upload Document - Direct to AI server (for RAG chatbot)
   async uploadDocument(file, institutionId = null, courseId = null, uploadedBy = null) {
     try {
-      // Validate file parameter
-      if (!file) {
-        throw new Error('No file provided');
-      }
-
-      console.log('uploadDocument called with:', {
-        file: file,
-        type: typeof file,
-        constructor: file?.constructor?.name,
-        isFile: file instanceof File,
-        isBlob: file instanceof Blob,
-        hasName: !!file?.name,
-        hasSize: !!file?.size,
-        hasType: !!file?.type
-      });
-
-      // If file-like object but not instanceof File/Blob, try to reconstruct it
+      if (!file) throw new Error('No file provided');
       let validFile = file;
-      
       if (!(file instanceof File) && !(file instanceof Blob)) {
-        console.warn('File object lost prototype, attempting to reconstruct...');
-        
-        // Check if it has file-like properties
         if (file.name && file.size !== undefined && file.type !== undefined) {
           try {
-            // Try to read as blob and create new File
             if (file instanceof Object && file.arrayBuffer) {
               const buffer = await file.arrayBuffer();
               validFile = new File([buffer], file.name, { type: file.type });
-              console.log('✓ Successfully reconstructed File object');
             } else {
-              throw new Error('Cannot reconstruct File object - missing arrayBuffer method');
+              throw new Error('Cannot reconstruct File object');
             }
-          } catch (reconstructError) {
-            console.error('Failed to reconstruct file:', reconstructError);
-            throw new Error('Document upload failed: Invalid file object. Please refresh the page and try again.');
+          } catch {
+            throw new Error('Document upload failed: Invalid file object. Please refresh and try again.');
           }
         } else {
           throw new Error('Document upload failed: Invalid file object. Please select the file again.');
         }
       }
-
-      console.log('Final file validation:', {
-        name: validFile.name,
-        type: validFile.type,
-        size: validFile.size,
-        isFile: validFile instanceof File,
-        isBlob: validFile instanceof Blob
-      });
-
       const formData = new FormData();
       formData.append('file', validFile, validFile.name);
       
@@ -154,28 +127,46 @@ class AIService {
       console.log('Sending upload request to backend /api/ai/upload...');
 
       // Send through backend API to handle R2 + MongoDB + AI processing
-      const response = await apiAxios.post('/ai/upload', formData, {
+      const response = await aiAxios.post('/ai/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
         timeout: 300000, // 5 minutes for file uploads
       });
-
-      console.log('Upload successful:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Upload error:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Upload timeout - File might be too large or processing is taking too long.');
-      }
+      if (error.code === 'ECONNABORTED') throw new Error('Upload timeout - File might be too large.');
       throw new Error(error.response?.data?.detail || error.response?.data?.error || error.message || 'Upload failed');
     }
   }
 
-  // Check AI Health - Direct to AI server
+  async indexDocument(file, institutionId = null, courseId = null) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      if (institutionId) formData.append('institution_id', String(institutionId));
+      if (courseId) formData.append('course_id', String(courseId));
+      const response = await aiDirectAxios.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 300000,
+      });
+      return response.data;
+    } catch (error) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Document processing timed out. The file was saved but may not be searchable yet.');
+      }
+      throw new Error(
+        error.response?.data?.detail ||
+        error.response?.data?.error ||
+        error.message ||
+        'Document processing failed'
+      );
+    }
+  }
+
   async checkHealth() {
     try {
-      const response = await aiDirectAxios.get('/health', { timeout: 5000 }); // Short timeout for health check
+      const response = await aiDirectAxios.get('/health', { timeout: 5000 });
       return response.data;
     } catch (error) {
       return { status: 'unavailable', error: error.message };

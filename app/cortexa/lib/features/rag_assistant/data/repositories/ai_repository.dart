@@ -1,7 +1,6 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/errors/exceptions.dart';
-import '../models/rag_query_model.dart';
 import '../models/rag_response_model.dart';
 import '../models/mcq_model.dart';
 import '../models/chat_message_model.dart';
@@ -13,98 +12,57 @@ class AiRepository {
 
   AiRepository(this._apiClient, this._storage);
 
-  /// Query RAG system with institution context
+  // ──────────────────────────────────────────────────────────────
+  //  RAG QUERY  (Node backend → MongoDB chunks → HF LLM / Web)
+  // ──────────────────────────────────────────────────────────────
+
+  /// Query the Node-backend RAG pipeline.
+  ///
+  /// Flow:
+  ///  1. Node embeds query  via HF Space /embed  (sentence-transformer)
+  ///  2. Cosine similarity  against MongoDB DocumentChunk collection
+  ///  3a. Good hits  → HF /generate with chunk context
+  ///  3b. No hits    → DuckDuckGo web search, then HF /generate
+  ///
+  /// Endpoint: POST /api/student/rag/query  (auth required)
   Future<RagResponse> queryRag({
     required String query,
     String? institutionId,
     int topK = 5,
   }) async {
     try {
-      print('🤖 Querying RAG: "$query"');
-      
-      final response = await _apiClient.aiPost(
-        '/query',
-        body: RagQueryRequest(
-          query: query,
-          topK: topK,
-          institutionId: institutionId,
-        ).toJson(),
+      print('🤖 Querying RAG pipeline: "$query"');
+
+      final response = await _apiClient.post(
+        '/student/rag/query',
+        body: {
+          'query': query,
+          if (institutionId != null) 'institutionId': institutionId,
+        },
+        requiresAuth: true,
       );
 
       final ragResponse = RagResponse.fromJson(response);
-      print('✅ RAG response: ${ragResponse.answer.substring(0, 50)}...');
-      
-      // Cache chat message
-      await _saveChatMessage(ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        message: query,
-        isUser: true,
-        timestamp: DateTime.now(),
-      ));
-      
-      await _saveChatMessage(ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        message: ragResponse.answer,
-        isUser: false,
-        timestamp: DateTime.now(),
-        sources: ragResponse.sources.map((s) => s.documentName).toList(),
-        context: ragResponse.context,
-        isWebFallback: ragResponse.usedWebSearch,
-      ));
+      print('✅ RAG [${ragResponse.searchMethod}]: ${ragResponse.answer.length} chars');
 
+      await _cacheMessages(query, ragResponse);
       return ragResponse;
     } on ApiException catch (e) {
       throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
     } catch (e) {
       throw ServerException(
-        message: 'RAG query failed: ${e.toString()}',
+        message: 'Could not get an answer. Please check your connection and try again.',
         statusCode: 500,
       );
     }
   }
 
-  /// Query hybrid assistant (RAG + Web Search fallback)
+  /// Backward-compat alias — delegates to queryRag.
   Future<RagResponse> queryHybridAssistant({
     required String query,
     bool useWebFallback = true,
-  }) async {
-    try {
-      print('🌐 Querying Hybrid Assistant: "$query"');
-      
-      final response = await _apiClient.aiPost(
-        '/assistant',
-        body: {
-          'query': query,
-          'use_web_fallback': useWebFallback,
-        },
-      );
-
-      final ragResponse = RagResponse.fromJson(response);
-      print('✅ Hybrid response (web: ${ragResponse.usedWebSearch})');
-      
-      // Cache chat message
-      await _saveChatMessage(ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        message: query,
-        isUser: true,
-        timestamp: DateTime.now(),
-      ));
-      
-      await _saveChatMessage(ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        message: ragResponse.answer,
-        isUser: false,
-        timestamp: DateTime.now(),
-        sources: ragResponse.sources.map((s) => s.documentName).toList(),
-        isWebFallback: ragResponse.usedWebSearch,
-      ));
-
-      return ragResponse;
-    } catch (e) {
-      print('❌ Hybrid assistant error: $e');
-      rethrow;
-    }
-  }
+  }) =>
+      queryRag(query: query);
 
   /// Generate MCQs from text, document, or topic
   Future<List<McqQuestion>> generateMcqs({
@@ -115,7 +73,7 @@ class AiRepository {
   }) async {
     try {
       print('📝 Generating $numQuestions MCQs ($difficulty) from $sourceType');
-      
+
       final response = await _apiClient.post(
         '/ai/mcq/generate',
         body: McqGenerateRequest(
@@ -164,34 +122,9 @@ class AiRepository {
     }
   }
 
-  /// Upload document to RAG system
-  Future<Map<String, dynamic>> uploadDocumentToRag({
-    required String filePath,
-    required String fileName,
-    String? institutionId,
-    String? courseId,
-  }) async {
-    try {
-      print('📤 Uploading document: $fileName');
-      
-      final response = await _apiClient.uploadFile(
-        '/ai/upload',
-        filePath: filePath,
-        fieldName: 'file',
-        additionalFields: {
-          if (institutionId != null) 'institution_id': institutionId,
-          if (courseId != null) 'course_id': courseId,
-        },
-        requiresAuth: true,
-      );
-
-      print('✅ Document uploaded: ${response['chunks_added']} chunks added');
-      return response;
-    } catch (e) {
-      print('❌ Document upload error: $e');
-      rethrow;
-    }
-  }
+  // ──────────────────────────────────────────────────────────────
+  //  Chat history (Hive local cache)
+  // ──────────────────────────────────────────────────────────────
 
   /// Get chat history from Hive cache
   Future<List<ChatMessage>> getChatHistory() async {
@@ -209,6 +142,30 @@ class AiRepository {
   /// Clear chat history
   Future<void> clearChatHistory() async {
     await _storage.clearRagChatHistory();
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  //  Private helpers
+  // ──────────────────────────────────────────────────────────────
+
+  Future<void> _cacheMessages(String query, RagResponse response) async {
+    await _saveChatMessage(ChatMessage(
+      id: '${DateTime.now().millisecondsSinceEpoch}_q',
+      message: query,
+      isUser: true,
+      timestamp: DateTime.now(),
+    ));
+
+    await _saveChatMessage(ChatMessage(
+      id: '${DateTime.now().millisecondsSinceEpoch}_a',
+      message: response.answer,
+      isUser: false,
+      timestamp: DateTime.now(),
+      sources: response.sources.map((s) => s.documentName).toList(),
+      richSources: response.sources,
+      isWebFallback: response.usedWebSearch,
+      searchMethod: response.searchMethod,
+    ));
   }
 
   /// Save chat message to Hive

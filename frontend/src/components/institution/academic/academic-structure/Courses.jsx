@@ -6,7 +6,6 @@ import {
   FiEdit2,
   FiTrash2,
   FiSearch,
-  FiFilter,
   FiX,
   FiUsers,
   FiClock,
@@ -15,13 +14,14 @@ import {
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../../../context/authcontext";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { academicAPI } from "../../../../services/api";
 
 export default function Courses() {
   const { user } = useAuth();
   const { institution } = useOutletContext();
+  const navigate = useNavigate();
 
   const [courses, setCourses] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -49,7 +49,7 @@ export default function Courses() {
   });
 
   const brandColor = institution?.branding?.primaryColor || "#3b82f6";
-  const hasAccess = user?.role === "admin" || user?.role === "teacher";
+  const hasAccess = user?.role === "admin";
 
   useEffect(() => {
     if (institution?._id) {
@@ -195,6 +195,11 @@ export default function Courses() {
 
     return matchesSearch && matchesDepartment && matchesSemester;
   });
+
+  const handleCourseCardClick = (course) => {
+    if (!institution?.slug || !course?.code) return;
+    navigate(`/${institution.slug}/courses/${course.code}`);
+  };
 
   if (loading) {
     return (
@@ -434,6 +439,7 @@ export default function Courses() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
                 className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all group"
+                onClick={() => handleCourseCardClick(course)}
               >
                 {/* Course Header */}
                 <div
@@ -454,13 +460,19 @@ export default function Courses() {
                       {hasAccess && (
                         <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
-                            onClick={() => handleEdit(course)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(course);
+                            }}
                             className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
                           >
                             <FiEdit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(course._id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(course._id);
+                            }}
                             className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
                           >
                             <FiTrash2 className="w-4 h-4" />
@@ -482,6 +494,10 @@ export default function Courses() {
                           <span>{course.maxCapacity} Max</span>
                         </div>
                       )}
+                    </div>
+
+                    <div className="mt-4 inline-flex items-center gap-2 text-xs font-semibold bg-white/20 rounded-lg px-3 py-1.5">
+                      <span>Open course page</span>
                     </div>
                   </div>
                 </div>
@@ -541,6 +557,7 @@ export default function Courses() {
                       </div>
                     )}
                   </div>
+
                 </div>
               </motion.div>
             ))}

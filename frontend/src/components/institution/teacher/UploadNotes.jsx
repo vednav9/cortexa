@@ -4,6 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { useAuth } from "../../../context/authcontext";
 import toast from "react-hot-toast";
 import api from "../../../services/api";
+import aiService from "../../../services/aiService";
 import {
     FiUpload,
     FiFile,
@@ -30,6 +31,7 @@ export default function UploadNotes() {
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadStep, setUploadStep] = useState(''); // 'uploading' | 'indexing' | 'finalizing'
     const [isDragging, setIsDragging] = useState(false);
 
     // Form state
@@ -39,6 +41,13 @@ export default function UploadNotes() {
 
     const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
     const rgb = hexToRgb(brandColor);
+    const isDocReady = (doc) => Boolean(doc?.isProcessed) || Number(doc?.chunksCount || 0) > 0;
+    const isDocFailed = (doc) => !isDocReady(doc) && Boolean(doc?.processingError);
+    const isDocPending = (doc) => !isDocReady(doc) && !isDocFailed(doc);
+
+    const processedCount = documents.filter((doc) => isDocReady(doc)).length;
+    const failedCount = documents.filter((doc) => isDocFailed(doc)).length;
+    const pendingCount = documents.filter((doc) => isDocPending(doc)).length;
 
     // Fetch courses
     useEffect(() => {
@@ -53,6 +62,17 @@ export default function UploadNotes() {
             fetchDocuments();
         }
     }, [selectedCourse]);
+
+    // Auto-refresh while any document is pending so UI converges to final status.
+    useEffect(() => {
+        if (!selectedCourse || pendingCount === 0) return;
+
+        const timer = setInterval(() => {
+            fetchDocuments();
+        }, 4000);
+
+        return () => clearInterval(timer);
+    }, [selectedCourse, pendingCount]);
 
     const fetchCourses = async () => {
         try {
@@ -73,7 +93,10 @@ export default function UploadNotes() {
     const fetchDocuments = async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/teacher/notes/${selectedCourse}`);
+            const response = await api.get(`/teacher/notes/${selectedCourse}`, {
+                params: { _ts: Date.now() },
+                headers: { 'Cache-Control': 'no-cache' },
+            });
             setDocuments(response.data.documents || []);
         } catch (error) {
             console.error("Fetch documents error:", error);
@@ -150,51 +173,106 @@ export default function UploadNotes() {
         }
     }, [fileName]);
 
-    // Upload document
-    const handleUpload = async () => {
-        if (!selectedFile) {
-            toast.error("Please select a file");
-            return;
+    // Upload document — resilient 3-step flow
+   const handleUpload = async () => {
+  if (!selectedFile) { toast.error("Please select a file"); return; }
+  if (!fileName.trim()) { toast.error("Please enter a file name"); return; }
+  if (!selectedCourse) { toast.error("Please select a course"); return; }
+
+  setUploading(true);
+  setUploadStep('uploading');
+
+  try {
+    // Step 1: Upload file to R2 + create Document record in MongoDB
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("fileName", fileName.trim());
+    formData.append("courseId", selectedCourse);
+
+        const step1Res = await api.post("/teacher/notes/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    const doc = step1Res.data.document;
+    const documentId = doc?._id;
+    const institutionId = doc?.institution;
+        const statusSyncSupported =
+            step1Res.data.statusSyncSupported === true ||
+            step1Res.data.statusSynced === true;
+        const backendAlreadyIndexed =
+            step1Res.data.aiIndexed === true && step1Res.data.statusSynced === true;
+
+        // Step 2: Optional direct AI indexing (only if backend did not already complete indexing)
+        let chunksAdded = Number(step1Res.data?.chunksPersisted || 0);
+        let aiChunks = [];
+        let aiEmbeddingModel = 'paraphrase-MiniLM-L3-v2';
+        let aiError = null;
+
+        if (!backendAlreadyIndexed) {
+            setUploadStep('indexing');
+            try {
+                const aiRes = await aiService.indexDocument(selectedFile, institutionId, selectedCourse);
+                chunksAdded = Number(aiRes?.chunks_added || 0);
+                aiChunks = Array.isArray(aiRes?.chunks) ? aiRes.chunks : [];
+                aiEmbeddingModel = aiRes?.embedding_model || 'paraphrase-MiniLM-L3-v2';
+            } catch (err) {
+                aiError = err.message;
+            }
         }
 
-        if (!fileName.trim()) {
-            toast.error("Please enter a file name");
-            return;
+    // Step 3: Sync final status + persist chunks to MongoDB
+        if (statusSyncSupported && documentId && !backendAlreadyIndexed) {
+      setUploadStep('finalizing');
+      try {
+        if (aiError) {
+          await api.patch(`/teacher/notes/${documentId}/mark-failed`, { error: aiError });
+        } else {
+          const syncRes = await api.patch(`/teacher/notes/${documentId}/mark-processed`, {
+            chunksCount: chunksAdded,
+            // ✅ Pass chunks directly so Node never calls HF GET endpoint
+            chunks: aiChunks,
+            embeddingModel: aiEmbeddingModel,
+          });
+
+          const persistedChunks = Number(syncRes?.data?.chunksPersisted || 0);
+          const persistedEmbeddings = Number(syncRes?.data?.embeddingsPersisted || 0);
+
+          if (chunksAdded > 0 && (persistedChunks <= 0 || persistedEmbeddings <= 0)) {
+            throw new Error("Mongo persistence incomplete: chunks/embeddings were not stored");
+          }
         }
+      } catch (syncErr) {
+        console.error('Status sync error:', syncErr);
+        aiError =
+          syncErr?.response?.data?.error ||
+          syncErr?.response?.data?.message ||
+          syncErr?.message ||
+          'Failed to persist processed chunks and embeddings';
+      }
+    }
 
-        if (!selectedCourse) {
-            toast.error("Please select a course");
-            return;
-        }
-
-        try {
-            setUploading(true);
-            const formData = new FormData();
-            formData.append("file", selectedFile);
-            formData.append("title", fileName.trim());
-            formData.append("courseId", selectedCourse);
-
-            await api.post("/teacher/notes/upload", formData, {
-                headers: {
-                    "Content-Type": "multipart/form-data"
-                }
-            });
-
-            toast.success("Document uploaded successfully! Processing in background...");
-
-            // Reset form
-            setSelectedFile(null);
-            setFileName("");
-
-            // Refresh documents list
+    if (aiError) {
+      toast.error(`File saved, but processing failed: ${aiError}`, { duration: 6000 });
+    } else {
+      toast.success(
+        `Document uploaded successfully! ${chunksAdded} chunk${chunksAdded !== 1 ? 's' : ''} ready for search.`
+      );
+      setSelectedFile(null);
+      setFileName("");
+    }
+  } catch (error) {
+    console.error("Upload error:", error);
+    toast.error(
+      error.response?.data?.message || error.response?.data?.error || "Failed to upload document"
+    );
+  } finally {
+    setUploading(false);
+    setUploadStep('');
+        if (selectedCourse) {
             fetchDocuments();
-        } catch (error) {
-            console.error("Upload error:", error);
-            toast.error(error.response?.data?.error || "Failed to upload document");
-        } finally {
-            setUploading(false);
         }
-    };
+  }
+};
 
     // Delete document
     const handleDelete = async (documentId) => {
@@ -406,9 +484,10 @@ export default function UploadNotes() {
                                 >
                                     {uploading ? (
                                         <span className="flex items-center justify-center gap-2 text-gray-600">
-                                            <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent 
-                                                        rounded-full animate-spin" />
-                                            Uploading...
+                                            <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                                            {uploadStep === 'uploading' ? 'Saving file...' :
+                                             uploadStep === 'indexing' ? 'Processing document...' :
+                                             'Almost done...'}
                                         </span>
                                     ) : (
                                         <span className="flex items-center justify-center gap-2">
@@ -429,6 +508,21 @@ export default function UploadNotes() {
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-6 md:p-8"
                     >
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Ready</p>
+                                <p className="text-2xl font-black text-emerald-800 mt-1">{processedCount}</p>
+                            </div>
+                            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Pending</p>
+                                <p className="text-2xl font-black text-amber-800 mt-1">{pendingCount}</p>
+                            </div>
+                            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                                <p className="text-[11px] font-bold uppercase tracking-wide text-red-700">Failed</p>
+                                <p className="text-2xl font-black text-red-800 mt-1">{failedCount}</p>
+                            </div>
+                        </div>
+
                         <div className="flex items-center gap-3 mb-6">
                             <h2 className="text-xl font-black text-gray-900">
                                 Uploaded Documents
@@ -476,15 +570,20 @@ export default function UploadNotes() {
                                                     <span className="hidden sm:inline">•</span>
                                                     <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
                                                     <span className="hidden sm:inline">•</span>
-                                                    {doc.isProcessed ? (
+                                                    {isDocReady(doc) ? (
                                                         <span className="flex items-center gap-1" style={{ color: brandColor }}>
                                                             <FiCheckCircle className="w-3.5 h-3.5" />
-                                                            Processed
+                                                            Ready
+                                                        </span>
+                                                    ) : isDocFailed(doc) ? (
+                                                        <span className="flex items-center gap-1 text-red-500" title={doc.processingError}>
+                                                            <FiAlertCircle className="w-3.5 h-3.5" />
+                                                            Processing Failed
                                                         </span>
                                                     ) : (
                                                         <span className="flex items-center gap-1 text-yellow-600">
                                                             <FiAlertCircle className="w-3.5 h-3.5" />
-                                                            Processing
+                                                            Pending
                                                         </span>
                                                     )}
                                                 </div>

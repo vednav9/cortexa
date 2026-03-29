@@ -123,6 +123,38 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     return '$mins:$secs';
   }
 
+  void _showStatusSnackBar({
+    required String message,
+    required IconData icon,
+    required Color color,
+    int seconds = 3,
+  }) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: seconds),
+      ),
+    );
+  }
+
   Future<void> _initAudioPlayer() async {
     _videoPlayerController?.removeListener(_onVideoPlayerStateChanged);
     await _videoPlayerController?.pause();
@@ -171,61 +203,27 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           return false;
         });
         
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.mic, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Text('Recording started!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                ],
-              ),
-              backgroundColor: AppColors.primary,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              margin: const EdgeInsets.all(16),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
+        _showStatusSnackBar(
+          message: 'Recording started',
+          icon: Icons.mic,
+          color: AppColors.primary,
+          seconds: 2,
+        );
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.mic_off, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Expanded(child: Text('Microphone permission denied', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-                ],
-              ),
-              backgroundColor: Colors.red.shade600,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              margin: const EdgeInsets.all(16),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Failed to start recording: ${e.toString()}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
+        _showStatusSnackBar(
+          message: 'Microphone permission denied',
+          icon: Icons.mic_off,
+          color: Colors.red.shade600,
+          seconds: 4,
         );
       }
+    } catch (e) {
+      _showStatusSnackBar(
+        message: 'Failed to start recording: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     }
   }
 
@@ -237,80 +235,39 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       });
       await _initAudioPlayer();
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                SizedBox(width: 12),
-                Text('Recording stopped!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              ],
-            ),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Recording stopped',
+        icon: Icons.check_circle_outline,
+        color: Colors.green.shade600,
+        seconds: 2,
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Failed to stop recording: ${e.toString()}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Failed to stop recording: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     }
   }
 
   Future<void> _transcribeAudio() async {
     if (_audioFilePath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 12),
-              Text('No audio recording found', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            ],
-          ),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-        ),
+      _showStatusSnackBar(
+        message: 'No audio recording found',
+        icon: Icons.warning_amber_rounded,
+        color: Colors.orange.shade600,
+        seconds: 3,
       );
       return;
     }
 
     if (_lectureTitleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 12),
-              Text('Please enter a lecture title', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            ],
-          ),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-        ),
+      _showStatusSnackBar(
+        message: 'Please enter a lecture title',
+        icon: Icons.warning_amber_rounded,
+        color: Colors.orange.shade600,
+        seconds: 3,
       );
       return;
     }
@@ -342,49 +299,20 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       });
       _previewController.text = formatted;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                SizedBox(width: 12),
-                Text('Lecture transcribed successfully!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              ],
-            ),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Lecture transcribed successfully',
+        icon: Icons.check_circle_outline,
+        color: Colors.green.shade600,
+      );
     } catch (e) {
       setState(() => _isProcessing = false);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Transcription failed: ${e.toString().replaceAll('Exception: ', '')}',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+
+      _showStatusSnackBar(
+        message: 'Transcription failed: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     }
   }
 
@@ -392,24 +320,12 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     final text = _previewController.text;
     if (text.isEmpty) return;
     Clipboard.setData(ClipboardData(text: text));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text('Transcript copied to clipboard'),
-            ],
-          ),
-          backgroundColor: AppColors.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    _showStatusSnackBar(
+      message: 'Transcript copied to clipboard',
+      icon: Icons.check_circle,
+      color: AppColors.primary,
+      seconds: 2,
+    );
   }
 
   void _reset() {
@@ -631,39 +547,23 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       await _loadRecordings();
       _reset();
 
-      if (mounted) {
-        final sizeWarning = fileSizeBytes > maxR2Bytes;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Expanded(child: Text(
-                sizeWarning
-                    ? 'Saved locally (file >100 MB, skipped cloud)'
-                    : r2Key != null
-                        ? isReRecord ? 'Re-recording saved & synced to cloud!' : 'Saved & uploaded to cloud!'
-                        : 'Saved locally (cloud unavailable)',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              )),
-            ]),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      final sizeWarning = fileSizeBytes > maxR2Bytes;
+      _showStatusSnackBar(
+        message: sizeWarning
+            ? 'Saved locally (file >100 MB, skipped cloud)'
+            : r2Key != null
+                ? (isReRecord ? 'Re-recording saved and synced to cloud' : 'Saved and uploaded to cloud')
+                : 'Saved locally (cloud unavailable)',
+        icon: Icons.check_circle,
+        color: Colors.green.shade600,
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Save failed: ${e.toString().replaceAll("Exception: ", "")}'),
-          backgroundColor: Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-        ));
-      }
+      _showStatusSnackBar(
+        message: 'Save failed: ${e.toString().replaceAll("Exception: ", "")}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -724,16 +624,12 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     await getIt<HiveStorageService>().deleteVoiceRecording(recording['id'] as String);
     await _loadRecordings();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Recording deleted'),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ));
-    }
+    _showStatusSnackBar(
+      message: 'Recording deleted',
+      icon: Icons.delete_outline,
+      color: Colors.red.shade600,
+      seconds: 2,
+    );
   }
 
   Future<void> _renameRecording(Map<String, dynamic> recording) async {
@@ -776,16 +672,12 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     await getIt<HiveStorageService>()
         .updateVoiceRecording(recording['id'] as String, {'title': newTitle!});
     await _loadRecordings();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Recording renamed'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ));
-    }
+    _showStatusSnackBar(
+      message: 'Recording renamed',
+      icon: Icons.edit,
+      color: AppColors.primary,
+      seconds: 2,
+    );
   }
 
   void _openRecordingDetail(Map<String, dynamic> recording) {

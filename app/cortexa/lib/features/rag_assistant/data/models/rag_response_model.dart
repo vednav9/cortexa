@@ -4,6 +4,7 @@ class RagResponse {
   final List<DocumentSource> sources;
   final String context;
   final bool? usedWebSearch;
+  final String? searchMethod;
 
   RagResponse({
     required this.query,
@@ -11,18 +12,20 @@ class RagResponse {
     required this.sources,
     required this.context,
     this.usedWebSearch,
+    this.searchMethod,
   });
 
   factory RagResponse.fromJson(Map<String, dynamic> json) {
     return RagResponse(
-      query: json['query'] as String,
-      answer: json['answer'] as String,
+      query: json['query'] as String? ?? '',
+      answer: json['answer'] as String? ?? '',
       sources: (json['sources'] as List<dynamic>?)
               ?.map((s) => DocumentSource.fromJson(s as Map<String, dynamic>))
               .toList() ??
           [],
       context: json['context'] as String? ?? '',
       usedWebSearch: json['used_web_search'] as bool?,
+      searchMethod: json['search_method'] as String?,
     );
   }
 
@@ -32,6 +35,7 @@ class RagResponse {
         'sources': sources.map((s) => s.toJson()).toList(),
         'context': context,
         'used_web_search': usedWebSearch,
+        'search_method': searchMethod,
       };
 }
 
@@ -40,30 +44,46 @@ class DocumentSource {
   final String? chunkText;
   final double? similarityScore;
   final int? pageNumber;
+  final String? sectionTitle;
+  final String? url;
+  final String type; // "document" | "web"
 
   DocumentSource({
     required this.documentName,
     this.chunkText,
     this.similarityScore,
     this.pageNumber,
+    this.sectionTitle,
+    this.url,
+    this.type = 'document',
   });
+
+  bool get isWeb => type == 'web';
 
   factory DocumentSource.fromJson(Map<String, dynamic> json) {
     return DocumentSource(
-      documentName: json['document_name'] as String? ?? 
-                    json['document'] as String? ?? 
+      documentName: json['document_name'] as String? ??
+                    json['document'] as String? ??
                     'Unknown',
       chunkText: json['chunk_text'] as String? ?? json['text'] as String?,
-      similarityScore: (json['similarity_score'] as num?)?.toDouble() ?? 
+      similarityScore: (json['similarity_score'] as num?)?.toDouble() ??
                       (json['score'] as num?)?.toDouble(),
       pageNumber: json['page_number'] as int? ?? json['page'] as int?,
+      sectionTitle: json['section_title'] as String?,
+      url: json['url'] as String?,
+      type: json['type'] as String? ?? 'document',
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'document_name': documentName,
-        'chunk_text': chunkText,
-        'similarity_score': similarityScore,
-        'page_number': pageNumber,
-      };
+  Map<String, dynamic> toJson() {
+    return {
+      'document_name': documentName,
+      'chunk_text': chunkText,
+      'similarity_score': similarityScore,
+      'page_number': pageNumber,
+      'section_title': sectionTitle,
+      'url': url,
+      'type': type,
+    };
+  }
 }

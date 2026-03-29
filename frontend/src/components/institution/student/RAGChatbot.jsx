@@ -2,12 +2,13 @@
 import React, { useState, useRef, useEffect, useContext } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  FiSend, FiUpload, FiFile, FiX, FiCheck,
-  FiLoader, FiPaperclip, FiZap,
+  FiSend, FiFile, FiLoader, FiZap,
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
 import { useOutletContext } from "react-router-dom";
 import { InstitutionContext } from "../../../context/InstitutionContext";
+import { useAuth } from "../../../context/authcontext";
+import api from "../../../services/api";
 import aiService from "../../../services/aiService";
 
 const hexToRgb = (hex) => {
@@ -81,7 +82,10 @@ const Message = ({ msg, brand, rgb }) => {
                   {src.type === "document" ? (
                     <>
                       <FiFile className="w-3 h-3 flex-shrink-0" style={{ color: brand }} />
-                      <span className="truncate">{src.source}</span>
+                      <span className="truncate">
+                        {src.document_name || src.source}
+                        {src.page_number ? ` (p.${src.page_number})` : ""}
+                      </span>
                     </>
                   ) : (
                     <>
@@ -90,7 +94,7 @@ const Message = ({ msg, brand, rgb }) => {
                         href={src.url} target="_blank" rel="noopener noreferrer"
                         className="truncate hover:underline" style={{ color: brand }}
                       >
-                        {src.title}
+                        {src.title || src.document_name || "Web source"}
                       </a>
                     </>
                   )}
@@ -115,6 +119,7 @@ const Message = ({ msg, brand, rgb }) => {
 export default function RAGChatbot() {
   const { currentInstitution } = useOutletContext();
   const { institution } = useContext(InstitutionContext);
+  const { user } = useAuth();
 
   const inst = institution || currentInstitution;
   const brand = inst?.branding?.primaryColor || "#10b981";
@@ -129,10 +134,107 @@ export default function RAGChatbot() {
 
   /* Upload panel state */
   const [showUpload, setShowUpload] = useState(false);
-  const [file, setFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(null);
-  const fileInputRef = useRef(null);
+  const [documents, setDocuments] = useState([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [selectedDocIds, setSelectedDocIds] = useState([]);
+
+  const normalizeCourse = (course = {}) => ({
+    ...course,
+    _id: String(course?._id || course?.id || ""),
+    code: String(course?.code || ""),
+    name: String(course?.name || ""),
+  });
+
+  useEffect(() => {
+    const fetchTeacherCourses = async () => {
+      if (user?.role !== "teacher") return;
+      try {
+        const res = await api.get("/teacher/authorized-courses");
+        const list = Array.isArray(res?.data?.courses) ? res.data.courses : [];
+        setCourses(list);
+        if (list.length > 0) {
+          setSelectedCourse(list[0]._id);
+        }
+      } catch (_) {
+        setCourses([]);
+      }
+    };
+
+    fetchTeacherCourses();
+  }, [user?.role]);
+
+  useEffect(() => {
+    const fetchStudentCourses = async () => {
+      if (user?.role !== "student" || !inst?.slug) return;
+      try {
+        const res = await api.get(`/institutions/slug/${inst.slug}/courses`);
+        const raw = Array.isArray(res?.data?.courses) ? res.data.courses : [];
+        const list = raw.map(normalizeCourse).filter((c) => c._id);
+        setCourses(list);
+        setSelectedCourse((prev) => prev || (list[0]?._id || ""));
+      } catch (_) {
+        setCourses([]);
+        setSelectedCourse("");
+      }
+    };
+
+    fetchStudentCourses();
+  }, [user?.role, inst?.slug]);
+
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      if (!selectedCourse || !user?.role) {
+        setDocuments([]);
+        setSelectedDocIds([]);
+        return;
+      }
+
+      if (user.role === "teacher") {
+        try {
+          setDocsLoading(true);
+          const res = await api.get(`/teacher/notes/${selectedCourse}`, {
+            params: { _ts: Date.now() },
+            headers: { 'Cache-Control': 'no-cache' },
+          });
+          const list = Array.isArray(res?.data?.documents) ? res.data.documents : [];
+          setDocuments(list);
+          setSelectedDocIds(list.map((doc) => String(doc._id)));
+        } catch {
+          setDocuments([]);
+          setSelectedDocIds([]);
+        } finally {
+          setDocsLoading(false);
+        }
+        return;
+      }
+
+      if (user.role === "student") {
+        const selectedCourseObj = courses.find((c) => String(c._id) === String(selectedCourse));
+        if (!selectedCourseObj?.code || !inst?.slug) {
+          setDocuments([]);
+          setSelectedDocIds([]);
+          return;
+        }
+
+        try {
+          setDocsLoading(true);
+          const res = await api.get(`/institutions/slug/${inst.slug}/courses/${selectedCourseObj.code}`);
+          const list = Array.isArray(res?.data?.documents) ? res.data.documents : [];
+          setDocuments(list);
+          setSelectedDocIds(list.map((doc) => String(doc._id)));
+        } catch {
+          setDocuments([]);
+          setSelectedDocIds([]);
+        } finally {
+          setDocsLoading(false);
+        }
+      }
+    };
+
+    fetchDocuments();
+  }, [selectedCourse, user?.role, courses, inst?.slug]);
 
   useEffect(() => {
     if (!chatScrollRef.current || (!loading && messages.length === 0)) return;
@@ -145,17 +247,40 @@ export default function RAGChatbot() {
   /* ── Send message ── */
   const handleSend = async () => {
     if (!input.trim() || loading) return;
+    if (!selectedCourse) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        type: "error",
+        content: "Please select a course first so I can answer from that course documents.",
+        timestamp: new Date(),
+      }]);
+      return;
+    }
+    if (documents.length > 0 && selectedDocIds.length === 0) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        type: "error",
+        content: "Please select at least one document from the Available Docs panel.",
+        timestamp: new Date(),
+      }]);
+      return;
+    }
     const text = input.trim();
     setInput("");
     const userMsg = { id: Date.now(), type: "user", content: text, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
     try {
-      const res = await aiService.queryAssistant(text, true);
+      const res = await aiService.queryStudentRAG(
+        text,
+        inst?._id || null,
+        selectedCourse,
+        selectedDocIds
+      );
       setMessages(prev => [...prev, {
         id: Date.now() + 1, type: "ai",
         content: res.answer, sources: res.sources,
-        searchMethod: res.search_method, timestamp: new Date(),
+        searchMethod: res.search_method || "rag", timestamp: new Date(),
       }]);
     } catch (err) {
       setMessages(prev => [...prev, {
@@ -167,39 +292,25 @@ export default function RAGChatbot() {
     }
   };
 
-  /* ── File upload ── */
-  const handleFileChange = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const name = f.name.toLowerCase();
-    if (!name.endsWith(".pdf") && !name.endsWith(".txt") && !name.endsWith(".docx")) {
-      setProgress({ status: "error", message: "Only PDF, TXT, DOCX files are allowed" }); return;
-    }
-    if (f.size > 10 * 1024 * 1024) {
-      setProgress({ status: "error", message: "Max file size is 10 MB" }); return;
-    }
-    setFile(f); setProgress(null);
+  const formatFileSize = (bytes = 0) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleUpload = async () => {
-    const fileToUpload = fileInputRef.current?.files?.[0] || file;
-    if (!fileToUpload) return;
-    setUploading(true);
-    setProgress({ status: "uploading", message: "Uploading…" });
-    try {
-      const res = await aiService.uploadDocument(fileToUpload, inst?._id, null);
-      setProgress({ status: "success", message: `Done! ${res.chunks_added} chunks indexed.` });
-      setTimeout(() => { setFile(null); setProgress(null); if (fileInputRef.current) fileInputRef.current.value = ""; }, 2500);
-    } catch (err) {
-      setProgress({ status: "error", message: err.message || "Upload failed" });
-    } finally {
-      setUploading(false);
-    }
+  const toggleDocSelection = (docId) => {
+    const id = String(docId);
+    setSelectedDocIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
-  const handleRemoveFile = () => {
-    setFile(null); setProgress(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const selectAllDocs = () => {
+    setSelectedDocIds(documents.map((doc) => String(doc._id)));
+  };
+
+  const clearAllDocs = () => {
+    setSelectedDocIds([]);
   };
 
   return (
@@ -228,7 +339,7 @@ export default function RAGChatbot() {
             </div>
           </div>
 
-          {/* Upload toggle */}
+          {/* Documents toggle */}
           <button
             onClick={() => setShowUpload(v => !v)}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all"
@@ -237,8 +348,8 @@ export default function RAGChatbot() {
               : { borderColor: "#e5e7eb", backgroundColor: "white", color: "#6b7280" }
             }
           >
-            <FiUpload className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{showUpload ? "Hide Uploader" : "Upload Docs"}</span>
+            <FiFile className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{showUpload ? "Hide Docs" : "Available Docs"}</span>
           </button>
         </motion.div>
       </div>
@@ -357,7 +468,7 @@ export default function RAGChatbot() {
           </div>
         </div>
 
-        {/* ── UPLOAD PANEL ──────────────────────────────────────── */}
+        {/* ── DOCUMENTS PANEL ───────────────────────────────────── */}
         <AnimatePresence>
           {showUpload && (
             <motion.div
@@ -372,133 +483,99 @@ export default function RAGChatbot() {
                 style={{ background: `linear-gradient(90deg,${brand},rgba(${rgb},0.25))` }} />
 
               <div className="p-5">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-5">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                      style={{ backgroundColor: `rgba(${rgb},0.10)` }}>
-                      <FiUpload className="w-4 h-4" style={{ color: brand }} />
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-extrabold text-gray-900">Upload Docs</p>
-                      <p className="text-[10px] text-gray-400">PDF, TXT, DOCX · Max 10 MB</p>
-                    </div>
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: `rgba(${rgb},0.10)` }}>
+                    <FiFile className="w-4 h-4" style={{ color: brand }} />
                   </div>
-                  <button
-                    onClick={() => setShowUpload(false)}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-gray-500 transition-colors"
-                  >
-                    <FiX className="w-4 h-4" />
-                  </button>
+                  <div>
+                    <p className="text-[13px] font-extrabold text-gray-900">Available Docs</p>
+                    <p className="text-[10px] text-gray-400">Used for course-specific answers</p>
+                  </div>
                 </div>
 
-                {/* Drop zone */}
-                {!file && (
-                  <label className="block cursor-pointer">
-                    <div
-                      className="border-2 border-dashed rounded-2xl p-8 text-center transition-all hover:border-opacity-80"
-                      style={{ borderColor: `rgba(${rgb},0.3)`, backgroundColor: `rgba(${rgb},0.03)` }}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={e => {
-                        e.preventDefault();
-                        const f = e.dataTransfer.files[0];
-                        if (f) { fileInputRef.current.files = e.dataTransfer.files; handleFileChange({ target: { files: e.dataTransfer.files } }); }
-                      }}
-                    >
-                      <div
-                        className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3"
-                        style={{ backgroundColor: `rgba(${rgb},0.10)` }}
-                      >
-                        <FiPaperclip className="w-5 h-5" style={{ color: brand }} />
-                      </div>
-                      <p className="text-[13px] font-semibold text-gray-600 mb-1">Drop a file here</p>
-                      <p className="text-[11px] text-gray-400">or click to browse</p>
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.txt,.docx"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
+                <div className="mb-4">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+                    Select Course
                   </label>
-                )}
-
-                {/* Selected file */}
-                {file && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="space-y-3"
+                  <select
+                    value={selectedCourse}
+                    onChange={(e) => setSelectedCourse(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-[12px] font-medium text-gray-700 bg-white"
                   >
-                    <div
-                      className="flex items-center gap-3 p-3.5 rounded-xl border"
-                      style={{ borderColor: `rgba(${rgb},0.15)`, backgroundColor: `rgba(${rgb},0.04)` }}
-                    >
-                      <div
-                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: `rgba(${rgb},0.12)` }}
-                      >
-                        <FiFile className="w-4 h-4" style={{ color: brand }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-semibold text-gray-800 truncate">{file.name}</p>
-                        <p className="text-[11px] text-gray-400">{(file.size / 1024).toFixed(1)} KB</p>
-                      </div>
-                      {!uploading && (
-                        <button onClick={handleRemoveFile} className="text-gray-300 hover:text-red-400 transition-colors">
-                          <FiX className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Progress / status */}
-                    {progress && (
-                      <div
-                        className={`flex items-center gap-2 p-3 rounded-xl text-[12px] font-semibold ${progress.status === "success" ? "bg-emerald-50 text-emerald-700"
-                          : progress.status === "error" ? "bg-red-50 text-red-600"
-                            : "bg-blue-50 text-blue-600"
-                          }`}
-                      >
-                        {progress.status === "success" && <FiCheck className="w-4 h-4 flex-shrink-0" />}
-                        {progress.status === "uploading" && <FiLoader className="w-4 h-4 flex-shrink-0 animate-spin" />}
-                        <span>{progress.message}</span>
-                      </div>
+                    {courses.length === 0 ? (
+                      <option value="">No courses found</option>
+                    ) : (
+                      courses.map((course) => (
+                        <option key={course._id} value={course._id}>
+                          {course.code} - {course.name}
+                        </option>
+                      ))
                     )}
-
-                    {!uploading && !progress && (
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleUpload}
-                        className="w-full py-3 rounded-xl text-white text-[13px] font-bold shadow-sm transition-all"
-                        style={{ backgroundColor: brand }}
-                      >
-                        Upload to Knowledge Base
-                      </motion.button>
-                    )}
-                  </motion.div>
-                )}
-
-                {/* How it works */}
-                <div className="mt-6 space-y-3">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">How it works</p>
-                  {[
-                    { n: "1", label: "Upload your notes or PDFs" },
-                    { n: "2", label: "AI indexes & embeds content" },
-                    { n: "3", label: "Ask questions about your docs" },
-                  ].map(step => (
-                    <div key={step.n} className="flex items-center gap-3">
-                      <div
-                        className="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-extrabold text-white flex-shrink-0"
-                        style={{ backgroundColor: brand }}
-                      >
-                        {step.n}
-                      </div>
-                      <p className="text-[12px] text-gray-500">{step.label}</p>
-                    </div>
-                  ))}
+                  </select>
                 </div>
+
+                {docsLoading ? (
+                  <div className="py-4 text-[12px] text-gray-500 flex items-center gap-2">
+                    <FiLoader className="w-4 h-4 animate-spin" />
+                    Loading documents...
+                  </div>
+                ) : documents.length === 0 ? (
+                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-[12px] text-gray-500">
+                    No documents available for this course.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] text-gray-400 font-semibold">
+                        {selectedDocIds.length} of {documents.length} selected
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={selectAllDocs}
+                          className="text-[10px] font-semibold text-gray-500 hover:text-gray-700"
+                        >
+                          Select all
+                        </button>
+                        <button
+                          onClick={clearAllDocs}
+                          className="text-[10px] font-semibold text-gray-500 hover:text-gray-700"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                    {documents.map((doc) => (
+                      <div
+                        key={doc._id}
+                        onClick={() => toggleDocSelection(doc._id)}
+                        className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                          selectedDocIds.includes(String(doc._id))
+                            ? "border-emerald-300 bg-emerald-50"
+                            : "border-gray-100 bg-gray-50"
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedDocIds.includes(String(doc._id))}
+                            onChange={() => toggleDocSelection(doc._id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-semibold text-gray-800 truncate">{doc.fileName || doc.originalName || "Document"}</p>
+                            <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
+                              <span>{formatFileSize(doc.fileSize || 0)}</span>
+                              <span>•</span>
+                              <span>{Number(doc.chunksCount || 0)} chunks</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

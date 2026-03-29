@@ -1,6 +1,20 @@
 import 'package:flutter/services.dart';
 
+enum BackendConnectionMode {
+   production,
+   local,
+   ngrok,
+}
+
 class ApiConfig {
+   // Use exactly one backend source at a time.
+   // This prevents conflicting booleans like "ngrok + local both true".
+   // Switch this while testing:
+   // - BackendConnectionMode.ngrok       -> tunnel to local backend
+   // - BackendConnectionMode.local       -> emulator/local direct
+   // - BackendConnectionMode.production  -> deployed backend
+   static const BackendConnectionMode _backendMode = BackendConnectionMode.ngrok;
+
   // ─── Platform channel (Android side provides BuildConfig values) ───────────
   static const _channel = MethodChannel('com.example.cortexa/secrets');
 
@@ -38,12 +52,38 @@ class ApiConfig {
   // NEVER hardcode this value here.
   static String _productionUrl = '';
 
-  // Set to true to force the local backend during development.
-  static const bool _useLocalBackend = false;
+   // ── NGROK TEST MODE ──────────────────────────────────────────────────────
+   // Example:
+   // static const String _ngrokBackendUrl = 'https://abcd-12-34-56-78.ngrok-free.app/api';
+   static const String _ngrokBackendUrl = 'https://d1ac-106-222-210-249.ngrok-free.app';
+
+   // If you run AI locally and expose it via ngrok, set that here.
+   // If you want to keep using HF while testing backend locally, leave this as HF URL.
+   // static const String _ngrokAiUrl = 'https://wxyz-12-34-56-78.ngrok-free.app/api';
+   static const String _ngrokAiUrl = 'https://jay-10020-cortexa-ai.hf.space';
+
+   // Ensures backend base URL always ends with /api and has no trailing slash.
+   static String _normalizeBackendBase(String raw) {
+      final trimmed = raw.trim();
+      if (trimmed.isEmpty) return trimmed;
+      final noTrailingSlash = trimmed.replaceAll(RegExp(r'/+$'), '');
+      return noTrailingSlash.endsWith('/api')
+            ? noTrailingSlash
+            : '$noTrailingSlash/api';
+   }
 
   static String get baseUrl {
-    if (_useLocalBackend || _productionUrl.isEmpty) return _localUrl;
-    return _productionUrl;
+      switch (_backendMode) {
+         case BackendConnectionMode.ngrok:
+            return _normalizeBackendBase(_ngrokBackendUrl);
+         case BackendConnectionMode.local:
+            return _normalizeBackendBase(_localUrl);
+         case BackendConnectionMode.production:
+            // If production URL is missing in local.properties, fall back to local.
+            return _normalizeBackendBase(
+               _productionUrl.isEmpty ? _localUrl : _productionUrl,
+            );
+      }
   }
 
   /* ===========================
@@ -51,15 +91,21 @@ class ApiConfig {
   =========================== */
 
   // Local AI URL (for testing with local AI service)
-  static const String _localAiUrl = 'http://10.0.2.2:8000/api';
+   static const String _localAiUrl = 'http://10.0.2.2:8000';
 
   // Production AI URL — populated by ApiConfig.initialize() from local.properties.
   // NEVER hardcode this value here.
   static String _productionAiUrl = '';
 
   static String get aiBaseUrl {
-    if (_useLocalBackend || _productionAiUrl.isEmpty) return _localAiUrl;
-    return _productionAiUrl;
+      switch (_backendMode) {
+         case BackendConnectionMode.ngrok:
+            return _ngrokAiUrl;
+         case BackendConnectionMode.local:
+            return _localAiUrl;
+         case BackendConnectionMode.production:
+            return _productionAiUrl.isEmpty ? _localAiUrl : _productionAiUrl;
+      }
   }
   
   /* ===========================

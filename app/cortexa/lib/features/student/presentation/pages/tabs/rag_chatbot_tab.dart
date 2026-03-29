@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../../../core/constants/app_colors.dart';
 import '../../../../../../core/di/service_locator.dart';
 import '../../../../../../core/services/hive_storage_service.dart';
 import '../../../../rag_assistant/data/models/chat_message_model.dart';
+import '../../../../rag_assistant/data/models/rag_response_model.dart';
 import '../../../../rag_assistant/data/repositories/ai_repository.dart';
 import '../../../../rag_assistant/presentation/bloc/rag_chat_bloc.dart';
 import '../../../../rag_assistant/presentation/bloc/rag_chat_event.dart';
@@ -398,21 +400,51 @@ class _RAGChatbotTabState extends State<RAGChatbotTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        msg.message,
-                        style: TextStyle(
-                          color: isUser
-                              ? Colors.white
-                              : AppColors.textPrimary,
-                          fontSize: 14,
-                          height: 1.5,
+                      if (isUser)
+                        // User bubbles: plain SelectableText (white text on primary)
+                        Theme(
+                          data: Theme.of(context).copyWith(
+                            textSelectionTheme:
+                                const TextSelectionThemeData(
+                              selectionColor: Color(0x55FFFFFF),
+                            ),
+                          ),
+                          child: SelectableText(
+                            msg.message,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                        )
+                      else
+                        // AI bubbles: SelectionArea gives OS-native persistent
+                        // selection that is NOT cleared by tapping outside the
+                        // text (matches web / native reading behavior).
+                        Theme(
+                          data: Theme.of(context).copyWith(
+                            textSelectionTheme:
+                                const TextSelectionThemeData(
+                              selectionColor: Color(0x554FC3F7),
+                            ),
+                          ),
+                          child: SelectionArea(
+                            child: Text(
+                              msg.message,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      if (!isUser && msg.isWebFallback == true) ..._webBadge(),
+                      if (!isUser && msg.searchMethod == 'web') ..._webBadge(),
                       if (!isUser &&
-                          msg.sources != null &&
-                          msg.sources!.isNotEmpty)
-                        _buildSources(msg.sources!),
+                          msg.richSources != null &&
+                          msg.richSources!.isNotEmpty)
+                        _buildReferencesButton(msg.richSources!),
                     ],
                   ),
                 ),
@@ -486,54 +518,55 @@ class _RAGChatbotTabState extends State<RAGChatbotTab> {
         ),
       ];
 
-  Widget _buildSources(List<String> sources) {
+  Widget _buildReferencesButton(List<DocumentSource> sources) {
+    final isWeb = sources.any((s) => s.isWeb);
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.source_outlined,
-                    size: 13, color: AppColors.textSecondary),
-                const SizedBox(width: 5),
-                const Text('Sources (rag):',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary)),
-              ],
-            ),
-            const SizedBox(height: 6),
-            ...sources.take(3).map(
-                  (s) => Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.description_outlined,
-                            size: 12, color: AppColors.textMuted),
-                        const SizedBox(width: 5),
-                        Expanded(
-                          child: Text(s,
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.textSecondary),
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
-                  ),
+      padding: const EdgeInsets.only(top: 8),
+      child: GestureDetector(
+        onTap: () {
+          showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => _ReferencesBottomSheet(sources: sources),
+          );
+        },
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isWeb
+                    ? Icons.language_rounded
+                    : Icons.source_outlined,
+                size: 13,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                '${sources.length} Reference${sources.length == 1 ? '' : 's'}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.primary,
                 ),
-          ],
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.keyboard_arrow_right_rounded,
+                size: 14,
+                color: AppColors.primary,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -566,6 +599,8 @@ class _RAGChatbotTabState extends State<RAGChatbotTab> {
                 _dot(1),
                 const SizedBox(width: 4),
                 _dot(2),
+                const SizedBox(width: 10),
+                _AnimatedStatusText(),
               ],
             ),
           ),
@@ -707,4 +742,363 @@ class _RAGChatbotTabState extends State<RAGChatbotTab> {
 
   String _fmtTime(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+}
+
+// ─── Animated status text widget ─────────────────────────────────────────────
+
+class _AnimatedStatusText extends StatefulWidget {
+  const _AnimatedStatusText();
+
+  @override
+  State<_AnimatedStatusText> createState() => _AnimatedStatusTextState();
+}
+
+class _AnimatedStatusTextState extends State<_AnimatedStatusText> {
+  static const _steps = [
+    'Searching your notes...',
+    'Checking the web...',
+    'Generating answer...',
+  ];
+
+  int _stepIndex = 0;
+  late final _timer = Stream.periodic(const Duration(seconds: 3))
+      .listen((_) {
+    if (mounted) {
+      setState(() {
+        _stepIndex = (_stepIndex + 1) % _steps.length;
+      });
+    }
+  });
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      child: Text(
+        _steps[_stepIndex],
+        key: ValueKey(_stepIndex),
+        style: const TextStyle(
+          fontSize: 12,
+          color: AppColors.textSecondary,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── References bottom sheet ─────────────────────────────────────────────────
+
+class _ReferencesBottomSheet extends StatefulWidget {
+  final List<DocumentSource> sources;
+
+  const _ReferencesBottomSheet({required this.sources});
+
+  @override
+  State<_ReferencesBottomSheet> createState() =>
+      _ReferencesBottomSheetState();
+}
+
+class _ReferencesBottomSheetState extends State<_ReferencesBottomSheet> {
+  DocumentSource? _selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (_, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textTertiary.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            // Header row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(
+                children: [
+                  if (_selected != null)
+                    GestureDetector(
+                      onTap: () => setState(() => _selected = null),
+                      child: const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Icon(Icons.arrow_back_ios_rounded,
+                            size: 16, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      _selected != null
+                          ? _selected!.documentName
+                          : 'References (${widget.sources.length})',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Icon(Icons.close_rounded,
+                        size: 20, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _selected != null
+                  ? _buildDetailView(_selected!)
+                  : _buildListView(scrollCtrl),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListView(ScrollController scrollCtrl) {
+    return ListView.separated(
+      controller: scrollCtrl,
+      padding: const EdgeInsets.all(16),
+      itemCount: widget.sources.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) => _buildSourceRow(widget.sources[i]),
+    );
+  }
+
+  Widget _buildSourceRow(DocumentSource source) {
+    final simPct = source.similarityScore != null
+        ? '${(source.similarityScore! * 100).round()}%'
+        : null;
+    final List<String> subParts = [];
+    if (source.sectionTitle != null && source.sectionTitle!.isNotEmpty) {
+      subParts.add(source.sectionTitle!);
+    }
+    if (source.pageNumber != null) {
+      subParts.add('p.\u00a0${source.pageNumber}');
+    }
+    final subtitle = subParts.isNotEmpty ? subParts.join('  \u2022  ') : null;
+
+    return GestureDetector(
+      onTap: () {
+        if (source.isWeb && source.url != null) {
+          final uri = Uri.tryParse(source.url!);
+          if (uri != null) {
+            launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        } else {
+          setState(() => _selected = source);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                source.isWeb
+                    ? Icons.public_rounded
+                    : Icons.description_outlined,
+                size: 16,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    source.documentName,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                  if (source.chunkText != null &&
+                      source.chunkText!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      source.chunkText!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (simPct != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      simPct,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Icon(
+                  source.isWeb
+                      ? Icons.open_in_new_rounded
+                      : Icons.chevron_right_rounded,
+                  size: 16,
+                  color: AppColors.textTertiary,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailView(DocumentSource source) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (source.pageNumber != null ||
+              (source.sectionTitle != null &&
+                  source.sectionTitle!.isNotEmpty))
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.bookmark_outline_rounded,
+                      size: 14, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (source.sectionTitle != null &&
+                            source.sectionTitle!.isNotEmpty)
+                          source.sectionTitle!,
+                        if (source.pageNumber != null)
+                          'Page ${source.pageNumber}',
+                      ].join('  \u2022  '),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 16),
+          const Text(
+            'SOURCE TEXT',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4FC3F7).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: const Color(0xFF4FC3F7).withValues(alpha: 0.3)),
+            ),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                textSelectionTheme: const TextSelectionThemeData(
+                  selectionColor: Color(0x554FC3F7),
+                ),
+              ),
+              child: SelectableText(
+                source.chunkText ?? 'No source text available.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
