@@ -34,22 +34,10 @@ class HybridAssistant:
         
         # Step 1: Try RAG (local documents)
         print("📚 Searching local documents...")
-<<<<<<< HEAD
         doc_results = self.retriever.retrieve(
             query=query,
             min_similarity=min_similarity
         )
-=======
-        doc_results = []
-        try:
-            doc_results = self.retriever.retrieve(
-                query=query,
-                min_similarity=min_similarity
-            )
-        except Exception as retriever_error:
-            print(f"Warning: local retrieval failed, continuing with fallback: {retriever_error}")
-            doc_results = []
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         
         sources = []
         answer = None

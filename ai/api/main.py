@@ -297,7 +297,6 @@ async def upload_document(
 
         vector_store.add_documents(texts, metadatas, ids)
 
-<<<<<<< HEAD
         # ✅ Return full chunks+embeddings in upload response
         # so Node doesn't need a second GET call to a potentially reset store
         embedding_model_name = vector_store.data['metadata'].get('embedding_model', 'paraphrase-MiniLM-L3-v2')
@@ -312,17 +311,6 @@ async def upload_document(
             chunks_payload.append({
                 "text": doc['text'],
                 "embedding": embedding.tolist() if hasattr(embedding, 'tolist') else list(embedding),
-=======
-        stats = vector_store.get_stats() if hasattr(vector_store, "get_stats") else {}
-        embedding_model_name = stats.get('embedding_model', 'unknown')
-
-        # In Mongo-proxy mode embeddings are stored in a separate collection,
-        # so return chunk metadata only from this endpoint.
-        chunks_payload = []
-        for i, (text, meta) in enumerate(zip(texts, metadatas)):
-            chunks_payload.append({
-                "text": text,
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
                 "metadata": {
                     **meta,
                     "chunk_index": i,
@@ -348,7 +336,6 @@ async def get_document_chunks(filename: str):
     try:
         vector_store = get_vector_store()
 
-<<<<<<< HEAD
         requested_raw = str(filename or "").strip()
         requested_name = Path(requested_raw).name
         requested_stem = Path(requested_name).stem
@@ -412,65 +399,11 @@ async def get_document_chunks(filename: str):
                 'embedding': doc['embedding'].tolist() if hasattr(doc['embedding'], 'tolist') else doc['embedding'],
                 'metadata': doc.get('metadata', {})
             })
-=======
-        if hasattr(vector_store, "_check_connection"):
-            vector_store._check_connection()
-
-        requested_raw = str(filename or "").strip()
-        requested_name = Path(requested_raw).name
-        requested_stem = Path(requested_name).stem
-        candidates = [x for x in [requested_name, requested_stem] if x]
-        source_clauses = []
-        for candidate in candidates:
-            safe = re.escape(candidate)
-            source_clauses.extend([
-                {"metadata.source": {"$regex": f"^{safe}$", "$options": "i"}},
-                {"metadata.fileName": {"$regex": f"^{safe}$", "$options": "i"}},
-                {"metadata.filename": {"$regex": f"^{safe}$", "$options": "i"}},
-                {"metadata.document_id": {"$regex": f"^{safe}$", "$options": "i"}},
-            ])
-
-        query = {"$or": source_clauses} if source_clauses else {}
-        chunk_rows = list(
-            vector_store.chunks_collection
-            .find(query, {"chunk_id": 1, "text": 1, "metadata": 1})
-            .sort("metadata.chunk_index", 1)
-        )
-
-        if not chunk_rows:
-            raise HTTPException(status_code=404, detail=f"No chunks found for {filename}")
-
-        chunk_ids = [str(row.get("chunk_id", "")).strip() for row in chunk_rows if str(row.get("chunk_id", "")).strip()]
-        embedding_map = {}
-        if chunk_ids:
-            for emb in vector_store.embeddings_collection.find(
-                {"chunk_id": {"$in": chunk_ids}},
-                {"chunk_id": 1, "embedding": 1}
-            ):
-                emb_id = str(emb.get("chunk_id", "")).strip()
-                if emb_id:
-                    embedding_map[emb_id] = emb.get("embedding", [])
-
-        chunks = []
-        for row in chunk_rows:
-            row_chunk_id = str(row.get("chunk_id", "")).strip()
-            chunks.append({
-                'text': row.get('text', ''),
-                'embedding': embedding_map.get(row_chunk_id, []),
-                'metadata': row.get('metadata', {}) or {}
-            })
-
-        stats = vector_store.get_stats() if hasattr(vector_store, "get_stats") else {}
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         
         return DocumentChunksResponse(
             filename=filename,
             chunks=chunks,
-<<<<<<< HEAD
             embedding_model=vector_store.data['metadata'].get('embedding_model', 'unknown'),
-=======
-            embedding_model=stats.get('embedding_model', 'unknown'),
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
             total_chunks=len(chunks)
         )
     except HTTPException:
@@ -488,11 +421,7 @@ async def delete_document_chunks(filename: str):
         return {
             "status": "success",
             "filename": filename,
-<<<<<<< HEAD
             "removed_chunks": int(removed),
-=======
-            "removed_chunks": int(removed) if isinstance(removed, (int, float)) else 0,
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -624,7 +553,6 @@ async def generate_mcqs(request: MCQGenerateRequest):
     try:
         mcq_generator = get_mcq_generator_instance()
         mcq_validator = get_mcq_validator_instance()
-<<<<<<< HEAD
 
         # Normalize source_type aliases (frontend may send 'document' or 'topic', AI internally uses 'text')
         raw_source_type = (request.source_type or "").strip().lower()
@@ -651,44 +579,14 @@ async def generate_mcqs(request: MCQGenerateRequest):
         if not isinstance(mcqs, list):
             mcqs = []
 
-=======
-        
-        if request.source_type == "text":
-            mcqs = mcq_generator.generate_from_text(
-                text=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
-            )
-        elif request.source_type == "document":
-            mcqs = mcq_generator.generate_from_document(
-                document_name=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
-            )
-        elif request.source_type == "topic":
-            mcqs = mcq_generator.generate_from_topic(
-                topic=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
-            )
-        else:
-            raise HTTPException(status_code=400, detail="Invalid source_type")
-        
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         # Filter valid MCQs first.
         valid_mcqs = [mcq for mcq in mcqs if mcq_validator.validate_mcq(mcq)]
 
         # If strict validation drops too many questions, top up with normalized
         # parsed MCQs so caller still gets requested count.
-<<<<<<< HEAD
         if len(valid_mcqs) < num_questions:
             for mcq in mcqs:
                 if len(valid_mcqs) >= num_questions:
-=======
-        if len(valid_mcqs) < request.num_questions:
-            for mcq in mcqs:
-                if len(valid_mcqs) >= request.num_questions:
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
                     break
                 if mcq in valid_mcqs:
                     continue
@@ -725,7 +623,6 @@ async def generate_mcqs(request: MCQGenerateRequest):
                         "D": str(mcq.get("option_d", "Option D")),
                     }
 
-<<<<<<< HEAD
                 if correct not in ["A", "B", "C", "D"]:
                     correct = "A"
 
@@ -748,23 +645,6 @@ async def generate_mcqs(request: MCQGenerateRequest):
             base_topic = re.sub(r'^Topic:\s*', '', first_line, flags=re.IGNORECASE).strip()
             if not base_topic or len(base_topic) > 120:
                 base_topic = "the selected topic"
-=======
-                normalized = {
-                    "question": question,
-                    "options": options_map,
-                    "correct_answer": correct if correct in ["A", "B", "C", "D"] else "A",
-                    "explanation": str(mcq.get("explanation", "Based on the provided context.")),
-                    "difficulty": str(mcq.get("difficulty", request.difficulty or "medium")).lower(),
-                }
-
-                if normalized["question"]:
-                    valid_mcqs.append(normalized)
-
-        # Absolute fallback: synthesize missing MCQs so API always returns requested count.
-        if len(valid_mcqs) < request.num_questions:
-            missing = request.num_questions - len(valid_mcqs)
-            base_topic = request.source.strip() if request.source else "the topic"
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
             for i in range(missing):
                 valid_mcqs.append({
                     "question": f"Which statement best describes {base_topic} (item {i + 1})?",
@@ -776,7 +656,6 @@ async def generate_mcqs(request: MCQGenerateRequest):
                     },
                     "correct_answer": "A",
                     "explanation": "Option A is the best-supported choice based on available context.",
-<<<<<<< HEAD
                     "difficulty": normalized_difficulty,
                 })
 
@@ -788,13 +667,6 @@ async def generate_mcqs(request: MCQGenerateRequest):
                 detail="AI returned no MCQs. Try a broader topic, fewer questions, or a different source document."
             )
 
-=======
-                    "difficulty": (request.difficulty or "medium").lower(),
-                })
-
-        valid_mcqs = valid_mcqs[:request.num_questions]
-        
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         return {
             "status": "success",
             "total_generated": len(mcqs),
@@ -802,15 +674,11 @@ async def generate_mcqs(request: MCQGenerateRequest):
             "mcqs": valid_mcqs
         }
     
-<<<<<<< HEAD
     except HTTPException:
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
-=======
-    except Exception as e:
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         raise HTTPException(status_code=500, detail=str(e))
 
 

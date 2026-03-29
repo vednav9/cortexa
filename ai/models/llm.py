@@ -1,5 +1,4 @@
 """
-<<<<<<< HEAD
 Language model for text generation
 """
 import torch
@@ -10,12 +9,6 @@ from transformers import (
     pipeline
 )
 from typing import Optional
-=======
-Language model for local text generation (CPU/GPU)
-"""
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
->>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
 from config import LLM_MODEL, DEVICE, MODELS_DIR, MAX_NEW_TOKENS, TEMPERATURE, TOP_P
 
 class LanguageModel:
