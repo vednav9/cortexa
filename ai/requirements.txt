@@ -10,6 +10,10 @@ uvicorn>=0.23.0
 python-multipart>=0.0.6
 gunicorn
 pymongo==4.6.1
+<<<<<<< HEAD
+=======
+huggingface_hub>=0.20.0
+>>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
 
 # Document processing
 PyPDF2>=3.0.0

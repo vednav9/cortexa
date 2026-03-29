@@ -54,7 +54,15 @@ class JSONStore:
         
         # Get IDs to delete from the embeddings collection
         chunks_to_delete = list(self.chunks_collection.find(query, {"chunk_id": 1}))
+<<<<<<< HEAD
         chunk_ids = [doc["chunk_id"] for doc in chunks_to_delete]
+=======
+        chunk_ids = [
+            str(doc.get("chunk_id", "")).strip()
+            for doc in chunks_to_delete
+            if str(doc.get("chunk_id", "")).strip()
+        ]
+>>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         
         if chunk_ids:
             # 2. Delete the embeddings linked to those chunk IDs
@@ -119,7 +127,21 @@ class JSONStore:
                 db_query[f"metadata.{k}"] = v
         
         chunk_cursor = self.chunks_collection.find(db_query)
+<<<<<<< HEAD
         chunks_dict = {doc['chunk_id']: doc for doc in chunk_cursor}
+=======
+        chunks_dict = {}
+        skipped_chunk_rows = 0
+        for doc in chunk_cursor:
+            chunk_id = str(doc.get('chunk_id', '')).strip()
+            if not chunk_id:
+                skipped_chunk_rows += 1
+                continue
+            chunks_dict[chunk_id] = doc
+
+        if skipped_chunk_rows:
+            print(f"Warning: skipped {skipped_chunk_rows} chunk rows without chunk_id")
+>>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         
         if not chunks_dict:
             return [], [], []
@@ -129,18 +151,46 @@ class JSONStore:
         embeddings_cursor = self.embeddings_collection.find({"chunk_id": {"$in": chunk_ids}})
         
         results = []
+<<<<<<< HEAD
         for emb_doc in embeddings_cursor:
             chunk_id = emb_doc['chunk_id']
+=======
+        skipped_embedding_rows = 0
+        for emb_doc in embeddings_cursor:
+            chunk_id = str(emb_doc.get('chunk_id', '')).strip()
+            if not chunk_id:
+                skipped_embedding_rows += 1
+                continue
+>>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
             if chunk_id not in chunks_dict:
                 continue
                 
             chunk_data = chunks_dict[chunk_id]
+<<<<<<< HEAD
             doc_embedding = np.array(emb_doc['embedding'])
             
             # Compute cosine similarity
             similarity = np.dot(query_embedding, doc_embedding) / (
                 np.linalg.norm(query_embedding) * np.linalg.norm(doc_embedding)
             )
+=======
+            embedding_raw = emb_doc.get('embedding')
+            if embedding_raw is None:
+                skipped_embedding_rows += 1
+                continue
+            doc_embedding = np.array(embedding_raw)
+            if doc_embedding.size == 0:
+                skipped_embedding_rows += 1
+                continue
+            
+            # Compute cosine similarity
+            query_norm = np.linalg.norm(query_embedding)
+            doc_norm = np.linalg.norm(doc_embedding)
+            if query_norm == 0 or doc_norm == 0:
+                skipped_embedding_rows += 1
+                continue
+            similarity = np.dot(query_embedding, doc_embedding) / (query_norm * doc_norm)
+>>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
             distance = 1 - similarity
             
             results.append({
@@ -149,6 +199,12 @@ class JSONStore:
                 'distance': distance,
                 'similarity': similarity
             })
+<<<<<<< HEAD
+=======
+
+        if skipped_embedding_rows:
+            print(f"Warning: skipped {skipped_embedding_rows} embedding rows due to missing/invalid data")
+>>>>>>> a06ff7e70b83069b439c95563bab4f3822d242b1
         
         # Sort by best match
         results.sort(key=lambda x: x['distance'])
