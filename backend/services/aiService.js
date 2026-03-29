@@ -5,7 +5,7 @@ const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
 
 // Increased timeouts for AI operations
 const DEFAULT_TIMEOUT = 180000; // 3 minutes
-const LONG_TIMEOUT = 300000; // 5 minutes
+const LONG_TIMEOUT = 600000; // 10 minutes — matches getMcqTimeoutProfile primary limit
 const UPLOAD_TIMEOUT = 300000; // 5 minutes for document indexing uploads
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,6 +65,21 @@ class AIService {
       return response.data;
     } catch (error) {
       throw new Error(`MCQ generation failed: ${error.message}`);
+    }
+  }
+
+  // Embed text/query for semantic retrieval
+  async embedText(text) {
+    try {
+      const response = await axios.post(`${AI_API_URL}/embed`, {
+        text: String(text || "")
+      }, {
+        headers: getHeaders(),
+        timeout: 30000
+      });
+      return Array.isArray(response?.data?.embedding) ? response.data.embedding : null;
+    } catch (error) {
+      return null;
     }
   }
 

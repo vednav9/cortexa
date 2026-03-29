@@ -24,6 +24,10 @@ const hexToRgb = (hex) => {
         : '16, 185, 129';
 };
 
+const getMcqClientTimeoutMs = (count, difficulty = "medium") => {
+    return 600000;
+};
+
 export default function GenerateMCQ() {
     const { user } = useAuth();
     const outletContext = useOutletContext();
@@ -152,21 +156,38 @@ export default function GenerateMCQ() {
         try {
             setGenerating(true);
             const normalizedTopic = source.trim();
-            const response = await api.post("/teacher/mcq/generate", {
-                courseId: selectedCourse,
-                topic: normalizedTopic || "Generate MCQs from selected documents",
-                count: parseInt(numQuestions),
-                difficulty,
-                sourceType,
-                documentId: selectedDocumentIds[0] || null,
-                documentIds: selectedDocumentIds,
-            });
+            const requestTimeoutMs = getMcqClientTimeoutMs(numQuestions, difficulty);
+            const response = await api.post(
+                "/teacher/mcq/generate",
+                {
+                    courseId: selectedCourse,
+                    topic: normalizedTopic || "Generate MCQs from selected documents",
+                    count: parseInt(numQuestions),
+                    difficulty,
+                    sourceType,
+                    documentId: selectedDocumentIds[0] || null,
+                    documentIds: selectedDocumentIds,
+                },
+                {
+                    timeout: requestTimeoutMs,
+                }
+            );
 
-            setGeneratedMCQs(response.data.mcqs || []);
-            toast.success(`Generated ${response.data.mcqs?.length || 0} MCQs!`);
+            const normalizedMcqs = normalizeGeneratedMcqs(response.data.mcqs || []);
+            setGeneratedMCQs(normalizedMcqs);
+            toast.success(`Generated ${normalizedMcqs.length || 0} MCQs!`);
         } catch (error) {
-            console.error("Generate MCQs error:", error);
-            toast.error(error.response?.data?.message || "Failed to generate MCQs");
+            console.error("Generate MCQs error:", {
+                message: error?.message,
+                status: error?.response?.status,
+                data: error?.response?.data,
+            });
+            const serverMessage =
+                error?.response?.data?.error ||
+                error?.response?.data?.message ||
+                error?.message ||
+                "Failed to generate MCQs";
+            toast.error(serverMessage);
         } finally {
             setGenerating(false);
         }
@@ -284,6 +305,70 @@ export default function GenerateMCQ() {
 
     const clearSelectedDocuments = () => {
         setSelectedDocumentIds([]);
+    };
+
+    const normalizeCorrectAnswerIndex = (value) => {
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return Math.max(0, Math.min(3, Math.floor(value)));
+        }
+        if (typeof value === "string") {
+            const v = value.trim().toUpperCase();
+            if (/^[A-D]$/.test(v)) return v.charCodeAt(0) - 65;
+            const n = Number(v);
+            if (Number.isFinite(n)) return Math.max(0, Math.min(3, Math.floor(n)));
+        }
+        return 0;
+    };
+
+    const normalizeGeneratedMcqs = (mcqs = []) => {
+        if (!Array.isArray(mcqs)) return [];
+
+        return mcqs
+            .filter((mcq) => mcq && typeof mcq === 'object')
+            .map((mcq) => {
+                // Backend can return options as:
+                //   1. Array   ["opt a", "opt b", "opt c", "opt d"]
+                //   2. Dict    {A: "opt a", B: "opt b", C: "opt c", D: "opt d"}
+                //   3. Flat    option_a / option_b / option_c / option_d fields
+                let optA = '', optB = '', optC = '', optD = '';
+
+                if (Array.isArray(mcq?.options)) {
+                    const arr = mcq.options.map((o) => String(o ?? '').trim());
+                    optA = arr[0] ?? '';
+                    optB = arr[1] ?? '';
+                    optC = arr[2] ?? '';
+                    optD = arr[3] ?? '';
+                } else if (mcq?.options && typeof mcq.options === 'object') {
+                    optA = String(mcq.options.A ?? mcq.options.a ?? '').trim();
+                    optB = String(mcq.options.B ?? mcq.options.b ?? '').trim();
+                    optC = String(mcq.options.C ?? mcq.options.c ?? '').trim();
+                    optD = String(mcq.options.D ?? mcq.options.d ?? '').trim();
+                }
+
+                // Fall back to flat fields if dict/array left something empty
+                optA = optA || String(mcq?.option_a ?? '').trim();
+                optB = optB || String(mcq?.option_b ?? '').trim();
+                optC = optC || String(mcq?.option_c ?? '').trim();
+                optD = optD || String(mcq?.option_d ?? '').trim();
+
+                // Derive the correct answer index (0-3)
+                // backend returns either a letter ("A") or an index (0)
+                const rawCorrect = mcq?.correct_answer ?? mcq?.correctAnswer;
+                const correctIndex = normalizeCorrectAnswerIndex(rawCorrect);
+
+                return {
+                    ...mcq,
+                    question: String(mcq?.question || 'Question').trim(),
+                    option_a: optA || 'Option A',
+                    option_b: optB || 'Option B',
+                    option_c: optC || 'Option C',
+                    option_d: optD || 'Option D',
+                    correct_answer: correctIndex,
+                    explanation: String(mcq?.explanation || '').trim(),
+                    difficulty: String(mcq?.difficulty || difficulty).toLowerCase(),
+                };
+            })
+            .filter((mcq) => mcq.question && mcq.option_a);
     };
 
     return (
@@ -473,15 +558,16 @@ export default function GenerateMCQ() {
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
                                         Quantity
                                     </label>
-                                    <input
-                                        type="number"
+                                    <select
                                         value={numQuestions}
-                                        onChange={(e) => setNumQuestions(e.target.value)}
-                                        min="1"
-                                        max="20"
+                                        onChange={(e) => setNumQuestions(Number(e.target.value))}
                                         className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-bold text-[14px] transition-all"
                                         style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
-                                    />
+                                    >
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={15}>15</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
@@ -518,7 +604,7 @@ export default function GenerateMCQ() {
                             >
                                 {generating ? (
                                     <>
-                                        <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                         Generating...
                                     </>
                                 ) : (
@@ -610,15 +696,7 @@ export default function GenerateMCQ() {
                                                         );
                                                     })}
                                                 </div>
-                                                {mcq.explanation && (
-                                                    <div className="mt-4 p-4 rounded-xl text-sm" style={{ backgroundColor: `rgba(${rgb},0.04)` }}>
-                                                        <div className="flex items-center gap-1.5 mb-1">
-                                                            <HiSparkles className="w-4 h-4" style={{ color: brandColor }} />
-                                                            <span className="font-bold text-gray-900 text-xs uppercase tracking-wide">AI Explanation</span>
-                                                        </div>
-                                                        <p className="text-gray-700 font-medium leading-relaxed">{mcq.explanation}</p>
-                                                    </div>
-                                                )}
+                                                {/* AI Explanation hidden per user request */}
                                             </div>
                                         </div>
                                     </div>

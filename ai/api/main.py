@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import shutil
+import re
 from pathlib import Path
 
 from config import DOCUMENTS_DIR, AUDIO_DIR, TRANSCRIPTS_DIR
@@ -552,36 +553,40 @@ async def generate_mcqs(request: MCQGenerateRequest):
     try:
         mcq_generator = get_mcq_generator_instance()
         mcq_validator = get_mcq_validator_instance()
-        
-        if request.source_type == "text":
+
+        # Normalize source_type aliases (frontend may send 'document' or 'topic', AI internally uses 'text')
+        raw_source_type = (request.source_type or "").strip().lower()
+        normalized_difficulty = (request.difficulty or "medium").lower()
+        if normalized_difficulty not in ["easy", "medium", "hard"]:
+            normalized_difficulty = "medium"
+        num_questions = max(1, min(20, int(request.num_questions or 5)))
+
+        if raw_source_type in ("text", "topic"):
             mcqs = mcq_generator.generate_from_text(
                 text=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
+                num_questions=num_questions,
+                difficulty=normalized_difficulty
             )
-        elif request.source_type == "document":
+        elif raw_source_type == "document":
             mcqs = mcq_generator.generate_from_document(
                 document_name=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
-            )
-        elif request.source_type == "topic":
-            mcqs = mcq_generator.generate_from_topic(
-                topic=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
+                num_questions=num_questions,
+                difficulty=normalized_difficulty
             )
         else:
-            raise HTTPException(status_code=400, detail="Invalid source_type")
-        
+            raise HTTPException(status_code=400, detail=f"Invalid source_type '{request.source_type}'. Use 'text', 'topic', or 'document'.")
+
+        if not isinstance(mcqs, list):
+            mcqs = []
+
         # Filter valid MCQs first.
         valid_mcqs = [mcq for mcq in mcqs if mcq_validator.validate_mcq(mcq)]
 
         # If strict validation drops too many questions, top up with normalized
         # parsed MCQs so caller still gets requested count.
-        if len(valid_mcqs) < request.num_questions:
+        if len(valid_mcqs) < num_questions:
             for mcq in mcqs:
-                if len(valid_mcqs) >= request.num_questions:
+                if len(valid_mcqs) >= num_questions:
                     break
                 if mcq in valid_mcqs:
                     continue
@@ -618,21 +623,28 @@ async def generate_mcqs(request: MCQGenerateRequest):
                         "D": str(mcq.get("option_d", "Option D")),
                     }
 
-                normalized = {
+                if correct not in ["A", "B", "C", "D"]:
+                    correct = "A"
+
+                normalized_mcq = {
                     "question": question,
                     "options": options_map,
-                    "correct_answer": correct if correct in ["A", "B", "C", "D"] else "A",
+                    "correct_answer": correct,
                     "explanation": str(mcq.get("explanation", "Based on the provided context.")),
-                    "difficulty": str(mcq.get("difficulty", request.difficulty or "medium")).lower(),
+                    "difficulty": normalized_difficulty,
                 }
 
-                if normalized["question"]:
-                    valid_mcqs.append(normalized)
+                if normalized_mcq["question"]:
+                    valid_mcqs.append(normalized_mcq)
 
         # Absolute fallback: synthesize missing MCQs so API always returns requested count.
-        if len(valid_mcqs) < request.num_questions:
-            missing = request.num_questions - len(valid_mcqs)
-            base_topic = request.source.strip() if request.source else "the topic"
+        if len(valid_mcqs) < num_questions:
+            missing = num_questions - len(valid_mcqs)
+            raw_source = (request.source or "").strip()
+            first_line = raw_source.split('\n')[0].strip()
+            base_topic = re.sub(r'^Topic:\s*', '', first_line, flags=re.IGNORECASE).strip()
+            if not base_topic or len(base_topic) > 120:
+                base_topic = "the selected topic"
             for i in range(missing):
                 valid_mcqs.append({
                     "question": f"Which statement best describes {base_topic} (item {i + 1})?",
@@ -644,11 +656,17 @@ async def generate_mcqs(request: MCQGenerateRequest):
                     },
                     "correct_answer": "A",
                     "explanation": "Option A is the best-supported choice based on available context.",
-                    "difficulty": (request.difficulty or "medium").lower(),
+                    "difficulty": normalized_difficulty,
                 })
 
-        valid_mcqs = valid_mcqs[:request.num_questions]
-        
+        valid_mcqs = valid_mcqs[:num_questions]
+
+        if not valid_mcqs:
+            raise HTTPException(
+                status_code=502,
+                detail="AI returned no MCQs. Try a broader topic, fewer questions, or a different source document."
+            )
+
         return {
             "status": "success",
             "total_generated": len(mcqs),
@@ -656,7 +674,11 @@ async def generate_mcqs(request: MCQGenerateRequest):
             "mcqs": valid_mcqs
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

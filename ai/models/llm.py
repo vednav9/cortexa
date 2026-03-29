@@ -71,7 +71,7 @@ class LanguageModel:
             prompt,
             return_tensors="pt",
             truncation=True,
-            max_length=1024,  # cap input to avoid OOM and slow processing
+            max_length=768,  # cap input; single-MCQ prompts are <512 tokens
         ).to(self.model.device)
 
         with torch.no_grad():
