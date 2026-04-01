@@ -1,5 +1,5 @@
 // MCQTest.jsx - Student MCQ Test Interface with beautiful UI
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiCheckCircle,
@@ -12,14 +12,12 @@ import {
   FiAlertCircle,
 } from "react-icons/fi";
 import { HiSparkles } from "react-icons/hi";
-import { useAuth } from "../../../context/authcontext";
 import { useOutletContext } from "react-router-dom";
 import toast from "react-hot-toast";
 import api from "../../../services/api";
 
 export default function MCQTest() {
-  const { user } = useAuth();
-  const { currentInstitution } = useOutletContext();
+  const { institution } = useOutletContext();
   const [tests, setTests] = useState([]);
   const [activeTest, setActiveTest] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -30,11 +28,65 @@ export default function MCQTest() {
   const [loading, setLoading] = useState(true);
   const [startTime, setStartTime] = useState(null);
 
-  useEffect(() => {
-    if (currentInstitution?._id) {
-      fetchAvailableTests();
+  const fetchAvailableTests = useCallback(async () => {
+    if (!institution?._id) {
+      setTests([]);
+      setLoading(false);
+      return;
     }
-  }, [currentInstitution]);
+
+    try {
+      setLoading(true);
+      const res = await api.get(`/student-mcq/mcq/assigned?institutionId=${institution._id}`);
+      setTests(res.data.mcqSets || []);
+    } catch (error) {
+      console.error("Error fetching tests:", error);
+      toast.error("Failed to load tests");
+      setTests([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [institution?._id]);
+
+  const handleSubmitTest = useCallback(async () => {
+    if (!window.confirm("Are you sure you want to submit the test?")) {
+      return;
+    }
+
+    try {
+      const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+      
+      const answersArray = activeTest.questions.map((q, index) => ({
+        questionIndex: index,
+        selectedAnswer: answers[index] !== undefined ? answers[index] : -1
+      }));
+
+      const res = await api.post(`/student-mcq/mcq/${activeTest._id}/submit`, {
+        answers: answersArray,
+        timeTaken
+      });
+
+      setResults(res.data.results);
+      setShowResults(true);
+      toast.success("Test submitted successfully!");
+      
+      // Refresh test list
+      fetchAvailableTests();
+    } catch (error) {
+      console.error("Error submitting test:", error);
+      toast.error(error.response?.data?.error || "Failed to submit test");
+    }
+  }, [activeTest, answers, startTime, fetchAvailableTests]);
+
+  useEffect(() => {
+    if (!institution?._id) {
+      setTests([]);
+      setLoading(false);
+      return;
+    }
+
+    fetchAvailableTests();
+  }, [institution?._id, fetchAvailableTests]);
 
   // Timer logic
   useEffect(() => {
@@ -50,21 +102,7 @@ export default function MCQTest() {
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [activeTest, timeLeft, showResults]);
-
-  const fetchAvailableTests = async () => {
-    try {
-      setLoading(true);
-      const res = await api.get(`/student-mcq/mcq/assigned?institutionId=${currentInstitution._id}`);
-      setTests(res.data.mcqSets || []);
-    } catch (error) {
-      console.error("Error fetching tests:", error);
-      toast.error("Failed to load tests");
-      setTests([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [activeTest, timeLeft, showResults, handleSubmitTest]);
 
   const startTest = async (test) => {
     if (test.hasAttempted) {
@@ -109,36 +147,6 @@ export default function MCQTest() {
   const handlePrevQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1);
-    }
-  };
-
-  const handleSubmitTest = async () => {
-    if (!window.confirm("Are you sure you want to submit the test?")) {
-      return;
-    }
-
-    try {
-      const timeTaken = Math.floor((Date.now() - startTime) / 1000);
-      
-      const answersArray = activeTest.questions.map((q, index) => ({
-        questionIndex: index,
-        selectedAnswer: answers[index] !== undefined ? answers[index] : -1
-      }));
-
-      const res = await api.post(`/student-mcq/mcq/${activeTest._id}/submit`, {
-        answers: answersArray,
-        timeTaken
-      });
-
-      setResults(res.data.results);
-      setShowResults(true);
-      toast.success("Test submitted successfully!");
-      
-      // Refresh test list
-      fetchAvailableTests();
-    } catch (error) {
-      console.error("Error submitting test:", error);
-      toast.error(error.response?.data?.error || "Failed to submit test");
     }
   };
 
@@ -192,7 +200,7 @@ export default function MCQTest() {
           className="max-w-2xl mx-auto"
         >
           <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-            <div className="text-6xl mb-4">{gradeInfo.emoji}</div>
+            {/* <div className="text-6xl mb-4">{gradeInfo.emoji}</div> */}
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Test Completed!</h2>
             <p className="text-gray-600 mb-8">{activeTest.title}</p>
 
@@ -382,6 +390,14 @@ export default function MCQTest() {
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
               <p className="text-gray-600">Loading tests...</p>
             </div>
+          </div>
+        ) : !institution?._id ? (
+          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+            <FiAlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              Institution Not Selected
+            </h3>
+            <p className="text-gray-600">Please select an institution to view assigned MCQ tests.</p>
           </div>
         ) : tests.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-lg p-12 text-center">

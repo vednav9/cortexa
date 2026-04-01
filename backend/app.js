@@ -21,6 +21,7 @@ import queryRoutes from "./routes/queryRoutes.js";
 import qaRoutes from './routes/qaRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import studentRagRoutes from './routes/studentRagRoutes.js';
+import studentMCQRoutes from './routes/studentMCQRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,6 +85,7 @@ app.use("/api/queries", queryRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/student/rag', studentRagRoutes);
+app.use('/api/student-mcq', studentMCQRoutes);
 
 console.log("✅ All routes registered successfully");
 
