@@ -10,10 +10,16 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set in environment variables");
+function getGeminiClient() {
+    const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+    const apiKey = String(rawKey).trim().replace(/^['\"]|['\"]$/g, "");
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    if (!apiKey) {
+        throw new Error("Gemini API key is missing. Set GEMINI_API_KEY (or GOOGLE_API_KEY) in backend/.env");
+    }
+
+    return new GoogleGenerativeAI(apiKey);
+}
 
 // Supported MIME types Gemini can read natively
 const MIME_MAP = {
@@ -147,6 +153,7 @@ export async function generateMCQsWithGemini({ documents, topic, numQuestions, d
         throw new Error("No documents provided for MCQ generation.");
     }
 
+    const genAI = getGeminiClient();
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 

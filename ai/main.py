@@ -6,7 +6,7 @@ from typing import List
 
 from config import DOCUMENTS_DIR
 from vectordb.document_processor import DocumentProcessor
-from vectordb.json_store import get_json_store  # Changed
+from vectordb.mongodb_store import get_mongodb_store
 from rag.retriever import get_retriever
 from rag.generator import get_generator
 
@@ -17,7 +17,7 @@ def load_documents(file_paths: List[str]):
     print("="*60)
     
     processor = DocumentProcessor()
-    vector_store = get_json_store()
+    vector_store = get_mongodb_store()
     
     for file_path in file_paths:
         print(f"\nProcessing: {file_path}")
@@ -32,8 +32,9 @@ def load_documents(file_paths: List[str]):
         vector_store.add_documents(texts, metadatas, ids)
     
     stats = vector_store.get_stats()
-    print(f"\n✓ Total chunks in store: {stats['total_documents']}")
-    print(f"✓ JSON file size: {stats['file_size_mb']:.2f} MB")
+    print(f"\n✓ Total chunks in store: {stats.get('total_chunks', 0)}")
+    print(f"✓ Total embeddings in store: {stats.get('total_embeddings', 0)}")
+    print(f"✓ MongoDB storage size: {stats.get('storage_size_mb', 0):.2f} MB")
     
     # Export chunks only (without embeddings)
     vector_store.export_chunks_only()
@@ -76,7 +77,7 @@ def interactive_mode():
     print("  - Type 'quit' or 'exit' to stop")
     print("="*60 + "\n")
     
-    vector_store = get_json_store()
+    vector_store = get_mongodb_store()
     
     while True:
         query = input("\n💬 Your question: ").strip()
