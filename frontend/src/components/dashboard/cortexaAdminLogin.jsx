@@ -49,6 +49,9 @@ const CortexaAdminLogin = () => {
                 onSubmit={handleSubmit}
                 className="bg-white p-6 rounded-md shadow-md w-[320px]"
             >
+                <div className="w-12 h-12 mx-auto mb-4 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center">
+                    <img src="/logo.png" alt="Cortexa logo" className="w-full h-full object-contain scale-125" />
+                </div>
                 <h2 className="text-xl font-semibold mb-4 text-center">
                     Cortexa Admin Login
                 </h2>

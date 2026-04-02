@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useParams, Outlet, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiAlertCircle, FiArrowUp } from "react-icons/fi";
-import { HiSparkles } from "react-icons/hi";
 import api from "../services/api";
 import { InstitutionContext } from "../context/InstitutionContext";
 import { useAuth } from "../context/authcontext";
@@ -124,7 +123,7 @@ export default function InstitutionLayout() {
                             animate={{ rotate: [0, -180, -360] }}
                             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                         >
-                            <HiSparkles className="w-8 h-8 text-white" />
+                            <img src="/logo.png" alt="Cortexa logo" className="w-full h-full object-contain scale-125" />
                         </motion.div>
                     </motion.div>
                     <p className="text-gray-600 font-semibold text-lg">Loading institution...</p>

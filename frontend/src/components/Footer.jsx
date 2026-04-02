@@ -72,8 +72,11 @@ const Footer = () => {
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             aria-label="Back to top"
-            className="group focus:outline-none"
+            className="group flex items-center gap-2.5 focus:outline-none"
           >
+            <span className="h-8 w-8 rounded-lg overflow-hidden bg-white/10 border border-white/[0.08] flex items-center justify-center">
+              <img src="/logo.png" alt="Cortexa logo" className="h-full w-full object-contain scale-125" />
+            </span>
             <span className="text-lg font-extrabold tracking-tight text-white/60 transition-colors duration-200 group-hover:text-white">
               Cortexa
             </span>
