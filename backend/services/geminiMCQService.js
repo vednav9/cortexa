@@ -10,10 +10,16 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set in environment variables");
+function getGeminiClient() {
+    const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+    const apiKey = String(rawKey).trim().replace(/^['\"]|['\"]$/g, "");
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    if (!apiKey) {
+        throw new Error("Gemini API key is missing. Set GEMINI_API_KEY (or GOOGLE_API_KEY) in backend/.env");
+    }
+
+    return new GoogleGenerativeAI(apiKey);
+}
 
 // Supported MIME types Gemini can read natively
 const MIME_MAP = {
@@ -93,19 +99,26 @@ function parseGeminiResponse(text, numQuestions, difficulty) {
 
     let parsed = [];
 
-    // Try JSON parse
+    // Attempt 1: direct JSON parse of the full cleaned text
     try {
         const json = JSON.parse(cleaned);
         parsed = Array.isArray(json) ? json : [];
-    } catch (_) {
-        // Attempt to extract JSON array substring
+    } catch (_) { /* fall through */ }
+
+    // Attempt 2: extract the outermost JSON array substring (handles leading/trailing text)
+    if (parsed.length === 0) {
         const match = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/);
         if (match) {
-            try {
-                parsed = JSON.parse(match[0]);
-            } catch (_2) {
-                parsed = [];
-            }
+            try { parsed = JSON.parse(match[0]); } catch (_) { /* fall through */ }
+        }
+    }
+
+    // Attempt 3: greedy per-object extraction (rescues truncated JSON arrays)
+    if (parsed.length === 0) {
+        const objRegex = /\{[^{}]*"question"[^{}]*"options"[^{}]*"correct_answer"[^{}]*\}/g;
+        const objects = cleaned.match(objRegex) || [];
+        for (const obj of objects) {
+            try { parsed.push(JSON.parse(obj)); } catch (_) { /* skip malformed obj */ }
         }
     }
 
@@ -147,6 +160,7 @@ export async function generateMCQsWithGemini({ documents, topic, numQuestions, d
         throw new Error("No documents provided for MCQ generation.");
     }
 
+    const genAI = getGeminiClient();
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 
@@ -188,15 +202,22 @@ export async function generateMCQsWithGemini({ documents, topic, numQuestions, d
         contents,
         generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: numQuestions * 150 + 200,
+            // Each MCQ object can be ~300-400 tokens when formatted as JSON.
+            // Using a generous fixed limit so the array is never truncated.
+            maxOutputTokens: 4096,
         },
     });
 
     const responseText = result.response.text();
-    console.log("📝 Gemini raw response (first 300 chars):", responseText.slice(0, 300));
+    console.log(`📝 Gemini raw response length: ${responseText.length} chars`);
+    console.log("📝 Gemini raw response (first 500 chars):", responseText.slice(0, 500));
 
     const mcqs = parseGeminiResponse(responseText, numQuestions, difficulty);
-    console.log(`✅ Parsed ${mcqs.length} MCQs from Gemini response`);
+    if (mcqs.length === 0) {
+        console.error("⚠️  Parser returned 0 MCQs. Full response:\n", responseText);
+    } else {
+        console.log(`✅ Parsed ${mcqs.length} MCQs from Gemini response`);
+    }
 
     return mcqs;
 }

@@ -49,6 +49,7 @@ export default function GenerateMCQ() {
 
     // Generated MCQs
     const [generatedMCQs, setGeneratedMCQs] = useState([]);
+    const [editingMcqIndex, setEditingMcqIndex] = useState(null);
 
     // Save modal
     const [showSaveModal, setShowSaveModal] = useState(false);
@@ -371,6 +372,12 @@ export default function GenerateMCQ() {
             .filter((mcq) => mcq.question && mcq.option_a);
     };
 
+    const updateGeneratedMcqField = (index, field, value) => {
+        setGeneratedMCQs((prev) =>
+            prev.map((mcq, i) => (i === index ? { ...mcq, [field]: value } : mcq))
+        );
+    };
+
     return (
         <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: `rgba(${rgb},0.02)` }}>
             <div className="max-w-7xl mx-auto">
@@ -664,15 +671,39 @@ export default function GenerateMCQ() {
                                                 {index + 1}
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="font-bold text-gray-900 mb-4 mt-1 leading-relaxed text-[15px]">
-                                                    {mcq.question}
-                                                </h3>
+                                                <div className="flex items-center justify-between gap-3 mb-4 mt-1">
+                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                                        Question {index + 1}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => setEditingMcqIndex(editingMcqIndex === index ? null : index)}
+                                                        className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-semibold flex items-center gap-1.5"
+                                                    >
+                                                        <FiEdit2 className="w-3.5 h-3.5" />
+                                                        {editingMcqIndex === index ? "Done" : "Edit"}
+                                                    </button>
+                                                </div>
+
+                                                {editingMcqIndex === index ? (
+                                                    <textarea
+                                                        value={mcq.question}
+                                                        onChange={(e) => updateGeneratedMcqField(index, "question", e.target.value)}
+                                                        rows={3}
+                                                        className="w-full mb-4 px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 text-[14px] font-semibold"
+                                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                                    />
+                                                ) : (
+                                                    <h3 className="font-bold text-gray-900 mb-4 leading-relaxed text-[15px]">
+                                                        {mcq.question}
+                                                    </h3>
+                                                )}
+
                                                 <div className="grid gap-3 sm:grid-cols-2">
                                                     {[
-                                                        { label: "A", text: mcq.option_a },
-                                                        { label: "B", text: mcq.option_b },
-                                                        { label: "C", text: mcq.option_c },
-                                                        { label: "D", text: mcq.option_d }
+                                                        { label: "A", field: "option_a", text: mcq.option_a },
+                                                        { label: "B", field: "option_b", text: mcq.option_b },
+                                                        { label: "C", field: "option_c", text: mcq.option_c },
+                                                        { label: "D", field: "option_d", text: mcq.option_d }
                                                     ].map((option, idx) => {
                                                         const isCorrect = idx === mcq.correct_answer;
                                                         return (
@@ -689,9 +720,36 @@ export default function GenerateMCQ() {
                                                                 <span className={`w-6 h-6 rounded flex items-center justify-center font-bold text-xs shrink-0 ${isCorrect ? "bg-green-500 text-white" : "bg-white text-gray-500 shadow-sm"}`}>
                                                                     {option.label}
                                                                 </span>
-                                                                <span className={`text-[13px] mt-0.5 font-medium ${isCorrect ? "text-green-900" : "text-gray-700"}`}>
-                                                                    {option.text}
-                                                                </span>
+                                                                {editingMcqIndex === index ? (
+                                                                    <div className="flex-1 min-w-0 space-y-2">
+                                                                        <input
+                                                                            value={option.text}
+                                                                            onChange={(e) => updateGeneratedMcqField(index, option.field, e.target.value)}
+                                                                            className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[13px] font-medium focus:outline-none focus:ring-2"
+                                                                            style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                                                        />
+                                                                        <div className="flex items-center justify-between">
+                                                                            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gray-500 whitespace-nowrap">
+                                                                                <input
+                                                                                    type="radio"
+                                                                                    name={`correct-answer-${index}`}
+                                                                                    checked={isCorrect}
+                                                                                    onChange={() => updateGeneratedMcqField(index, "correct_answer", idx)}
+                                                                                />
+                                                                                Mark as correct
+                                                                            </label>
+                                                                            {isCorrect && (
+                                                                                <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                                                                                    Correct
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className={`text-[13px] mt-0.5 font-medium ${isCorrect ? "text-green-900" : "text-gray-700"}`}>
+                                                                        {option.text}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}
@@ -853,7 +911,7 @@ export default function GenerateMCQ() {
                                     </div>
                                     <div className="mb-8">
                                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                                            Description <span className="text-gray-400 font-semibold lowercase normal-case">(optional)</span>
+                                            Description <span className="text-gray-400 font-semibold normal-case">(optional)</span>
                                         </label>
                                         <textarea
                                             value={mcqSetDescription}

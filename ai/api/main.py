@@ -163,8 +163,8 @@ def get_doc_processor():
 def get_vector_store():
     global _vector_store
     if _vector_store is None:
-        from vectordb.json_store import get_json_store
-        _vector_store = get_json_store()
+        from vectordb.mongodb_store import get_mongodb_store
+        _vector_store = get_mongodb_store()
     return _vector_store
 
 

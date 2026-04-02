@@ -6,7 +6,7 @@ import re
 import unicodedata
 from typing import List, Dict, Optional
 from models.llm import get_llm_model
-from vectordb.json_store import get_json_store
+from vectordb.mongodb_store import get_mongodb_store
 
 
 def sanitize_context(text: str) -> str:
@@ -35,7 +35,7 @@ def sanitize_context(text: str) -> str:
 class MCQGenerator:
     def __init__(self):
         self.llm = get_llm_model()
-        self.vector_store = get_json_store()
+        self.vector_store = get_mongodb_store()
     
     def generate_from_text(
         self,
