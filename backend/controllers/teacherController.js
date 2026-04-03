@@ -70,15 +70,16 @@ const normalizeCorrectAnswer = (correctAnswer, optionsLength = 4) => {
 };
 
 const normalizeMCQ = (mcq, difficulty = "medium") => {
-    const options = normalizeOptions(mcq.options, mcq);
-    const correctRaw = mcq.correctAnswer ?? mcq.correct_answer;
+    const safe = (mcq && typeof mcq === "object") ? mcq : {};
+    const options = normalizeOptions(safe.options, safe);
+    const correctRaw = safe.correctAnswer ?? safe.correct_answer;
     return {
-        question: stripQuestionPrefix(mcq.question || "Question"),
+        question: stripQuestionPrefix(safe.question || "Question"),
         options,
         correctAnswer: normalizeCorrectAnswer(correctRaw, options.length),
-        explanation: String(mcq.explanation || "").trim(),
-        difficulty: ["easy", "medium", "hard"].includes(String(mcq.difficulty || "").toLowerCase())
-            ? String(mcq.difficulty).toLowerCase()
+        explanation: String(safe.explanation || "").trim(),
+        difficulty: ["easy", "medium", "hard"].includes(String(safe.difficulty || "").toLowerCase())
+            ? String(safe.difficulty).toLowerCase()
             : difficulty,
     };
 };
@@ -211,18 +212,27 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
         document = await Document.findOne({
             _id: documentId,
             course: courseId,
-            uploadedBy: teacherId,
+            // FIX: Removed 'uploadedBy: teacherId' so any authorized teacher can generate from course docs
         });
     }
 
     if (!document && documentName) {
+        const requestedName = String(documentName || "").trim();
+        const requestedStem = requestedName.includes(".")
+            ? requestedName.split(".").slice(0, -1).join(".").trim()
+            : "";
+        const nameCandidates = Array.from(new Set([requestedName, requestedStem].filter(Boolean)));
+        const nameClauses = nameCandidates.flatMap((name) => {
+            const safe = escapeRegex(name);
+            return [
+                { originalName: { $regex: `^${safe}$`, $options: "i" } },
+                { fileName: { $regex: `^${safe}$`, $options: "i" } },
+            ];
+        });
+
         document = await Document.findOne({
             course: courseId,
-            uploadedBy: teacherId,
-            $or: [
-                { originalName: documentName },
-                { fileName: documentName },
-            ],
+            ...(nameClauses.length ? { $or: nameClauses } : {}),
         }).sort({ createdAt: -1 });
     }
 
@@ -987,7 +997,6 @@ export const deleteDocument = async (req, res) => {
 export const markDocumentProcessed = async (req, res) => {
   try {
     const { documentId } = req.params;
-    // ✅ FIX: chunks + embeddingModel now come from the request body directly
     const { chunksCount, chunks, embeddingModel } = req.body || {};
     const teacherId = req.user.id;
 
@@ -1013,24 +1022,20 @@ export const markDocumentProcessed = async (req, res) => {
     }
 
     let persisted = { chunkCount: 0, embeddingCount: 0 };
-
     if (incomingChunks.length > 0) {
-      persisted = await persistChunksToMongo(
-        document,
-        incomingChunks,
-        embeddingModel || 'paraphrase-MiniLM-L3-v2'
-      );
+      persisted = await persistChunksToMongo(document, incomingChunks, embeddingModel || 'paraphrase-MiniLM-L3-v2');
     }
 
-        if ((requestedChunks ?? 0) > 0 && persisted.chunkCount === 0) {
-            throw new Error("Document marked processed but no chunks were persisted in DocumentChunk.");
-        }
+    // FIX: Changed 'requestedChunks' to 'requestedCount' to prevent ReferenceError crash
+    if (requestedCount > 0 && persisted.chunkCount === 0) {
+        throw new Error("Document marked processed but no chunks were persisted in DocumentChunk.");
+    }
 
-        const update = {
-            isProcessed: true,
-            processingError: null,
-            chunksCount: Math.max(0, persisted.chunkCount),
-        };
+    const update = {
+        isProcessed: true,
+        processingError: null,
+        chunksCount: Math.max(0, persisted.chunkCount),
+    };
 
     await Document.findByIdAndUpdate(documentId, {
       isProcessed: true,
@@ -1148,102 +1153,107 @@ export const generateMCQs = async (req, res) => {
         const { courseId, topic, count, difficulty, sourceType, documentId } = req.body;
         const teacherId = req.user.id;
 
-        if (!courseId || !topic) {
-            return res.status(400).json({
-                success: false,
-                message: "Course and topic are required"
-            });
+        if (!courseId) {
+            return res.status(400).json({ success: false, message: "Course is required" });
         }
 
-        // Verify teacher is authorized for this course
+        const normalizedSourceType = ["topic", "document"].includes(sourceType) ? sourceType : "topic";
+        const normalizedTopic = String(topic || "").trim();
+
+        if (normalizedSourceType === "topic" && !normalizedTopic) {
+            return res.status(400).json({ success: false, message: "Topic is required for topic-based MCQ generation" });
+        }
+        if (normalizedSourceType === "document" && !documentId && !normalizedTopic) {
+            return res.status(400).json({ success: false, message: "Document ID or document name is required for document-based MCQ generation" });
+        }
+
         const teacher = await Teacher.findById(teacherId).select('authorizedCourses');
-        
         if (!teacher) {
-            return res.status(404).json({
-                success: false,
-                message: "Teacher not found"
-            });
+            return res.status(404).json({ success: false, message: "Teacher not found" });
         }
 
-        const isAuthorized = teacher.authorizedCourses.some(
+        // FIX: Added `(teacher.authorizedCourses || [])` to prevent TypeError crash
+        const isAuthorized = (teacher.authorizedCourses || []).some(
             course => course.toString() === courseId
         );
 
         if (!isAuthorized) {
-            return res.status(403).json({
-                success: false,
-                message: "You are not authorized to generate MCQs for this course"
-            });
+            return res.status(403).json({ success: false, message: "You are not authorized to generate MCQs for this course" });
         }
 
-        const normalizedSourceType = ["topic", "document"].includes(sourceType)
-            ? sourceType
-            : "topic";
-        const normalizedDifficulty = ["easy", "medium", "hard"].includes((difficulty || "").toLowerCase())
-            ? difficulty.toLowerCase()
-            : "medium";
-        const requestedCount = Number.isFinite(Number(count))
-            ? Math.max(1, Math.min(10, Number(count)))
-            : 5;
+        const normalizedDifficulty = ["easy", "medium", "hard"].includes((difficulty || "").toLowerCase()) ? difficulty.toLowerCase() : "medium";
+        const requestedCount = Number.isFinite(Number(count)) ? Math.max(1, Math.min(10, Number(count))) : 5;
 
         let contextText = "";
-        let sourceMeta = topic;
+        let sourceMeta = normalizedTopic;
+        let promptTopic = normalizedTopic;
 
         if (normalizedSourceType === "document") {
-            const docContext = await buildDocumentChunkContext({
-                documentId,
-                documentName: topic,
-                teacherId,
-                courseId,
-            });
-            contextText = docContext.contextText;
-            sourceMeta = docContext.document?.originalName || topic;
+            try {
+                const docContext = await buildDocumentChunkContext({
+                    documentId,
+                    documentName: normalizedTopic,
+                    teacherId,
+                    courseId,
+                });
+                contextText = docContext.contextText;
+                sourceMeta = docContext.document?.originalName || normalizedTopic;
+                if (!promptTopic) promptTopic = String(sourceMeta || "document").trim();
+            } catch (docErr) {
+                // FIX: Catch Document lookup errors gracefully instead of crashing
+                return res.status(404).json({ success: false, message: docErr.message });
+            }
         } else {
-            // Topic mode: build context from web first, no document/chunk lookup.
-            contextText = await buildTopicWebContext(topic);
+            contextText = await buildTopicWebContext(promptTopic);
         }
 
-        const aiPrompt = `Topic: ${topic}\n\nUse the following reference context to create accurate MCQs:\n${contextText}`;
+        const aiPrompt = `Topic: ${promptTopic}\n\nUse the following reference context to create accurate MCQs:\n${contextText}`;
 
         let firstPass = null;
         try {
-            firstPass = await aiService.generateMCQs(
-                "text",
-                aiPrompt,
-                requestedCount,
-                normalizedDifficulty
-            );
+            firstPass = await aiService.generateMCQs("text", aiPrompt, requestedCount, normalizedDifficulty);
         } catch (firstPassError) {
             console.warn("Primary AI generation failed:", firstPassError?.message || firstPassError);
         }
 
-        const rawFirstPass = Array.isArray(firstPass?.mcqs) ? firstPass.mcqs : [];
+        // FIX: Safely parse FastAPI response whether it returns { mcqs: [...] } OR a flat array [...]
+        let rawFirstPass = [];
+        if (firstPass && Array.isArray(firstPass.mcqs)) {
+            rawFirstPass = firstPass.mcqs;
+        } else if (Array.isArray(firstPass)) {
+            rawFirstPass = firstPass;
+        }
+
         let mcqs = mergeUniqueMcqs(rawFirstPass.map((mcq) => normalizeMCQ(mcq, normalizedDifficulty)));
 
-        // Top-up pass for missing MCQs.
+        // Top-up pass for missing MCQs
         if (mcqs.length < requestedCount) {
             const deficit = requestedCount - mcqs.length;
             const topUpPrompt = `${aiPrompt}\n\nGenerate ${deficit} additional MCQs that are different from previous ones.`;
+            
             let secondPass = null;
             try {
-                secondPass = await aiService.generateMCQs(
-                    "text",
-                    topUpPrompt,
-                    deficit,
-                    normalizedDifficulty
-                );
+                secondPass = await aiService.generateMCQs("text", topUpPrompt, deficit, normalizedDifficulty);
             } catch (topUpError) {
                 console.warn("Top-up AI generation failed:", topUpError?.message || topUpError);
             }
-            const rawSecondPass = Array.isArray(secondPass?.mcqs) ? secondPass.mcqs : [];
+            
+            let rawSecondPass = [];
+            if (secondPass && Array.isArray(secondPass.mcqs)) {
+                rawSecondPass = secondPass.mcqs;
+            } else if (Array.isArray(secondPass)) {
+                rawSecondPass = secondPass;
+            }
+
             mcqs = mergeUniqueMcqs([
                 ...mcqs,
                 ...rawSecondPass.map((mcq) => normalizeMCQ(mcq, normalizedDifficulty)),
             ]);
         }
 
+        // Fallback pass if AI totally failed
         if (mcqs.length < requestedCount) {
-            const fallback = buildFallbackMcqs(contextText || topic, requestedCount - mcqs.length, normalizedDifficulty);
+            const fallback = buildFallbackMcqs(contextText || promptTopic, requestedCount - mcqs.length, normalizedDifficulty);
             mcqs = mergeUniqueMcqs([...mcqs, ...fallback]);
         }
 
@@ -1252,7 +1262,7 @@ export const generateMCQs = async (req, res) => {
         if (mcqs.length === 0) {
             return res.status(502).json({
                 success: false,
-                message: "AI returned no MCQs. Try a broader topic or different source type."
+                message: "AI returned no MCQs and fallback generation failed."
             });
         }
 
@@ -1266,11 +1276,10 @@ export const generateMCQs = async (req, res) => {
         });
     } catch (error) {
         console.error("Generate MCQs error:", error);
-        const errorMessage = error?.message || "Unknown MCQ generation error";
         res.status(500).json({
             success: false,
             message: "Failed to generate MCQs",
-            error: errorMessage
+            error: error.message
         });
     }
 };

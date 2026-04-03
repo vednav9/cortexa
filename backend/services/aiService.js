@@ -5,16 +5,28 @@ const AI_API_URL = process.env.AI_API_URL || 'http://localhost:8000';
 
 // Increased timeouts for AI operations
 const DEFAULT_TIMEOUT = 180000; // 3 minutes
-const LONG_TIMEOUT = 300000; // 5 minutes
+const LONG_TIMEOUT = 420000; // 7 minutes (HF cold starts + generation)
 const UPLOAD_TIMEOUT = 300000; // 5 minutes for document indexing uploads
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Helper to inject the Railway MongoDB URI securely into HF requests
-const getHeaders = (additionalHeaders = {}) => ({
-  'x-mongo-uri': process.env.MONGO_URI || process.env.MONGODB_URI,
-  ...additionalHeaders
-});
+const getHeaders = (additionalHeaders = {}) => {
+  const mongoUri = (process.env.MONGO_URI || process.env.MONGODB_URI || '').trim();
+  const headers = { ...additionalHeaders };
+  if (mongoUri && mongoUri.toLowerCase() !== 'undefined' && mongoUri.toLowerCase() !== 'null') {
+    headers['x-mongo-uri'] = mongoUri;
+  }
+  return headers;
+};
+
+const getUpstreamErrorMessage = (error, fallback) => {
+  const status = error?.response?.status;
+  const detail = error?.response?.data?.detail;
+  const message = error?.response?.data?.message || error?.response?.data?.error;
+  const base = detail || message || error?.message || fallback;
+  return status ? `${base} (status ${status})` : base;
+};
 
 class AIService {
   // RAG Query
@@ -64,7 +76,7 @@ class AIService {
       });
       return response.data;
     } catch (error) {
-      throw new Error(`MCQ generation failed: ${error.message}`);
+      throw new Error(`MCQ generation failed: ${getUpstreamErrorMessage(error, 'Unknown upstream error')}`);
     }
   }
 
@@ -107,7 +119,7 @@ async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null
       throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
     }
   }
-}
+
 
   // // Get document chunks with embeddings
   // async getDocumentChunks(fileName) {
