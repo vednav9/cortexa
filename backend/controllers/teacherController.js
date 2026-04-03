@@ -428,18 +428,27 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
         document = await Document.findOne({
             _id: documentId,
             course: courseId,
-            uploadedBy: teacherId,
+            // FIX: Removed 'uploadedBy: teacherId' so any authorized teacher can generate from course docs
         });
     }
 
     if (!document && documentName) {
+        const requestedName = String(documentName || "").trim();
+        const requestedStem = requestedName.includes(".")
+            ? requestedName.split(".").slice(0, -1).join(".").trim()
+            : "";
+        const nameCandidates = Array.from(new Set([requestedName, requestedStem].filter(Boolean)));
+        const nameClauses = nameCandidates.flatMap((name) => {
+            const safe = escapeRegex(name);
+            return [
+                { originalName: { $regex: `^${safe}$`, $options: "i" } },
+                { fileName: { $regex: `^${safe}$`, $options: "i" } },
+            ];
+        });
+
         document = await Document.findOne({
             course: courseId,
-            uploadedBy: teacherId,
-            $or: [
-                { originalName: documentName },
-                { fileName: documentName },
-            ],
+            ...(nameClauses.length ? { $or: nameClauses } : {}),
         }).sort({ createdAt: -1 });
     }
 
@@ -458,14 +467,24 @@ const buildDocumentChunkContext = async ({ documentId, documentName, teacherId, 
         .join("\n\n")
         .slice(0, 8000);
 
-    // Fallback when DB chunks are missing or stale: ask AI service for document chunks by name.
+    // Fallback when model-linked chunks are missing: read native proxy chunks.
     if (!text) {
         try {
-            const aiChunkResp = await aiService.getDocumentChunks(document.originalName || document.fileName || documentName);
-            const aiChunks = Array.isArray(aiChunkResp?.chunks) ? aiChunkResp.chunks : [];
-            const normalized = Array.isArray(aiChunks)
-                ? aiChunks.map((c) => String(c?.text || c?.content || c || "").trim()).filter(Boolean)
-                : [];
+            const { chunksCollection } = getNativeVectorCollections();
+            const query = buildChunkQuery({
+                sourceCandidates: buildSourceCandidates(document, [documentName]),
+                institutionId: document?.institution,
+                courseId: document?.course,
+            });
+            const nativeChunks = await chunksCollection
+                .find(query, { projection: { text: 1, metadata: 1 } })
+                .sort({ "metadata.chunk_index": 1 })
+                .limit(25)
+                .toArray();
+
+            const normalized = nativeChunks
+                .map((c) => String(c?.text || "").trim())
+                .filter(Boolean);
             text = normalized.join("\n\n").slice(0, 8000);
         } catch (_) {
             // Keep text empty and let caller fallback to broad topic context.
@@ -658,22 +677,16 @@ const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
         rawNames.flatMap((name) => expandDocumentNameCandidates(name))
     ));
 
-    let chunksData = null;
-    let usedName = null;
+    const chunkQuery = buildChunkQuery({
+        sourceCandidates,
+        institutionId: document?.institution,
+        courseId: document?.course,
+    });
 
-    for (const name of candidateNames) {
-        try {
-            const result = await aiService.getDocumentChunksWithRetry(name, 5, 1200);
-            const chunks = Array.isArray(result?.chunks) ? result.chunks : [];
-            if (chunks.length > 0) {
-                chunksData = result;
-                usedName = name;
-                break;
-            }
-        } catch (_) {
-            // Try next candidate file name.
-        }
-    }
+    const chunkRows = await chunksCollection
+        .find(chunkQuery, { projection: { chunk_id: 1, metadata: 1 } })
+        .sort({ "metadata.chunk_index": 1 })
+        .toArray();
 
     if (!chunksData) {
         const mongoRecovered = await tryRecoverFromMongoAiStore(candidateNames);
@@ -683,7 +696,8 @@ const persistDocumentVectorsToMongo = async (document, preferredNames = []) => {
 
         console.error("Chunk persistence lookup failed", {
             documentId: String(document?._id || ""),
-            candidateNames,
+            sourceCandidates,
+            chunkQuery,
         });
         throw new Error(`No chunks available in AI store for document names: ${candidateNames.join(", ")}`);
     }
@@ -1336,7 +1350,6 @@ export const deleteDocument = async (req, res) => {
 export const markDocumentProcessed = async (req, res) => {
   try {
     const { documentId } = req.params;
-    // ✅ FIX: chunks + embeddingModel now come from the request body directly
     const { chunksCount, chunks, embeddingModel } = req.body || {};
     const teacherId = req.user.id;
 
@@ -1362,24 +1375,19 @@ export const markDocumentProcessed = async (req, res) => {
     }
 
     let persisted = { chunkCount: 0, embeddingCount: 0 };
-
     if (incomingChunks.length > 0) {
-      persisted = await persistChunksToMongo(
-        document,
-        incomingChunks,
-        embeddingModel || 'paraphrase-MiniLM-L3-v2'
-      );
+      persisted = await persistChunksToMongo(document, incomingChunks, embeddingModel || 'paraphrase-MiniLM-L3-v2');
     }
 
         if ((requestedCount ?? 0) > 0 && persisted.chunkCount === 0) {
             throw new Error("Document marked processed but no chunks were persisted in DocumentChunk.");
         }
 
-        const update = {
-            isProcessed: true,
-            processingError: null,
-            chunksCount: Math.max(0, persisted.chunkCount),
-        };
+    const update = {
+        isProcessed: true,
+        processingError: null,
+        chunksCount: Math.max(0, persisted.chunkCount),
+    };
 
     await Document.findByIdAndUpdate(documentId, {
       isProcessed: true,

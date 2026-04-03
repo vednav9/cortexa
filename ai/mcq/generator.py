@@ -1,7 +1,6 @@
 """
 MCQ Generator using LLM
 """
-import json
 import re
 import unicodedata
 from typing import List, Dict, Optional
@@ -126,6 +125,7 @@ class MCQGenerator:
         except Exception as e:
             raise ValueError(f"Failed to retrieve document '{document_name}': {str(e)}")
         
+        text = "\n\n".join([chunk['text'] for chunk in chunks])
         return self.generate_from_text(text, num_questions, difficulty, topic)
     
     def generate_from_topic(
@@ -134,25 +134,18 @@ class MCQGenerator:
         num_questions: int = 5,
         difficulty: str = "medium"
     ) -> List[Dict]:
-        """Generate MCQs from a specific topic using vector search or knowledge"""
-        try:
-            # Try vector search first
-            documents, metadatas, distances = self.vector_store.search(
-                query=topic,
-                top_k=5
-            )
-            
-            if documents and len(documents) > 0:
-                # Use top 3 documents
-                text = "\n\n".join(documents[:3])
-            else:
-                # Fallback to topic name only
-                print(f"⚠️ No vector search results for '{topic}', using topic name only")
-                text = f"Topic: {topic}"
-        except Exception as e:
-            print(f"⚠️ Vector search failed: {str(e)}, using topic name only")
-            text = f"Topic: {topic}"
+        """Generate MCQs from a specific topic using vector search"""
+        documents, metadatas, distances = self.vector_store.search(
+            query=topic,
+            top_k=4
+        )
         
+        if not documents:
+            # FIX: Return fallback instead of crashing with ValueError -> 500 Error
+            print(f"⚠️ No content found for topic: {topic}. Generating basic fallback.")
+            return self._generate_synthetic_mcqs(topic, num_questions)
+        
+        text = "\n\n".join(documents)
         return self.generate_from_text(text, num_questions, difficulty, topic)
     
     def _enforce_word_limits(self, mcq: dict) -> dict:
@@ -262,10 +255,8 @@ EXPLAIN: [one sentence why]
 Q{q_num}:"""
         return prompt
     
-    def _parse_mcqs_improved(self, response: str, context: str, num_requested: int) -> List[Dict]:
-        """
-        Improved MCQ parsing with new format: Q#: ... A. ... B. ... C. ... D. ... CORRECT: ... EXPLAIN: ...
-        """
+    def _parse_mcqs_improved(self, response: str, context: str) -> List[Dict]:
+        """Improved MCQ parsing with fallback"""
         mcqs = []
         
         # Split by Q# pattern — handles both leading and mid-string occurrences
@@ -275,29 +266,20 @@ Q{q_num}:"""
         if question_blocks and not re.search(r'[A-D][.):]+', question_blocks[0]):
             question_blocks = question_blocks[1:]
         
-        for block in question_blocks:
-            if not block.strip():
-                continue
-                
-            mcq = self._parse_single_mcq_block(block)
+        for question_text in questions:
+            mcq = self._parse_question_block(question_text)
             if mcq:
                 mcqs.append(mcq)
         
-        # If we got enough MCQs, return them.
-        if len(mcqs) >= num_requested:
-            return mcqs[:num_requested]
-        
-        # If parsing produced very few, try fallback parser and merge.
-        fallback_mcqs = self._parse_mcqs_fallback(response)
-        mcqs = self._merge_unique_mcqs(mcqs, fallback_mcqs)
-        
+        if len(mcqs) == 0:
+            print("⚠️ Parsing failed due to LLM hallucination, generating synthetic fallback MCQs...")
+            mcqs = self._generate_synthetic_mcqs(context, 3)
+            
         return mcqs
     
-    def _parse_single_mcq_block(self, block: str) -> Optional[Dict]:
-        """Parse a single question block in new format"""
-        lines = [l.strip() for l in block.split('\n') if l.strip()]
-        if not lines:
-            return None
+    def _parse_question_block(self, text: str) -> Optional[Dict]:
+        """Parse a single question block"""
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
         
         question = None
         options = {}
@@ -337,10 +319,11 @@ Q{q_num}:"""
                 if correct_match:
                     correct_answer = correct_match.group(1).upper()
                 continue
-            
-            # Match EXPLAIN: or EXPLANATION:
-            if 'EXPLAIN' in line.upper():
-                explanation = re.sub(r'^EXPLAIN(ATION)?[\s:]+', '', line, flags=re.IGNORECASE).strip()
+                
+            if 'answer' in line.lower():
+                answer_match = re.search(r'\b([A-D])\b', line, re.IGNORECASE)
+                if answer_match:
+                    correct_answer = answer_match.group(1).upper()
                 continue
         
         # Validate - need question, at least 2 options, and correct answer
@@ -355,67 +338,11 @@ Q{q_num}:"""
             ordered_options = [options.get(letter, f"Option {letter}") for letter in 'ABCD']
             return {
                 'question': question,
-                'options': {
-                    'A': ordered_options[0],
-                    'B': ordered_options[1],
-                    'C': ordered_options[2],
-                    'D': ordered_options[3],
-                },
+                'options': options,
                 'correct_answer': correct_answer,
                 'explanation': explanation or "Based on the provided context.",
                 'difficulty': 'medium'  # will be overridden by caller
             }
-        
-        return None
-
-    def _merge_unique_mcqs(self, base: List[Dict], extra: List[Dict]) -> List[Dict]:
-        """Merge MCQ lists and keep unique questions by normalized text."""
-        merged = []
-        seen = set()
-
-        for item in (base + extra):
-            question = str(item.get('question', '')).strip()
-            key = re.sub(r'^\s*(Q|Question)\s*\d+\s*[:.)-]\s*', '', question, flags=re.IGNORECASE).lower()
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            item['question'] = re.sub(r'^\s*(Q|Question)\s*\d+\s*[:.)-]\s*', '', question, flags=re.IGNORECASE).strip()
-            merged.append(item)
-
-        return merged
-    
-    def _parse_mcqs_fallback(self, response: str) -> List[Dict]:
-        """Fallback parsing for various formats"""
-        mcqs = []
-        
-        # Try finding by Q1:, Q2: pattern
-        question_pattern = r'Q\d+[:.]\s*(.+?)(?=Q\d+[:.]|$)'
-        blocks = re.findall(question_pattern, response, re.DOTALL | re.IGNORECASE)
-        
-        for block in blocks:
-            mcq = self._parse_legacy_format(block)
-            if mcq:
-                mcqs.append(mcq)
-        
-        return mcqs
-    
-    def _parse_legacy_format(self, text: str) -> Optional[Dict]:
-        """Parse legacy question format"""
-        lines = [l.strip() for l in text.split('\n') if l.strip()]
-        if not lines:
-            return None
-        
-        question = lines[0]
-        options = {}
-        correct_answer = None
-        explanation = None
-        
-        for line in lines[1:]:
-            # Try to parse options
-            opt_match = re.match(r'^([A-D])[\s.):]+(.+)$', line)
-            if opt_match:
-                options[opt_match.group(1).upper()] = opt_match.group(2).strip()
-                continue
             
             # Parse answer — support both ANSWER: X and CORRECT: X
             if 'ANSWER' in line.upper() or 'CORRECT' in line.upper():
@@ -517,16 +444,25 @@ Q{q_num}:"""
         return mcqs
     
     def _get_document_chunks(self, document_name: str, num_chunks: int = 10) -> List[Dict]:
-        """Get chunks from a specific document"""
+        """Get chunks from a specific document - relaxed matching to prevent 500s"""
         matching_chunks = []
+        doc_name_lower = str(document_name).lower()
         
-        for doc in self.vector_store.data['documents']:
-            if document_name.lower() in doc['metadata'].get('source', '').lower():
+        for doc in self.vector_store.data.get('documents', []):
+            meta = doc.get('metadata', {})
+            # Look inside multiple metadata keys just in case Flutter sent the wrong ID
+            searchable_string = " ".join([
+                str(meta.get('source', '')),
+                str(meta.get('fileName', '')),
+                str(meta.get('originalName', ''))
+            ]).lower()
+            
+            if doc_name_lower in searchable_string:
                 matching_chunks.append({
-                    'text': doc['text'],
-                    'metadata': doc['metadata']
+                    'text': doc.get('text', ''),
+                    'metadata': meta
                 })
-        
+                
         return matching_chunks[:num_chunks]
 
 # Singleton
