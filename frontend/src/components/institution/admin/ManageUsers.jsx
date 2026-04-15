@@ -227,21 +227,21 @@ const ManageUsers = () => {
     };
 
     // Export users
-    const handleExport = () => {
-        toast.success("Exporting users data...");
-    };
+    // const handleExport = () => {
+    //     toast.success("Exporting users data...");
+    // };
 
     // Import users
-    const handleImport = () => {
-        toast.success("Import functionality coming soon");
-    };
+    // const handleImport = () => {
+    //     toast.success("Import functionality coming soon");
+    // };
 
     const primaryColor = institution?.branding?.primaryColor || "#6366f1";
 
     return (
         <div className="p-6 space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            {/* <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">Manage Users</h1>
                     <p className="text-gray-600 mt-1">View, edit, and manage all users in your institution</p>
@@ -262,7 +262,7 @@ const ManageUsers = () => {
                         Export
                     </button>
                 </div>
-            </div>
+            </div> */}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

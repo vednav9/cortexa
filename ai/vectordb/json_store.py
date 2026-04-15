@@ -8,6 +8,7 @@ import numpy as np
 from typing import List, Dict, Tuple
 from datetime import datetime
 from pymongo import MongoClient
+import os
 
 from config import TOP_K
 from models.embeddings import get_embedding_model
@@ -19,6 +20,17 @@ class JSONStore:
         self.mongo_uri = None
         self.chunks_collection = None
         self.embeddings_collection = None
+
+        # Fallback for direct AI calls (e.g., browser -> HF Space) where
+        # x-mongo-uri header is not present. Header-based URI still takes precedence.
+        fallback_uri = (os.getenv("MONGO_URI") or os.getenv("MONGODB_URI") or "").strip()
+        if fallback_uri:
+            try:
+                self.set_mongo_uri(fallback_uri)
+                print("✓ MongoDB fallback URI loaded from environment")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize MongoDB from environment: {e}")
+
         print("✓ MongoDB Vector Proxy initialized (Dual Collections)")
         
     def set_mongo_uri(self, mongo_uri: str):
@@ -37,7 +49,7 @@ class JSONStore:
 
     def _check_connection(self):
         if self.chunks_collection is None or self.embeddings_collection is None:
-            raise ValueError("Missing x-mongo-uri header from the backend request.")
+            raise ValueError("MongoDB is not configured. Provide x-mongo-uri header or set MONGO_URI/MONGODB_URI in AI environment.")
 
     def remove_document_chunks(self, document_identifier: str):
         """Clears old chunks and embeddings from MongoDB before re-indexing a document."""
