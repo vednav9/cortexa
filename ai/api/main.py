@@ -937,32 +937,45 @@ async def transcribe_and_upload_to_rag(
         )
         
         # Step 6: Add transcript to RAG system
-        print("🔄 Adding transcript to RAG knowledge base...")
-        doc_processor = get_doc_processor()
-        vector_store = get_vector_store()
+        rag_status = "indexed"
+        rag_warning = None
+        chunks_added = 0
         
-        metadata = {
-            'institution_id': institution_id,
-            'course_id': course_id,
-            'lecture_title': lecture_title,
-            'teacher_id': teacher_id,
-            'content_type': 'lecture_transcript',
-            'audio_filename': audio_file.filename,
-            'duration': duration
-        }
-        
-        chunks = doc_processor.process_document(docx_path, metadata)
-        texts = [chunk.text for chunk in chunks]
-        metadatas = [chunk.metadata for chunk in chunks]
-        ids = [f"{base_filename}_transcript_{i}" for i in range(len(chunks))]
-        
-        vector_store.add_documents(texts, metadatas, ids)
-        
-        print(f"✅ Complete! Added {len(chunks)} chunks to knowledge base.")
+        try:
+            print("🔄 Adding transcript to RAG knowledge base...")
+            doc_processor = get_doc_processor()
+            vector_store = get_vector_store()
+            
+            metadata = {
+                'institution_id': institution_id,
+                'course_id': course_id,
+                'lecture_title': lecture_title,
+                'teacher_id': teacher_id,
+                'content_type': 'lecture_transcript',
+                'audio_filename': audio_file.filename,
+                'duration': duration
+            }
+            
+            chunks = doc_processor.process_document(docx_path, metadata)
+            texts = [chunk.text for chunk in chunks]
+            metadatas = [chunk.metadata for chunk in chunks]
+            ids = [f"{base_filename}_transcript_{i}" for i in range(len(chunks))]
+            
+            vector_store.add_documents(texts, metadatas, ids)
+            chunks_added = len(chunks)
+            print(f"✅ Complete! Added {chunks_added} chunks to knowledge base.")
+        except ValueError as ve:
+            rag_status = "skipped"
+            rag_warning = str(ve)
+            print(f"⚠️ RAG indexing skipped: {rag_warning}")
+        except Exception as rag_error:
+            rag_status = "skipped"
+            rag_warning = str(rag_error)
+            print(f"⚠️ RAG indexing failed: {rag_warning}")
         
         return {
-            "status": "success",
-            "message": "Lecture transcribed, formatted, and added to knowledge base",
+            "status": "success" if rag_status == "indexed" else "partial_success",
+            "message": "Lecture transcribed and formatted" if rag_status == "skipped" else "Lecture transcribed, formatted, and added to knowledge base",
             "transcription": {
                 "raw_text": raw_text,
                 "formatted_text": formatted_text,
@@ -971,9 +984,11 @@ async def transcribe_and_upload_to_rag(
                 "segments_count": len(segments)
             },
             "rag_system": {
-                "chunks_added": len(chunks),
+                "status": rag_status,
+                "chunks_added": chunks_added,
                 "document_name": Path(docx_path).name,
-                "document_path": str(docx_path)
+                "document_path": str(docx_path),
+                "warning": rag_warning
             },
             "metadata": {
                 "institution_id": institution_id,
