@@ -297,15 +297,20 @@ async def upload_document(
 
         vector_store.add_documents(texts, metadatas, ids)
 
-        stats = vector_store.get_stats() if hasattr(vector_store, "get_stats") else {}
-        embedding_model_name = stats.get('embedding_model', 'unknown')
+        # ✅ Return full chunks+embeddings in upload response
+        # so Node doesn't need a second GET call to a potentially reset store
+        embedding_model_name = vector_store.data['metadata'].get('embedding_model', 'paraphrase-MiniLM-L3-v2')
 
-        # In Mongo-proxy mode embeddings are stored in a separate collection,
-        # so return chunk metadata only from this endpoint.
+        # Get the chunks we just added (last len(texts) items in the store)
+        stored_docs = vector_store.data['documents']
+        just_added = stored_docs[-len(texts):]
+
         chunks_payload = []
-        for i, (text, meta) in enumerate(zip(texts, metadatas)):
+        for i, (doc, meta) in enumerate(zip(just_added, metadatas)):
+            embedding = doc['embedding']
             chunks_payload.append({
-                "text": text,
+                "text": doc['text'],
+                "embedding": embedding.tolist() if hasattr(embedding, 'tolist') else list(embedding),
                 "metadata": {
                     **meta,
                     "chunk_index": i,
@@ -331,59 +336,74 @@ async def get_document_chunks(filename: str):
     try:
         vector_store = get_vector_store()
 
-        if hasattr(vector_store, "_check_connection"):
-            vector_store._check_connection()
-
         requested_raw = str(filename or "").strip()
         requested_name = Path(requested_raw).name
         requested_stem = Path(requested_name).stem
-        candidates = [x for x in [requested_name, requested_stem] if x]
-        source_clauses = []
-        for candidate in candidates:
-            safe = re.escape(candidate)
-            source_clauses.extend([
-                {"metadata.source": {"$regex": f"^{safe}$", "$options": "i"}},
-                {"metadata.fileName": {"$regex": f"^{safe}$", "$options": "i"}},
-                {"metadata.filename": {"$regex": f"^{safe}$", "$options": "i"}},
-                {"metadata.document_id": {"$regex": f"^{safe}$", "$options": "i"}},
-            ])
+        requested_lower = requested_name.lower()
+        requested_stem_lower = requested_stem.lower()
+        
+        # Get all documents from the vector store
+        all_docs = vector_store.data['documents']
+        
+        def _matches_document(doc: dict) -> bool:
+            doc_id = str(doc.get('id', ''))
+            doc_id_lower = doc_id.lower()
 
-        query = {"$or": source_clauses} if source_clauses else {}
-        chunk_rows = list(
-            vector_store.chunks_collection
-            .find(query, {"chunk_id": 1, "text": 1, "metadata": 1})
-            .sort("metadata.chunk_index", 1)
-        )
+            metadata = doc.get('metadata', {}) or {}
+            source_raw = str(
+                metadata.get('source')
+                or metadata.get('fileName')
+                or metadata.get('file_name')
+                or ''
+            ).strip()
+            source_name = Path(source_raw).name
+            source_lower = source_name.lower()
+            source_stem_lower = Path(source_name).stem.lower()
 
-        if not chunk_rows:
+            # Primary historical convention from /upload IDs.
+            if requested_name and doc_id_lower.startswith(f"{requested_lower}_"):
+                return True
+
+            # Allow exact source filename match.
+            if requested_name and source_lower == requested_lower:
+                return True
+
+            # Allow extension-agnostic match as fallback.
+            if requested_stem and source_stem_lower == requested_stem_lower:
+                return True
+
+            return False
+
+        # Filter chunks for this filename (robust to id/source format differences)
+        doc_chunks = [doc for doc in all_docs if _matches_document(doc)]
+        
+        if not doc_chunks:
             raise HTTPException(status_code=404, detail=f"No chunks found for {filename}")
 
-        chunk_ids = [str(row.get("chunk_id", "")).strip() for row in chunk_rows if str(row.get("chunk_id", "")).strip()]
-        embedding_map = {}
-        if chunk_ids:
-            for emb in vector_store.embeddings_collection.find(
-                {"chunk_id": {"$in": chunk_ids}},
-                {"chunk_id": 1, "embedding": 1}
-            ):
-                emb_id = str(emb.get("chunk_id", "")).strip()
-                if emb_id:
-                    embedding_map[emb_id] = emb.get("embedding", [])
+        # Keep stable order for downstream persistence and debugging.
+        def _chunk_sort_key(doc: dict) -> int:
+            metadata = doc.get('metadata', {}) or {}
+            idx = metadata.get('chunk_index', metadata.get('chunkIndex'))
+            try:
+                return int(idx)
+            except Exception:
+                return 10**9
 
+        doc_chunks.sort(key=_chunk_sort_key)
+        
+        # Format chunks with embeddings
         chunks = []
-        for row in chunk_rows:
-            row_chunk_id = str(row.get("chunk_id", "")).strip()
+        for doc in doc_chunks:
             chunks.append({
-                'text': row.get('text', ''),
-                'embedding': embedding_map.get(row_chunk_id, []),
-                'metadata': row.get('metadata', {}) or {}
+                'text': doc['text'],
+                'embedding': doc['embedding'].tolist() if hasattr(doc['embedding'], 'tolist') else doc['embedding'],
+                'metadata': doc.get('metadata', {})
             })
-
-        stats = vector_store.get_stats() if hasattr(vector_store, "get_stats") else {}
         
         return DocumentChunksResponse(
             filename=filename,
             chunks=chunks,
-            embedding_model=stats.get('embedding_model', 'unknown'),
+            embedding_model=vector_store.data['metadata'].get('embedding_model', 'unknown'),
             total_chunks=len(chunks)
         )
     except HTTPException:
@@ -401,7 +421,7 @@ async def delete_document_chunks(filename: str):
         return {
             "status": "success",
             "filename": filename,
-            "removed_chunks": int(removed) if isinstance(removed, (int, float)) else 0,
+            "removed_chunks": int(removed),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
