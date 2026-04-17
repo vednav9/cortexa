@@ -232,6 +232,64 @@ def get_text_formatter():
     return _text_formatter
 
 
+def _embedding_model_name(vector_store) -> str:
+    try:
+        stats = vector_store.get_stats()
+        name = str(stats.get("embedding_model", "")).strip()
+        if name:
+            return name
+    except Exception:
+        pass
+
+    return "paraphrase-MiniLM-L3-v2"
+
+
+def _build_upload_chunks_payload(vector_store, ids, texts, metadatas):
+    # Legacy in-memory store path
+    if hasattr(vector_store, "data") and isinstance(getattr(vector_store, "data", None), dict):
+        stored_docs = vector_store.data.get("documents", [])
+        just_added = stored_docs[-len(texts):]
+
+        chunks_payload = []
+        for i, (doc, meta) in enumerate(zip(just_added, metadatas)):
+            embedding = doc.get("embedding", [])
+            chunks_payload.append({
+                "text": doc.get("text", ""),
+                "embedding": embedding.tolist() if hasattr(embedding, "tolist") else list(embedding),
+                "metadata": {
+                    **meta,
+                    "chunk_index": i,
+                    "total_chunks": len(texts),
+                }
+            })
+        return chunks_payload
+
+    # Mongo dual-collection path
+    embedding_map = {}
+    if hasattr(vector_store, "embeddings_collection") and vector_store.embeddings_collection is not None:
+        rows = vector_store.embeddings_collection.find(
+            {"chunk_id": {"$in": ids}},
+            {"chunk_id": 1, "embedding": 1}
+        )
+        for row in rows:
+            embedding_map[str(row.get("chunk_id", ""))] = row.get("embedding", [])
+
+    chunks_payload = []
+    for i, (doc_id, text, meta) in enumerate(zip(ids, texts, metadatas)):
+        embedding = embedding_map.get(str(doc_id), [])
+        chunks_payload.append({
+            "text": text,
+            "embedding": embedding,
+            "metadata": {
+                **meta,
+                "chunk_index": i,
+                "total_chunks": len(texts),
+            }
+        })
+
+    return chunks_payload
+
+
 # ============================================================================
 # BASIC ENDPOINTS
 # ============================================================================
@@ -297,26 +355,9 @@ async def upload_document(
 
         vector_store.add_documents(texts, metadatas, ids)
 
-        # ✅ Return full chunks+embeddings in upload response
-        # so Node doesn't need a second GET call to a potentially reset store
-        embedding_model_name = vector_store.data['metadata'].get('embedding_model', 'paraphrase-MiniLM-L3-v2')
-
-        # Get the chunks we just added (last len(texts) items in the store)
-        stored_docs = vector_store.data['documents']
-        just_added = stored_docs[-len(texts):]
-
-        chunks_payload = []
-        for i, (doc, meta) in enumerate(zip(just_added, metadatas)):
-            embedding = doc['embedding']
-            chunks_payload.append({
-                "text": doc['text'],
-                "embedding": embedding.tolist() if hasattr(embedding, 'tolist') else list(embedding),
-                "metadata": {
-                    **meta,
-                    "chunk_index": i,
-                    "total_chunks": len(texts),
-                }
-            })
+        # ✅ Return full chunks+embeddings in upload response for backend persistence.
+        embedding_model_name = _embedding_model_name(vector_store)
+        chunks_payload = _build_upload_chunks_payload(vector_store, ids, texts, metadatas)
 
         return {
             "filename": file.filename,
@@ -342,40 +383,82 @@ async def get_document_chunks(filename: str):
         requested_lower = requested_name.lower()
         requested_stem_lower = requested_stem.lower()
         
-        # Get all documents from the vector store
-        all_docs = vector_store.data['documents']
-        
-        def _matches_document(doc: dict) -> bool:
-            doc_id = str(doc.get('id', ''))
-            doc_id_lower = doc_id.lower()
+        if hasattr(vector_store, "data") and isinstance(getattr(vector_store, "data", None), dict):
+            # Legacy in-memory store path
+            all_docs = vector_store.data.get("documents", [])
 
-            metadata = doc.get('metadata', {}) or {}
-            source_raw = str(
-                metadata.get('source')
-                or metadata.get('fileName')
-                or metadata.get('file_name')
-                or ''
-            ).strip()
-            source_name = Path(source_raw).name
-            source_lower = source_name.lower()
-            source_stem_lower = Path(source_name).stem.lower()
+            def _matches_document(doc: dict) -> bool:
+                doc_id = str(doc.get('id', ''))
+                doc_id_lower = doc_id.lower()
 
-            # Primary historical convention from /upload IDs.
-            if requested_name and doc_id_lower.startswith(f"{requested_lower}_"):
-                return True
+                metadata = doc.get('metadata', {}) or {}
+                source_raw = str(
+                    metadata.get('source')
+                    or metadata.get('fileName')
+                    or metadata.get('file_name')
+                    or ''
+                ).strip()
+                source_name = Path(source_raw).name
+                source_lower = source_name.lower()
+                source_stem_lower = Path(source_name).stem.lower()
 
-            # Allow exact source filename match.
-            if requested_name and source_lower == requested_lower:
-                return True
+                if requested_name and doc_id_lower.startswith(f"{requested_lower}_"):
+                    return True
+                if requested_name and source_lower == requested_lower:
+                    return True
+                if requested_stem and source_stem_lower == requested_stem_lower:
+                    return True
+                return False
 
-            # Allow extension-agnostic match as fallback.
-            if requested_stem and source_stem_lower == requested_stem_lower:
-                return True
+            doc_chunks = [doc for doc in all_docs if _matches_document(doc)]
+        else:
+            # Mongo dual-collection path
+            if not hasattr(vector_store, "chunks_collection") or vector_store.chunks_collection is None:
+                raise HTTPException(status_code=500, detail="Vector store is not connected")
 
-            return False
+            source_regex = re.escape(requested_name)
+            clauses = [
+                {"metadata.source": {"$regex": f"^{source_regex}$", "$options": "i"}},
+                {"metadata.fileName": {"$regex": f"^{source_regex}$", "$options": "i"}},
+                {"metadata.file_name": {"$regex": f"^{source_regex}$", "$options": "i"}},
+                {"chunk_id": {"$regex": f"^{source_regex}_", "$options": "i"}},
+            ]
 
-        # Filter chunks for this filename (robust to id/source format differences)
-        doc_chunks = [doc for doc in all_docs if _matches_document(doc)]
+            if requested_stem:
+                stem_regex = re.escape(requested_stem)
+                clauses.extend([
+                    {"metadata.source": {"$regex": f"^{stem_regex}$", "$options": "i"}},
+                    {"metadata.fileName": {"$regex": f"^{stem_regex}$", "$options": "i"}},
+                    {"metadata.file_name": {"$regex": f"^{stem_regex}$", "$options": "i"}},
+                    {"chunk_id": {"$regex": f"^{stem_regex}_", "$options": "i"}},
+                ])
+
+            query = {"$or": clauses}
+
+            chunk_rows = list(vector_store.chunks_collection.find(
+                query,
+                {"chunk_id": 1, "text": 1, "metadata": 1}
+            ))
+
+            chunk_ids = [str(r.get("chunk_id", "")) for r in chunk_rows if r.get("chunk_id")]
+            embedding_map = {}
+            if chunk_ids and hasattr(vector_store, "embeddings_collection") and vector_store.embeddings_collection is not None:
+                emb_rows = vector_store.embeddings_collection.find(
+                    {"chunk_id": {"$in": chunk_ids}},
+                    {"chunk_id": 1, "embedding": 1}
+                )
+                for emb in emb_rows:
+                    embedding_map[str(emb.get("chunk_id", ""))] = emb.get("embedding", [])
+
+            doc_chunks = [
+                {
+                    "id": row.get("chunk_id", ""),
+                    "text": row.get("text", ""),
+                    "embedding": embedding_map.get(str(row.get("chunk_id", "")), []),
+                    "metadata": row.get("metadata", {}) or {},
+                }
+                for row in chunk_rows
+            ]
         
         if not doc_chunks:
             raise HTTPException(status_code=404, detail=f"No chunks found for {filename}")
@@ -403,7 +486,7 @@ async def get_document_chunks(filename: str):
         return DocumentChunksResponse(
             filename=filename,
             chunks=chunks,
-            embedding_model=vector_store.data['metadata'].get('embedding_model', 'unknown'),
+            embedding_model=_embedding_model_name(vector_store),
             total_chunks=len(chunks)
         )
     except HTTPException:
