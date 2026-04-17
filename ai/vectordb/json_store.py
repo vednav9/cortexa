@@ -75,8 +75,10 @@ class JSONStore:
             chunk_result = self.chunks_collection.delete_many(query)
             
             print(f"✓ Removed {chunk_result.deleted_count} old chunks and {emb_result.deleted_count} embeddings for {document_identifier}")
+            return int(chunk_result.deleted_count)
         else:
             print(f"✓ No existing chunks found to remove for {document_identifier}")
+            return 0
 
     def add_documents(self, texts: List[str], metadatas: List[Dict], ids: List[str] = None):
         self._check_connection()

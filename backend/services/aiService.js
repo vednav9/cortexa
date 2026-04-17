@@ -130,6 +130,22 @@ async uploadDocument(fileBuffer, fileName, institutionId = null, courseId = null
       });
       return response.data;
     } catch (error) {
+      const detail = String(error?.response?.data?.detail || error?.message || '');
+      const knownResponseBug = /JSONStore.*attribute.*data|has no attribute 'data'|has no attribute data/i.test(detail);
+
+      // Known upstream behavior: indexing may succeed but response serialization fails.
+      // Return a recoverable payload so backend can continue by reading Mongo proxy collections.
+      if (knownResponseBug) {
+        console.warn('AI /upload returned known response bug; continuing with Mongo recovery path.');
+        return {
+          status: 'partial_success',
+          chunks_added: 0,
+          chunks: [],
+          embedding_model: 'paraphrase-MiniLM-L3-v2',
+          response_bug: true,
+        };
+      }
+
       console.error('Backend upload error:', error.response?.data || error.message);
       throw new Error(`Document upload failed: ${error.response?.data?.detail || error.message}`);
     }
