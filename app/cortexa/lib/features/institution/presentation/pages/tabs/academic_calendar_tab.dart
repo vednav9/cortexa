@@ -1372,36 +1372,91 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
     );
   }
 
+  Color _eventTypeAccentColor(String eventType) {
+    switch (eventType.toLowerCase()) {
+      case 'exam':
+        return Colors.red;
+      case 'holiday':
+        return Colors.green;
+      case 'deadline':
+        return Colors.orange;
+      case 'other':
+        return Colors.blue;
+      case 'event':
+      default:
+        return Colors.yellow.shade700;
+    }
+  }
+
+  String _formatEventDate(dynamic rawDate) {
+    final parsed = DateTime.tryParse(rawDate?.toString() ?? '');
+    if (parsed == null) {
+      return 'Date not set';
+    }
+    return DateFormat('MMM d, yyyy').format(parsed);
+  }
+
+  String _textOrFallback(dynamic value, String fallback) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty || text.toLowerCase() == 'null') {
+      return fallback;
+    }
+    return text;
+  }
+
+  int _resolveEventSourceIndex(Map<String, dynamic> event, int fallbackIndex) {
+    final eventId = event['_id']?.toString() ?? '';
+    if (eventId.isNotEmpty) {
+      final sourceIndex = _events.indexWhere(
+        (item) => item['_id']?.toString() == eventId,
+      );
+      if (sourceIndex >= 0) {
+        return sourceIndex;
+      }
+    }
+
+    final sourceIndex = _events.indexOf(event);
+    if (sourceIndex >= 0) {
+      return sourceIndex;
+    }
+
+    return fallbackIndex;
+  }
+
   Widget _buildEventsList() {
     final filteredEvents = _filteredEvents;
-    return GridView.builder(
+    return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.9,
-      ),
       itemCount: filteredEvents.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final event = filteredEvents[index];
-        final startDate = event['startDate'] != null
-            ? DateTime.parse(event['startDate'])
-            : DateTime.now();
-        final day = DateFormat('dd').format(startDate);
-        final month = DateFormat('MMM').format(startDate).toUpperCase();
+        final sourceIndex = _resolveEventSourceIndex(event, index);
+        final eventType = _textOrFallback(
+          event['eventType'],
+          'event',
+        ).toLowerCase();
+        final accentColor = _eventTypeAccentColor(eventType);
+        final eventTypeLabel = eventType.toUpperCase();
+        final title = _textOrFallback(event['title'], 'Untitled event');
+        final description = _textOrFallback(
+          event['description'],
+          'No description added',
+        );
+        final dateLabel = _formatEventDate(event['startDate']);
+        final location = _textOrFallback(event['location'], 'Not specified');
 
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showAddEventDialog(event, index),
+            onTap: () => _showAddEventDialog(event, sourceIndex),
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.cardBackground,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: AppColors.borderDark.withValues(alpha: 0.3),
+                  color: AppColors.borderDark.withValues(alpha: 0.28),
                   width: 1,
                 ),
                 boxShadow: [
@@ -1412,113 +1467,151 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
                   ),
                 ],
               ),
-              child: Stack(
-                children: [
-                  // Main content - centered
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Oval date container
-                        Container(
-                          width: 80,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primary.withValues(alpha: 0.2),
-                                AppColors.primaryLight.withValues(alpha: 0.1),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.4),
-                              width: 2,
-                            ),
-                          ),
+                        Expanded(
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                day,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                  height: 1,
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                    letterSpacing: -0.3,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                month,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.8,
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: accentColor.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  eventTypeLabel,
+                                  style: TextStyle(
+                                    color: accentColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.25,
                                   ),
-                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        // Event name
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            event['title'],
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                              letterSpacing: -0.3,
+                        const SizedBox(width: 8),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => _deleteEvent(sourceIndex),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: AppColors.error,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.error.withValues(
+                                      alpha: 0.35,
+                                    ),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.close_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.9),
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 15,
+                          color: accentColor.withValues(alpha: 0.85),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            dateLabel,
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.9,
+                              ),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  // Delete button
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => _deleteEvent(index),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.error.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: Colors.white,
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: AppColors.textSecondary.withValues(
+                            alpha: 0.75,
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            location,
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.86,
+                              ),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

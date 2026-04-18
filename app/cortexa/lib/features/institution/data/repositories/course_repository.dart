@@ -18,41 +18,141 @@ class CourseRepository {
   }) async {
     try {
       print('🌐 Fetching courses for institution: $institutionId');
-      
+
       final queryParams = <String, String>{};
       if (departmentId != null) queryParams['departmentId'] = departmentId;
       if (semester != null) queryParams['semester'] = semester.toString();
       if (isActive != null) queryParams['isActive'] = isActive.toString();
-      
+
       final queryString = queryParams.isEmpty
           ? ''
           : '?${queryParams.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&')}';
-      
+
       final response = await _apiClient.get(
         '/academic/institutions/$institutionId/courses$queryString',
         requiresAuth: true,
       );
 
-      final courses = (response['courses'] as List?)
-          ?.map((e) => Map<String, dynamic>.from(e as Map))
-          .toList() ?? [];
+      final courses =
+          (response['courses'] as List?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [];
 
       print('✅ Fetched ${courses.length} courses');
-      
+
       // Cache courses locally
       _cacheCourses(institutionId, courses);
-      
+
       return {
         'success': true,
         'courses': courses,
         'count': response['count'] ?? courses.length,
       };
     } on ApiException catch (e) {
-      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+      throw ServerException(
+        message: e.message,
+        statusCode: e.statusCode ?? 400,
+      );
     } catch (e) {
       print('❌ Error fetching courses: $e');
       throw ServerException(
         message: 'Failed to fetch courses: ${e.toString()}',
+        statusCode: 500,
+      );
+    }
+  }
+
+  /// Resolve institution slug (or code fallback) for public role-aware endpoints.
+  Future<String?> resolveInstitutionSlug({String? institutionId}) async {
+    try {
+      final response = await _apiClient.get(
+        '/admin/institution',
+        requiresAuth: true,
+      );
+
+      final institution = response['institution'];
+      if (institution is Map<String, dynamic>) {
+        final slug = institution['slug']?.toString().trim();
+        if (slug != null && slug.isNotEmpty) {
+          return slug;
+        }
+
+        final code = institution['code']?.toString().trim();
+        if (code != null && code.isNotEmpty) {
+          return code;
+        }
+      }
+    } catch (e) {
+      print('⚠️ Could not resolve institution slug via /admin/institution: $e');
+    }
+
+    if (institutionId == null || institutionId.isEmpty) {
+      return null;
+    }
+
+    try {
+      final response = await _apiClient.get(
+        '/institutions/$institutionId',
+        requiresAuth: true,
+      );
+
+      final institution = response['institution'];
+      if (institution is Map<String, dynamic>) {
+        final slug = institution['slug']?.toString().trim();
+        if (slug != null && slug.isNotEmpty) {
+          return slug;
+        }
+
+        final code = institution['code']?.toString().trim();
+        if (code != null && code.isNotEmpty) {
+          return code;
+        }
+      }
+    } catch (e) {
+      print('⚠️ Could not resolve institution slug via /institutions/:id: $e');
+    }
+
+    return null;
+  }
+
+  /// Get course details and uploaded documents using institution slug route.
+  Future<Map<String, dynamic>> getCourseDetails({
+    required String institutionSlug,
+    required String courseCode,
+  }) async {
+    try {
+      final slug = Uri.encodeComponent(institutionSlug);
+      final code = Uri.encodeComponent(courseCode.toUpperCase());
+
+      final response = await _apiClient.get(
+        '/institutions/slug/$slug/courses/$code',
+        requiresAuth: true,
+      );
+
+      final course = response['course'] is Map
+          ? Map<String, dynamic>.from(response['course'] as Map)
+          : <String, dynamic>{};
+
+      final documents =
+          (response['documents'] as List?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          <Map<String, dynamic>>[];
+
+      return {
+        'success': response['success'] == true,
+        'course': course,
+        'documents': documents,
+      };
+    } on ApiException catch (e) {
+      throw ServerException(
+        message: e.message,
+        statusCode: e.statusCode ?? 400,
+      );
+    } catch (e) {
+      throw ServerException(
+        message: 'Failed to fetch course details: ${e.toString()}',
         statusCode: 500,
       );
     }
@@ -85,7 +185,7 @@ class CourseRepository {
   }) async {
     try {
       print('🌐 Creating course: $name');
-      
+
       final response = await _apiClient.post(
         '/academic/institutions/$institutionId/courses',
         body: {
@@ -105,20 +205,23 @@ class CourseRepository {
       );
 
       print('✅ Course created successfully');
-      
+
       final course = response['course'] as Map<String, dynamic>?;
       if (course != null) {
         // Add to local cache
         _addCourseToCache(institutionId, course);
       }
-      
+
       return {
         'success': true,
         'course': course,
         'message': response['message'] ?? 'Course created successfully',
       };
     } on ApiException catch (e) {
-      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+      throw ServerException(
+        message: e.message,
+        statusCode: e.statusCode ?? 400,
+      );
     } catch (e) {
       print('❌ Error creating course: $e');
       throw ServerException(
@@ -131,6 +234,7 @@ class CourseRepository {
   /// Update a course
   Future<Map<String, dynamic>> updateCourse({
     required String courseId,
+    String? department,
     String? code,
     String? name,
     String? description,
@@ -145,20 +249,23 @@ class CourseRepository {
   }) async {
     try {
       print('🌐 Updating course: $courseId');
-      
+
       final body = <String, dynamic>{};
+      if (department != null) body['department'] = department;
       if (code != null) body['code'] = code;
       if (name != null) body['name'] = name;
       if (description != null) body['description'] = description;
       if (credits != null) body['credits'] = credits;
       if (semester != null) body['semester'] = semester;
-      if (semesterAvailable != null) body['semesterAvailable'] = semesterAvailable;
+      if (semesterAvailable != null) {
+        body['semesterAvailable'] = semesterAvailable;
+      }
       if (instructor != null) body['instructor'] = instructor;
       if (facultyAvailable != null) body['facultyAvailable'] = facultyAvailable;
       if (maxCapacity != null) body['maxCapacity'] = maxCapacity;
       if (syllabus != null) body['syllabus'] = syllabus;
       if (isActive != null) body['isActive'] = isActive;
-      
+
       final response = await _apiClient.put(
         '/academic/courses/$courseId',
         body: body,
@@ -166,20 +273,23 @@ class CourseRepository {
       );
 
       print('✅ Course updated successfully');
-      
+
       final course = response['course'] as Map<String, dynamic>?;
       if (course != null) {
         // Update in local cache
         _updateCourseInCache(course);
       }
-      
+
       return {
         'success': true,
         'course': course,
         'message': response['message'] ?? 'Course updated successfully',
       };
     } on ApiException catch (e) {
-      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+      throw ServerException(
+        message: e.message,
+        statusCode: e.statusCode ?? 400,
+      );
     } catch (e) {
       print('❌ Error updating course: $e');
       throw ServerException(
@@ -193,23 +303,26 @@ class CourseRepository {
   Future<Map<String, dynamic>> deleteCourse(String courseId) async {
     try {
       print('🌐 Deleting course: $courseId');
-      
+
       final response = await _apiClient.delete(
         '/academic/courses/$courseId',
         requiresAuth: true,
       );
 
       print('✅ Course deleted successfully');
-      
+
       // Remove from local cache
       _deleteCourseFromCache(courseId);
-      
+
       return {
         'success': true,
         'message': response['message'] ?? 'Course deleted successfully',
       };
     } on ApiException catch (e) {
-      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+      throw ServerException(
+        message: e.message,
+        statusCode: e.statusCode ?? 400,
+      );
     } catch (e) {
       print('❌ Error deleting course: $e');
       throw ServerException(
