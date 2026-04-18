@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:async';
+
+import 'package:flutter/material.dart';
 import '../../../../../../core/constants/app_colors.dart';
 import '../../../../teacher/data/models/mcq_model.dart';
 import '../../../data/repositories/student_mcq_repository.dart';
@@ -29,6 +31,8 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
   int? _score;
   bool _isSubmitting = false;
   final _startTime = DateTime.now();
+  Timer? _timer;
+  int? _timeLeftSeconds;
 
   @override
   void initState() {
@@ -41,7 +45,83 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
       if (widget.previousAnswers != null) {
         _selectedAnswers.addAll(widget.previousAnswers!);
       }
+    } else {
+      final durationMinutes = widget.mcqSet.duration > 0
+          ? widget.mcqSet.duration
+          : 30;
+      _timeLeftSeconds = durationMinutes * 60;
+      _startTimer();
     }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _isSubmitting || _isTestCompleted) {
+        timer.cancel();
+        return;
+      }
+
+      final remaining = _timeLeftSeconds ?? 0;
+      if (remaining <= 1) {
+        timer.cancel();
+        setState(() => _timeLeftSeconds = 0);
+        _submitTest();
+        return;
+      }
+
+      setState(() => _timeLeftSeconds = remaining - 1);
+    });
+  }
+
+  String _formatCountdown(int totalSeconds) {
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildTimerBadge() {
+    final remaining = _timeLeftSeconds ?? 0;
+    final isUrgent = remaining <= 60;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isUrgent
+            ? AppColors.error.withValues(alpha: 0.12)
+            : AppColors.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isUrgent
+              ? AppColors.error.withValues(alpha: 0.35)
+              : AppColors.primary.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.timer_outlined,
+            size: 16,
+            color: isUrgent ? AppColors.error : AppColors.primary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _formatCountdown(remaining),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isUrgent ? AppColors.error : AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _selectAnswer(int questionIndex, int answerIndex) {
@@ -64,6 +144,10 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
   }
 
   Future<void> _submitTest() async {
+    if (_isSubmitting || _isTestCompleted) return;
+
+    _timer?.cancel();
+
     int correctAnswers = 0;
     for (int i = 0; i < _questions.length; i++) {
       if (_selectedAnswers[i] == _questions[i].correctAnswer) {
@@ -286,6 +370,14 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
             ),
           ],
         ),
+        actions: (_isTestCompleted || _timeLeftSeconds == null)
+            ? null
+            : [
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Center(child: _buildTimerBadge()),
+                ),
+              ],
         bottom: _isTestCompleted
             ? null
             : PreferredSize(
@@ -717,7 +809,7 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
   }
 
   Widget _buildNavigationBar() {
-    final hasAnswer = _selectedAnswers.containsKey(_currentQuestionIndex);
+    final hasPrevious = _currentQuestionIndex > 0;
     final isLastQuestion = _currentQuestionIndex == _questions.length - 1;
     final allAnswered = _selectedAnswers.length == _questions.length;
 
@@ -732,30 +824,45 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
       ),
       child: Row(
         children: [
-          if (_currentQuestionIndex > 0)
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _previousQuestion,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textPrimary,
-                  side: BorderSide(
-                      color: AppColors.textTertiary.withValues(alpha: 0.3)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: hasPrevious ? _previousQuestion : null,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: BorderSide(
+                  color: AppColors.textTertiary.withValues(alpha: 0.3),
                 ),
-                icon: const Icon(Icons.arrow_back, size: 20),
-                label: const Text('Previous',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.arrow_back, size: 20),
+              label: const Text(
+                'Previous',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
-          if (_currentQuestionIndex > 0) const SizedBox(width: 12),
+          ),
+          const SizedBox(width: 12),
           Expanded(
-            flex: _currentQuestionIndex > 0 ? 1 : 2,
             child: ElevatedButton.icon(
-              onPressed: isLastQuestion
-                  ? (allAnswered ? _submitTest : null)
-                  : (hasAnswer ? _nextQuestion : null),
+              onPressed: () {
+                if (isLastQuestion) {
+                  if (!allAnswered) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please answer all questions before submitting.'),
+                        backgroundColor: AppColors.textPrimary,
+                      ),
+                    );
+                    return;
+                  }
+                  _submitTest();
+                  return;
+                }
+                _nextQuestion();
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -771,10 +878,9 @@ class _TakeMCQTestPageState extends State<TakeMCQTestPage> {
                 isLastQuestion ? Icons.check_circle : Icons.arrow_forward,
                 size: 20,
               ),
-              label: Text(
-                isLastQuestion ? 'Submit Test' : 'Next',
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600),
+              label: const Text(
+                'Next',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
           ),

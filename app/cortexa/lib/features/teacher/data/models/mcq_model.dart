@@ -24,10 +24,18 @@ class MCQModel {
     } else if (json['options'] is Map) {
       final optionsMap = json['options'] as Map<String, dynamic>;
       options = [
-        optionsMap['A']?.toString() ?? optionsMap['a']?.toString() ?? 'Option A',
-        optionsMap['B']?.toString() ?? optionsMap['b']?.toString() ?? 'Option B',
-        optionsMap['C']?.toString() ?? optionsMap['c']?.toString() ?? 'Option C',
-        optionsMap['D']?.toString() ?? optionsMap['d']?.toString() ?? 'Option D',
+        optionsMap['A']?.toString() ??
+            optionsMap['a']?.toString() ??
+            'Option A',
+        optionsMap['B']?.toString() ??
+            optionsMap['b']?.toString() ??
+            'Option B',
+        optionsMap['C']?.toString() ??
+            optionsMap['c']?.toString() ??
+            'Option C',
+        optionsMap['D']?.toString() ??
+            optionsMap['d']?.toString() ??
+            'Option D',
       ];
     } else {
       options = [
@@ -50,7 +58,9 @@ class MCQModel {
       parsedCorrectAnswer = answerValue;
     } else if (answerValue is String) {
       final normalizedAnswer = answerValue.trim().toUpperCase();
-      if (normalizedAnswer.length == 1 && normalizedAnswer.codeUnitAt(0) >= 65 && normalizedAnswer.codeUnitAt(0) <= 68) {
+      if (normalizedAnswer.length == 1 &&
+          normalizedAnswer.codeUnitAt(0) >= 65 &&
+          normalizedAnswer.codeUnitAt(0) <= 68) {
         parsedCorrectAnswer = normalizedAnswer.codeUnitAt(0) - 65;
       }
     }
@@ -63,7 +73,10 @@ class MCQModel {
 
     final rawQuestion = json['question']?.toString() ?? 'Question';
     final cleanedQuestion = rawQuestion
-        .replaceFirst(RegExp(r'^\s*(Q|Question)\s*\d+\s*[:.)-]\s*', caseSensitive: false), '')
+        .replaceFirst(
+          RegExp(r'^\s*(Q|Question)\s*\d+\s*[:.)-]\s*', caseSensitive: false),
+          '',
+        )
         .trim();
 
     return MCQModel(
@@ -78,7 +91,9 @@ class MCQModel {
   Map<String, dynamic> toJson() {
     final normalizedOptions = List<String>.from(options);
     while (normalizedOptions.length < 4) {
-      normalizedOptions.add('Option ${String.fromCharCode(65 + normalizedOptions.length)}');
+      normalizedOptions.add(
+        'Option ${String.fromCharCode(65 + normalizedOptions.length)}',
+      );
     }
 
     final normalizedAnswer = correctAnswer.clamp(0, 3);
@@ -106,7 +121,8 @@ class MCQModel {
     return difficulty![0].toUpperCase() + difficulty!.substring(1);
   }
 
-  String get correctOption => options[correctAnswer.clamp(0, options.length - 1)];
+  String get correctOption =>
+      options[correctAnswer.clamp(0, options.length - 1)];
 }
 
 class MCQSetModel {
@@ -119,7 +135,12 @@ class MCQSetModel {
   final String? createdByName;
   final List<MCQModel> questions;
   final DateTime createdAt;
+  final DateTime? dueDate;
+  final int duration;
   final bool isAssigned;
+  final bool hasAttempted;
+  final double? attemptScore;
+  final String? attemptId;
   final int totalAttempts;
   final double averageScore;
 
@@ -133,7 +154,12 @@ class MCQSetModel {
     this.createdByName,
     required this.questions,
     required this.createdAt,
+    this.dueDate,
+    this.duration = 30,
     this.isAssigned = false,
+    this.hasAttempted = false,
+    this.attemptScore,
+    this.attemptId,
     this.totalAttempts = 0,
     this.averageScore = 0.0,
   });
@@ -160,7 +186,8 @@ class MCQSetModel {
       parsedCreatedById = json['createdBy']?.toString() ?? '';
     }
 
-    final questionsJson = json['questions'] as List? ?? json['mcqs'] as List? ?? [];
+    final questionsJson =
+        json['questions'] as List? ?? json['mcqs'] as List? ?? [];
 
     return MCQSetModel(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
@@ -172,10 +199,20 @@ class MCQSetModel {
       createdByName: parsedCreatedByName,
       questions: questionsJson
           .whereType<Map>()
-          .map((question) => MCQModel.fromJson(Map<String, dynamic>.from(question)))
+          .map(
+            (question) =>
+                MCQModel.fromJson(Map<String, dynamic>.from(question)),
+          )
           .toList(),
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
+      dueDate: DateTime.tryParse(json['dueDate']?.toString() ?? ''),
+      duration: (json['duration'] as num?)?.toInt() ?? 30,
       isAssigned: json['isAssigned'] as bool? ?? false,
+      hasAttempted: json['hasAttempted'] as bool? ?? false,
+      attemptScore: (json['attemptScore'] as num?)?.toDouble(),
+      attemptId: json['attemptId']?.toString(),
       totalAttempts: json['totalAttempts'] as int? ?? 0,
       averageScore: (json['averageScore'] as num?)?.toDouble() ?? 0.0,
     );
@@ -191,7 +228,12 @@ class MCQSetModel {
       'createdBy': createdById,
       'questions': questions.map((question) => question.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
+      if (dueDate != null) 'dueDate': dueDate!.toIso8601String(),
+      'duration': duration,
       'isAssigned': isAssigned,
+      'hasAttempted': hasAttempted,
+      if (attemptScore != null) 'attemptScore': attemptScore,
+      if (attemptId != null) 'attemptId': attemptId,
       'totalAttempts': totalAttempts,
       'averageScore': averageScore,
     };
