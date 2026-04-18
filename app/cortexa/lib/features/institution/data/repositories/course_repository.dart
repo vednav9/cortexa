@@ -1,6 +1,7 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../../../../core/errors/exceptions.dart';
+import '../../../../core/config/api_config.dart';
 
 /// Repository for course operations
 class CourseRepository {
@@ -8,6 +9,27 @@ class CourseRepository {
   final HiveStorageService _storage;
 
   CourseRepository(this._apiClient, this._storage);
+
+  String _extractInstitutionSlug(Map<String, dynamic>? institution) {
+    if (institution == null) return '';
+
+    final slug = institution['slug']?.toString().trim();
+    if (slug != null && slug.isNotEmpty) {
+      return slug;
+    }
+
+    final customSlug = institution['custom_url_slug']?.toString().trim();
+    if (customSlug != null && customSlug.isNotEmpty) {
+      return customSlug;
+    }
+
+    final code = institution['code']?.toString().trim();
+    if (code != null && code.isNotEmpty) {
+      return code;
+    }
+
+    return '';
+  }
 
   /// Get all courses for an institution
   Future<Map<String, dynamic>> getCourses(
@@ -65,52 +87,54 @@ class CourseRepository {
 
   /// Resolve institution slug (or code fallback) for public role-aware endpoints.
   Future<String?> resolveInstitutionSlug({String? institutionId}) async {
-    try {
-      final response = await _apiClient.get(
-        '/admin/institution',
-        requiresAuth: true,
-      );
-
-      final institution = response['institution'];
-      if (institution is Map<String, dynamic>) {
-        final slug = institution['slug']?.toString().trim();
-        if (slug != null && slug.isNotEmpty) {
-          return slug;
-        }
-
-        final code = institution['code']?.toString().trim();
-        if (code != null && code.isNotEmpty) {
-          return code;
-        }
-      }
-    } catch (e) {
-      print('⚠️ Could not resolve institution slug via /admin/institution: $e');
+    final fromCurrent = _extractInstitutionSlug(_storage.getCurrentInstitution());
+    if (fromCurrent.isNotEmpty) {
+      return fromCurrent;
     }
 
-    if (institutionId == null || institutionId.isEmpty) {
+    if (institutionId != null && institutionId.isNotEmpty) {
+      final fromCache = _extractInstitutionSlug(
+        _storage.findInstitutionById(institutionId),
+      );
+      if (fromCache.isNotEmpty) {
+        return fromCache;
+      }
+    }
+
+    final role = _storage.getCurrentUser()?.role.toLowerCase();
+    String? endpoint;
+
+    switch (role) {
+      case 'student':
+        endpoint = ApiConfig.studentMyInstitution;
+        break;
+      case 'teacher':
+        endpoint = ApiConfig.teacherMyInstitution;
+        break;
+      case 'admin':
+        endpoint = ApiConfig.adminInstitution;
+        break;
+    }
+
+    if (endpoint == null) {
       return null;
     }
 
     try {
       final response = await _apiClient.get(
-        '/institutions/$institutionId',
+        endpoint,
         requiresAuth: true,
       );
 
       final institution = response['institution'];
       if (institution is Map<String, dynamic>) {
-        final slug = institution['slug']?.toString().trim();
-        if (slug != null && slug.isNotEmpty) {
-          return slug;
-        }
-
-        final code = institution['code']?.toString().trim();
-        if (code != null && code.isNotEmpty) {
-          return code;
+        final normalized = _extractInstitutionSlug(institution);
+        if (normalized.isNotEmpty) {
+          return normalized;
         }
       }
     } catch (e) {
-      print('⚠️ Could not resolve institution slug via /institutions/:id: $e');
+      print('⚠️ Could not resolve institution slug via $endpoint: $e');
     }
 
     return null;

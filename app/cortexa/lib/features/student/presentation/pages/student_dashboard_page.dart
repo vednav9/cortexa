@@ -8,11 +8,11 @@ import '../../../../core/bloc/terminology/terminology_event.dart';
 import '../../../dashboard/data/models/institution_display_model.dart';
 import '../../../dashboard/presentation/pages/query_desk_page.dart';
 import '../../../institution/presentation/pages/tabs/institution_dashboard_tab.dart';
+import '../../../institution/presentation/pages/tabs/academic_structure_tab.dart';
 import 'tabs/student_announcements_tab.dart';
 import 'tabs/mcq_test_tab.dart';
 import 'tabs/rag_chatbot_tab.dart';
 import 'tabs/student_qa_section_tab.dart';
-import 'tabs/student_ai_chatbot_tab.dart';
 
 enum StudentTab {
   dashboard,
@@ -20,7 +20,7 @@ enum StudentTab {
   mcqTest,
   ragChatbot,
   qaSection,
-  aiChatbot,
+  academicStructure,
   queryDesk,
 }
 
@@ -209,7 +209,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.auto_awesome_outlined,
-                    title: 'AI Assistance (RAG)',
+                    title: 'AI Assistance',
                     tab: StudentTab.ragChatbot,
                     context: context,
                   ),
@@ -220,9 +220,9 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                     context: context,
                   ),
                   _buildDrawerItem(
-                    icon: Icons.smart_toy_outlined,
-                    title: 'Personal AI Assistant',
-                    tab: StudentTab.aiChatbot,
+                    icon: Icons.account_tree_outlined,
+                    title: 'Academic Structure',
+                    tab: StudentTab.academicStructure,
                     context: context,
                   ),
                   _buildDrawerItem(
@@ -338,8 +338,8 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         return const RAGChatbotTab();
       case StudentTab.qaSection:
         return const StudentQASectionTab();
-      case StudentTab.aiChatbot:
-        return const StudentAIChatbotTab();
+      case StudentTab.academicStructure:
+        return const AcademicStructureTab(readOnly: true);
       case StudentTab.queryDesk:
         return QueryDeskPage(institutionId: widget.institution.id);
     }

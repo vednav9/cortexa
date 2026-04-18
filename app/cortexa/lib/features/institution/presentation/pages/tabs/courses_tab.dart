@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../../../core/utils/fuzzy_search.dart';
 import '../../../../../../core/constants/app_colors.dart';
+import '../../../../../../core/config/api_config.dart';
 import '../../../../../../core/services/terminology_service.dart';
 import '../../../../../../core/services/hive_storage_service.dart';
 import '../../../../../../core/di/service_locator.dart';
@@ -10,7 +12,9 @@ import '../../../data/repositories/faculty_repository.dart';
 import '../../../data/repositories/semester_repository.dart';
 
 class CoursesTab extends StatefulWidget {
-  const CoursesTab({super.key});
+  final bool readOnly;
+
+  const CoursesTab({super.key, this.readOnly = false});
 
   @override
   State<CoursesTab> createState() => _CoursesTabState();
@@ -256,6 +260,22 @@ class _CoursesTabState extends State<CoursesTab> {
     return text;
   }
 
+  String _displayEntityText(dynamic value) {
+    if (value is Map) {
+      final map = Map<String, dynamic>.from(value);
+      final candidate =
+          map['fullName']?.toString().trim() ??
+          map['name']?.toString().trim() ??
+          map['code']?.toString().trim() ??
+          '';
+      if (candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+
+    return _textOrDash(value);
+  }
+
   String _formatBytes(dynamic bytes) {
     final value = num.tryParse(bytes?.toString() ?? '');
     if (value == null || value <= 0) {
@@ -280,6 +300,62 @@ class _CoursesTabState extends State<CoursesTab> {
     final day = local.day.toString().padLeft(2, '0');
     final month = local.month.toString().padLeft(2, '0');
     return '$day/$month/${local.year}';
+  }
+
+  String? _normalizeDownloadUrl(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty || raw == 'null') {
+      return null;
+    }
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return raw;
+    }
+    return '${ApiConfig.baseUrl}$raw';
+  }
+
+  Future<void> _openDocumentDownload(Map<String, dynamic> document) async {
+    final fileUrl = _normalizeDownloadUrl(document['fileUrl']);
+    final trackedDownloadUrl = _normalizeDownloadUrl(document['downloadUrl']);
+    final targetUrl = fileUrl ?? trackedDownloadUrl;
+
+    if (targetUrl == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Download link is not available for this file'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(targetUrl);
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Invalid download link'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      return;
+    }
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Unable to open download link'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   Future<void> _showCourseDetails(Map<String, dynamic> course) async {
@@ -434,25 +510,278 @@ class _CoursesTabState extends State<CoursesTab> {
             ),
           ),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: AppColors.borderDark.withValues(alpha: 0.3),
+          if (widget.readOnly)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ElevatedButton.icon(
+                onPressed: () => _openDocumentDownload(document),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+                icon: const Icon(Icons.download_rounded, size: 16),
+                label: const Text(
+                  'Download',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.borderDark.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                'Download available for students only',
+                style: TextStyle(
+                  color: AppColors.textSecondary.withValues(alpha: 0.8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-            child: Text(
-              'Download available for students only',
-              style: TextStyle(
-                color: AppColors.textSecondary.withValues(alpha: 0.8),
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  void _showReadOnlyCourseDetailsSheet({
+    required Map<String, dynamic> detailsCourse,
+    required List<Map<String, dynamic>> documents,
+  }) {
+    final programLabel = TerminologyService.getLearningProgramLabel(context);
+    final programDescription = _textOrDash(
+      detailsCourse['description'] ?? detailsCourse['fullDescription'],
+    );
+    final credits = _textOrDash(detailsCourse['credits']);
+    final code = _textOrDash(detailsCourse['code']);
+    final displayName = _textOrDash(detailsCourse['name']);
+    final instructorName = _displayEntityText(detailsCourse['instructor']);
+    final departmentName = _displayEntityText(detailsCourse['department']);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.55,
+        maxChildSize: 0.97,
+        expand: false,
+        builder: (context, scrollController) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderDark.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primary.withValues(alpha: 0.14),
+                                AppColors.primaryLight.withValues(alpha: 0.08),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      code,
+                                      style: const TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  if (credits != '-')
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '$credits credits',
+                                        style: const TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                displayName,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.4,
+                                ),
+                              ),
+                              if (programDescription != '-') ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  programDescription,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary.withValues(alpha: 0.9),
+                                    fontSize: 14,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Uploaded $programLabel Content',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        if (documents.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardBackground,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.borderDark.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Text(
+                              'No uploaded content available for this $programLabel yet.',
+                              style: TextStyle(
+                                color: AppColors.textSecondary.withValues(alpha: 0.85),
+                                fontSize: 13,
+                              ),
+                            ),
+                          )
+                        else
+                          ...documents.map(_buildCourseDocumentCard),
+                        const SizedBox(height: 14),
+                        Text(
+                          '$programLabel Information',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.borderDark.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Instructor: $instructorName',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary.withValues(alpha: 0.9),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Department: $departmentName',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary.withValues(alpha: 0.9),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Close'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -462,6 +791,14 @@ class _CoursesTabState extends State<CoursesTab> {
     required Map<String, dynamic> editableCourse,
     required List<Map<String, dynamic>> documents,
   }) {
+    if (widget.readOnly) {
+      _showReadOnlyCourseDetailsSheet(
+        detailsCourse: detailsCourse,
+        documents: documents,
+      );
+      return;
+    }
+
     final codeController = TextEditingController(
       text: (editableCourse['code'] ?? detailsCourse['code'] ?? '')
           .toString()
@@ -539,8 +876,15 @@ class _CoursesTabState extends State<CoursesTab> {
           );
 
           Future<void> handleUpdate() async {
+            final rootContext = this.context;
+            final messenger = ScaffoldMessenger.of(rootContext);
+            final sheetNavigator = Navigator.of(sheetContext);
+            final successLabel = TerminologyService.getLearningProgramLabel(
+              rootContext,
+            );
+
             if (courseId.isEmpty) {
-              ScaffoldMessenger.of(this.context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: const Text('Invalid course ID for update'),
                   backgroundColor: AppColors.error,
@@ -557,7 +901,7 @@ class _CoursesTabState extends State<CoursesTab> {
                 codeController.text.trim().isEmpty ||
                 creditsController.text.trim().isEmpty ||
                 selectedDepartment.isEmpty) {
-              ScaffoldMessenger.of(this.context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: const Text('Please fill all required fields'),
                   backgroundColor: AppColors.error,
@@ -572,7 +916,7 @@ class _CoursesTabState extends State<CoursesTab> {
 
             final parsedCredits = int.tryParse(creditsController.text.trim());
             if (parsedCredits == null) {
-              ScaffoldMessenger.of(this.context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: const Text('Credits must be a valid number'),
                   backgroundColor: AppColors.error,
@@ -588,7 +932,7 @@ class _CoursesTabState extends State<CoursesTab> {
             final semRaw = semesterNumberController.text.trim();
             final parsedSemester = semRaw.isEmpty ? null : int.tryParse(semRaw);
             if (semRaw.isNotEmpty && parsedSemester == null) {
-              ScaffoldMessenger.of(this.context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: const Text('Semester number must be a valid number'),
                   backgroundColor: AppColors.error,
@@ -631,13 +975,11 @@ class _CoursesTabState extends State<CoursesTab> {
 
               if (!mounted) return;
 
-              Navigator.pop(sheetContext);
+              sheetNavigator.pop();
 
-              ScaffoldMessenger.of(this.context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
-                  content: Text(
-                    '${TerminologyService.getLearningProgramLabel(this.context)} updated successfully',
-                  ),
+                  content: Text('$successLabel updated successfully'),
                   backgroundColor: AppColors.success,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
@@ -654,7 +996,7 @@ class _CoursesTabState extends State<CoursesTab> {
                 isUpdating = false;
               });
 
-              ScaffoldMessenger.of(this.context).showSnackBar(
+              messenger.showSnackBar(
                 SnackBar(
                   content: Text('Failed to update: ${e.toString()}'),
                   backgroundColor: AppColors.error,
@@ -906,7 +1248,7 @@ class _CoursesTabState extends State<CoursesTab> {
                               children: [
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    value: selectedDepartment.isEmpty
+                                    initialValue: selectedDepartment.isEmpty
                                         ? null
                                         : selectedDepartment,
                                     isExpanded: true,
@@ -940,7 +1282,7 @@ class _CoursesTabState extends State<CoursesTab> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    value: selectedSemester.isEmpty
+                                    initialValue: selectedSemester.isEmpty
                                         ? null
                                         : selectedSemester,
                                     isExpanded: true,
@@ -1013,7 +1355,7 @@ class _CoursesTabState extends State<CoursesTab> {
                               children: [
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    value: selectedInstructor.isEmpty
+                                    initialValue: selectedInstructor.isEmpty
                                         ? null
                                         : selectedInstructor,
                                     isExpanded: true,
@@ -1048,7 +1390,7 @@ class _CoursesTabState extends State<CoursesTab> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    value: selectedFaculty.isEmpty
+                                    initialValue: selectedFaculty.isEmpty
                                         ? null
                                         : selectedFaculty,
                                     isExpanded: true,
@@ -2488,6 +2830,10 @@ class _CoursesTabState extends State<CoursesTab> {
   }
 
   Future<void> _deleteCourse(int index) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final programLabel = TerminologyService.getLearningProgramLabel(context);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2521,10 +2867,11 @@ class _CoursesTabState extends State<CoursesTab> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     final courseId = _courses[index]['_id']?.toString();
     if (courseId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Error: Invalid course ID'),
           backgroundColor: AppColors.error,
@@ -2552,13 +2899,11 @@ class _CoursesTabState extends State<CoursesTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            '${TerminologyService.getLearningProgramLabel(context)} deleted successfully',
-          ),
+          content: Text('$programLabel deleted successfully'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -2571,10 +2916,10 @@ class _CoursesTabState extends State<CoursesTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
       print('Error deleting course: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to delete: ${e.toString()}'),
           backgroundColor: AppColors.error,
@@ -2881,20 +3226,22 @@ class _CoursesTabState extends State<CoursesTab> {
           ),
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: FloatingActionButton.extended(
-          onPressed: _showAddCourseDialog,
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          icon: const Icon(Icons.add, size: 24),
-          label: const Text(
-            'Add',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          ),
-        ),
-      ),
+      floatingActionButton: widget.readOnly
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FloatingActionButton.extended(
+                onPressed: _showAddCourseDialog,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                icon: const Icon(Icons.add, size: 24),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                ),
+              ),
+            ),
     );
   }
 
@@ -3101,39 +3448,39 @@ class _CoursesTabState extends State<CoursesTab> {
                       ],
                     ),
                   ),
-                  // Delete button
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: sourceIndex >= 0
-                            ? () => _deleteCourse(sourceIndex)
-                            : null,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.error.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: Colors.white,
+                  if (!widget.readOnly)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: sourceIndex >= 0
+                              ? () => _deleteCourse(sourceIndex)
+                              : null,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.error.withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

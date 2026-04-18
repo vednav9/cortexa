@@ -17,7 +17,12 @@ import '../../../data/models/course_model.dart';
 import '../../../data/models/document_model.dart';
 
 class AIChatbotPersonalTab extends StatefulWidget {
-  const AIChatbotPersonalTab({super.key});
+  final bool studentMode;
+
+  const AIChatbotPersonalTab({
+    super.key,
+    this.studentMode = false,
+  });
 
   @override
   State<AIChatbotPersonalTab> createState() => _AIChatbotPersonalTabState();
@@ -31,6 +36,7 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
   final ApiClient _apiClient = getIt<ApiClient>();
 
   String _institutionId = '';
+  String _institutionSlug = '';
   String _userName = 'Teacher';
   bool _isBootstrapping = true;
 
@@ -66,10 +72,18 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
     final institution = storage.getCurrentInstitution();
 
     setState(() {
-      _userName = user?.fullName ?? user?.username ?? 'Teacher';
+      _userName = user?.fullName ?? user?.username ?? (widget.studentMode ? 'Student' : 'Teacher');
       _institutionId =
-          institution?['_id'] as String? ?? institution?['id'] as String? ?? '';
+          institution?['_id'] as String? ??
+          institution?['id'] as String? ??
+          user?.institutionId ??
+          '';
+      _institutionSlug = _extractInstitutionSlug(institution);
     });
+
+    if (_institutionSlug.isEmpty) {
+      _institutionSlug = await _resolveInstitutionSlug();
+    }
 
     await _loadCourses();
 
@@ -93,22 +107,49 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
     });
 
     try {
-      final response = await _apiClient.get(
-        ApiConfig.teacherAuthorizedCourses,
-        requiresAuth: true,
-      );
+      late final Map<String, dynamic> response;
+
+      if (widget.studentMode) {
+        var slug = _institutionSlug;
+        if (slug.isEmpty) {
+          slug = await _resolveInstitutionSlug();
+          _institutionSlug = slug;
+        }
+
+        if (slug.isEmpty) {
+          throw Exception('Institution slug is missing');
+        }
+
+        response = await _apiClient.get(
+          '/institutions/slug/${Uri.encodeComponent(slug)}/courses',
+          requiresAuth: true,
+        );
+      } else {
+        response = await _apiClient.get(
+          ApiConfig.teacherAuthorizedCourses,
+          requiresAuth: true,
+        );
+      }
 
       if (response['success'] != true || response['courses'] is! List) {
         throw Exception(response['message'] ?? 'Failed to load courses');
       }
 
-      final parsedCourses = (response['courses'] as List)
-          .whereType<Map>()
-          .map(
-            (course) => CourseModel.fromJson(Map<String, dynamic>.from(course)),
-          )
-          .where((course) => course.id.isNotEmpty)
-          .toList();
+      final parsedCourses = <CourseModel>[];
+      for (final raw in (response['courses'] as List)) {
+        if (raw is! Map) continue;
+        try {
+          final normalized = _normalizeCourseJson(
+            Map<String, dynamic>.from(raw),
+          );
+          final parsed = CourseModel.fromJson(normalized);
+          if (parsed.id.isNotEmpty) {
+            parsedCourses.add(parsed);
+          }
+        } catch (_) {
+          // Skip malformed rows and keep valid courses.
+        }
+      }
 
       final hasCurrent = parsedCourses.any((c) => c.id == _selectedCourseId);
       final nextSelectedCourseId = parsedCourses.isEmpty
@@ -134,7 +175,9 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _courseLoadError = 'Failed to load authorized courses.';
+        _courseLoadError = widget.studentMode
+            ? 'Failed to load courses for your institution.'
+            : 'Failed to load authorized courses.';
         _courses = [];
         _selectedCourseId = null;
         _documents = [];
@@ -158,10 +201,42 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
     });
 
     try {
-      final response = await _apiClient.get(
-        '${ApiConfig.teacherGetDocuments}/$courseId',
-        requiresAuth: true,
-      );
+      late final Map<String, dynamic> response;
+
+      if (widget.studentMode) {
+        CourseModel? selectedCourse;
+        for (final course in _courses) {
+          if (course.id == courseId) {
+            selectedCourse = course;
+            break;
+          }
+        }
+
+        final courseCode = selectedCourse?.code.trim() ?? '';
+        if (courseCode.isEmpty) {
+          throw Exception('Selected course code is missing');
+        }
+
+        var slug = _institutionSlug;
+        if (slug.isEmpty) {
+          slug = await _resolveInstitutionSlug();
+          _institutionSlug = slug;
+        }
+
+        if (slug.isEmpty) {
+          throw Exception('Institution slug is missing');
+        }
+
+        response = await _apiClient.get(
+          '/institutions/slug/${Uri.encodeComponent(slug)}/courses/${Uri.encodeComponent(courseCode.toUpperCase())}',
+          requiresAuth: true,
+        );
+      } else {
+        response = await _apiClient.get(
+          '${ApiConfig.teacherGetDocuments}/$courseId',
+          requiresAuth: true,
+        );
+      }
 
       if (response['success'] != true || response['documents'] is! List) {
         throw Exception(response['message'] ?? 'Failed to load documents');
@@ -171,7 +246,11 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
       for (final raw in (response['documents'] as List)) {
         if (raw is! Map) continue;
         try {
-          docs.add(DocumentModel.fromJson(Map<String, dynamic>.from(raw)));
+          final normalized = _normalizeDocumentJson(
+            Map<String, dynamic>.from(raw),
+            courseId: courseId,
+          );
+          docs.add(DocumentModel.fromJson(normalized));
         } catch (_) {
           // Skip malformed document rows and keep valid ones.
         }
@@ -199,6 +278,141 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
         setState(() => _isLoadingDocuments = false);
       }
     }
+  }
+
+  String _extractInstitutionSlug(Map<String, dynamic>? institution) {
+    if (institution == null) return '';
+
+    final slug = institution['slug']?.toString().trim();
+    if (slug != null && slug.isNotEmpty) {
+      return slug;
+    }
+
+    final customSlug = institution['custom_url_slug']?.toString().trim();
+    if (customSlug != null && customSlug.isNotEmpty) {
+      return customSlug;
+    }
+
+    final code = institution['code']?.toString().trim();
+    if (code != null && code.isNotEmpty) {
+      return code;
+    }
+
+    return '';
+  }
+
+  Future<String> _resolveInstitutionSlug() async {
+    final storage = getIt<HiveStorageService>();
+
+    // First preference: already cached current institution data in Hive.
+    final currentInstitution = storage.getCurrentInstitution();
+    final fromCurrent = _extractInstitutionSlug(currentInstitution);
+    if (fromCurrent.isNotEmpty) {
+      return fromCurrent;
+    }
+
+    // Second preference: institution map in the global institutions cache.
+    if (_institutionId.isNotEmpty) {
+      final cachedInstitution = storage.findInstitutionById(_institutionId);
+      final fromCached = _extractInstitutionSlug(cachedInstitution);
+      if (fromCached.isNotEmpty) {
+        return fromCached;
+      }
+    }
+
+    // Final fallback: role-specific my-institution endpoints.
+    final endpoint = widget.studentMode
+        ? ApiConfig.studentMyInstitution
+        : ApiConfig.teacherMyInstitution;
+
+    try {
+      final response = await _apiClient.get(
+        endpoint,
+        requiresAuth: true,
+      );
+
+      final institution = response['institution'];
+      if (institution is Map<String, dynamic>) {
+        final resolvedId =
+            institution['_id']?.toString().trim() ??
+            institution['id']?.toString().trim() ??
+            '';
+        if (_institutionId.isEmpty && resolvedId.isNotEmpty) {
+          _institutionId = resolvedId;
+        }
+
+        final normalized = _extractInstitutionSlug(institution);
+        if (normalized.isNotEmpty) {
+          return normalized;
+        }
+      }
+    } catch (_) {
+      // Ignore and return empty value; caller will show a user-facing error.
+    }
+
+    return '';
+  }
+
+  Map<String, dynamic> _normalizeDocumentJson(
+    Map<String, dynamic> raw, {
+    required String courseId,
+  }) {
+    final uploadedBy = raw['uploadedBy'];
+    final uploadedById = uploadedBy is Map
+        ? (uploadedBy['_id']?.toString() ?? '')
+        : (uploadedBy?.toString() ?? '');
+    final uploadedByName = uploadedBy is Map
+        ? (uploadedBy['name']?.toString() ?? uploadedBy['fullName']?.toString())
+        : uploadedBy?.toString();
+
+    return {
+      '_id': raw['_id']?.toString() ?? raw['id']?.toString() ?? '',
+      'fileName': raw['fileName']?.toString() ?? raw['originalName']?.toString() ?? 'Document',
+      'originalName': raw['originalName']?.toString() ?? raw['fileName']?.toString() ?? 'Document',
+      'fileUrl': raw['fileUrl']?.toString() ?? '',
+      'fileType': raw['fileType']?.toString() ?? 'unknown',
+      'fileSize': (raw['fileSize'] as num?)?.toInt() ?? 0,
+      'course': raw['course']?.toString() ?? courseId,
+      'institution': raw['institution']?.toString() ?? _institutionId,
+      'uploadedBy': uploadedById,
+      'uploadedByName': uploadedByName,
+      'isProcessed': raw['isProcessed'] == true,
+      'createdAt': raw['createdAt']?.toString() ?? DateTime.now().toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> _normalizeCourseJson(Map<String, dynamic> raw) {
+    final departmentRaw = raw['department'];
+    Map<String, dynamic>? department;
+    if (departmentRaw is Map<String, dynamic>) {
+      department = departmentRaw;
+    } else if (departmentRaw is String && departmentRaw.trim().isNotEmpty) {
+      department = {
+        'name': departmentRaw.trim(),
+      };
+    }
+
+    final semesterAvailableRaw = raw['semesterAvailable'];
+    Map<String, dynamic>? semesterAvailable;
+    if (semesterAvailableRaw is Map<String, dynamic>) {
+      semesterAvailable = semesterAvailableRaw;
+    } else if (raw['semester'] != null) {
+      semesterAvailable = {
+        'name': raw['semester'].toString(),
+      };
+    }
+
+    return {
+      '_id': raw['_id']?.toString() ?? raw['id']?.toString() ?? '',
+      'id': raw['id']?.toString() ?? raw['_id']?.toString() ?? '',
+      'name': raw['name']?.toString() ?? '',
+      'code': raw['code']?.toString() ?? '',
+      'description': raw['description']?.toString() ?? '',
+      'department': department,
+      'semesterAvailable': semesterAvailable,
+      'credits': raw['credits'],
+      'isActive': raw['isActive'] != false,
+    };
   }
 
   Future<void> _onCourseChanged(String? nextCourseId) async {
@@ -1373,7 +1587,7 @@ class _AIChatbotPersonalTabState extends State<AIChatbotPersonalTab> {
     }
 
     return DropdownButtonFormField<String>(
-      value: _selectedCourseId,
+      initialValue: _selectedCourseId,
       onChanged: _onCourseChanged,
       decoration: InputDecoration(
         labelText: 'Select Course',

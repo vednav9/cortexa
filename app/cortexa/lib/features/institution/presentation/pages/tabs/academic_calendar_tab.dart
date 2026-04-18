@@ -7,7 +7,9 @@ import '../../../../../../core/di/service_locator.dart';
 import '../../../data/repositories/academic_calendar_repository.dart';
 
 class AcademicCalendarTab extends StatefulWidget {
-  const AcademicCalendarTab({super.key});
+  final bool readOnly;
+
+  const AcademicCalendarTab({super.key, this.readOnly = false});
 
   @override
   State<AcademicCalendarTab> createState() => _AcademicCalendarTabState();
@@ -1023,6 +1025,9 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
   }
 
   Future<void> _deleteEvent(int index) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1056,10 +1061,11 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     final eventId = _events[index]['_id']?.toString();
     if (eventId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Error: Invalid event ID'),
           backgroundColor: AppColors.error,
@@ -1087,9 +1093,9 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Event deleted successfully'),
           backgroundColor: AppColors.success,
@@ -1104,10 +1110,10 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
       print('Error deleting event: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to delete: ${e.toString()}'),
           backgroundColor: AppColors.error,
@@ -1298,20 +1304,22 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
           ),
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: FloatingActionButton.extended(
-          onPressed: _showAddEventDialog,
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          icon: const Icon(Icons.add, size: 24),
-          label: const Text(
-            'Add',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          ),
-        ),
-      ),
+      floatingActionButton: widget.readOnly
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FloatingActionButton.extended(
+                onPressed: _showAddEventDialog,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                icon: const Icon(Icons.add, size: 24),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                ),
+              ),
+            ),
     );
   }
 
@@ -1423,6 +1431,121 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
     return fallbackIndex;
   }
 
+  Widget _buildReadOnlyDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.borderDark.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEventDetailsSheet(Map<String, dynamic> event) {
+    final title = _textOrFallback(event['title'], 'Untitled event');
+    final description = _textOrFallback(
+      event['description'],
+      'No description added',
+    );
+    final eventType = _textOrFallback(event['eventType'], 'event').toUpperCase();
+    final audience = _textOrFallback(event['targetAudience'], 'all').toUpperCase();
+    final startDate = _formatEventDate(event['startDate']);
+    final endDate = _formatEventDate(event['endDate']);
+    final location = _textOrFallback(event['location'], 'Not specified');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.45,
+            maxChildSize: 0.92,
+            builder: (context, scrollController) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderDark.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Event Details',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _buildReadOnlyDetailRow('Title', title),
+                          _buildReadOnlyDetailRow('Description', description),
+                          _buildReadOnlyDetailRow('Event Type', eventType),
+                          _buildReadOnlyDetailRow('Audience', audience),
+                          _buildReadOnlyDetailRow('Start Date', startDate),
+                          _buildReadOnlyDetailRow('End Date', endDate),
+                          _buildReadOnlyDetailRow('Location', location),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEventsList() {
     final filteredEvents = _filteredEvents;
     return ListView.separated(
@@ -1449,7 +1572,9 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showAddEventDialog(event, sourceIndex),
+            onTap: widget.readOnly
+                ? () => _showEventDetailsSheet(event)
+                : () => _showAddEventDialog(event, sourceIndex),
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
@@ -1517,34 +1642,35 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _deleteEvent(sourceIndex),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: AppColors.error,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.error.withValues(
-                                      alpha: 0.35,
+                        if (!widget.readOnly)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _deleteEvent(sourceIndex),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.error.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
                                     ),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.close_rounded,
-                                size: 14,
-                                color: Colors.white,
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
