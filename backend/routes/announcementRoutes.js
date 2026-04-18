@@ -4,6 +4,24 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
+const normalizeAnnouncementAuthor = (announcementDoc) => {
+  if (!announcementDoc) return announcementDoc;
+
+  const announcement =
+    typeof announcementDoc.toObject === 'function'
+      ? announcementDoc.toObject()
+      : announcementDoc;
+
+  if (announcement.author && typeof announcement.author === 'object') {
+    const resolvedName = announcement.author.name || announcement.author.fullName;
+    if (resolvedName) {
+      announcement.author.name = resolvedName;
+    }
+  }
+
+  return announcement;
+};
+
 // Get all announcements for an institution (PUBLIC - but filtered)
 router.get('/:institutionId', async (req, res) => {
   try {
@@ -19,18 +37,20 @@ router.get('/:institutionId', async (req, res) => {
     if (priority) query.priority = priority;
 
     const announcements = await Announcement.find(query)
-      .populate('author', 'name email')
+      .populate('author', 'name fullName email')
       .sort({ isPinned: -1, createdAt: -1 })
       .limit(parseInt(limit))
       .skip(parseInt(skip));
+
+    const normalizedAnnouncements = announcements.map(normalizeAnnouncementAuthor);
 
     const total = await Announcement.countDocuments(query);
 
     res.json({
       success: true,
-      announcements,
+      announcements: normalizedAnnouncements,
       total,
-      hasMore: total > (parseInt(skip) + announcements.length)
+      hasMore: total > (parseInt(skip) + normalizedAnnouncements.length)
     });
   } catch (error) {
     res.status(500).json({ 
@@ -77,12 +97,12 @@ router.post('/', authenticate, async (req, res) => {
     });
 
     const populatedAnnouncement = await Announcement.findById(announcement._id)
-      .populate('author', 'name email');
+      .populate('author', 'name fullName email');
 
     res.status(201).json({
       success: true,
       message: 'Announcement created successfully',
-      announcement: populatedAnnouncement
+      announcement: normalizeAnnouncementAuthor(populatedAnnouncement)
     });
   } catch (error) {
     res.status(500).json({ 
@@ -118,12 +138,12 @@ router.put('/:id', authenticate, async (req, res) => {
       id,
       { $set: req.body },
       { new: true, runValidators: true }
-    ).populate('author', 'name email');
+    ).populate('author', 'name fullName email');
 
     res.json({
       success: true,
       message: 'Announcement updated successfully',
-      announcement: updatedAnnouncement
+      announcement: normalizeAnnouncementAuthor(updatedAnnouncement)
     });
   } catch (error) {
     res.status(500).json({ 
