@@ -1,16 +1,41 @@
-import 'package:dio/dio.dart';
 import '../../../../core/config/api_config.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/services/hive_storage_service.dart';
 import '../models/query_model.dart';
 
 class QueryRepository {
-  final Dio _dio;
+  final ApiClient _apiClient;
   final HiveStorageService _storage;
 
-  QueryRepository({Dio? dio, HiveStorageService? storage})
-      : _dio = dio ?? getIt<Dio>(),
-        _storage = storage ?? getIt<HiveStorageService>();
+  QueryRepository({ApiClient? apiClient, HiveStorageService? storage})
+    : _apiClient = apiClient ?? getIt<ApiClient>(),
+      _storage = storage ?? getIt<HiveStorageService>();
+
+  String _buildQueryString(Map<String, dynamic> queryParams) {
+    if (queryParams.isEmpty) return '';
+    final entries = queryParams.entries
+        .where(
+          (entry) =>
+              entry.value != null && entry.value.toString().trim().isNotEmpty,
+        )
+        .map(
+          (entry) =>
+              '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value.toString())}',
+        )
+        .toList();
+
+    if (entries.isEmpty) return '';
+    return '?${entries.join('&')}';
+  }
+
+  List<Query> _mapQueriesFromResponse(Map<String, dynamic> response) {
+    final list = (response['queries'] as List?) ?? const [];
+    return list
+        .whereType<Map>()
+        .map((json) => Query.fromJson(Map<String, dynamic>.from(json)))
+        .toList();
+  }
 
   /// Get all queries for an institution
   /// Parameters:
@@ -28,7 +53,7 @@ class QueryRepository {
   }) async {
     try {
       final queryParams = <String, dynamic>{};
-      
+
       if (status != null && status != 'all') {
         queryParams['status'] = status;
       }
@@ -42,40 +67,17 @@ class QueryRepository {
         queryParams['search'] = search;
       }
 
-      final token = _storage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
+      final endpoint =
+          '${ApiConfig.queriesByInstitution(institutionId)}${_buildQueryString(queryParams)}';
+
+      final response = await _apiClient.get(endpoint, requiresAuth: true);
+
+      final success = response['success'];
+      if (success == false) {
+        throw Exception(response['message'] ?? 'Failed to fetch queries');
       }
 
-      final response = await _dio.get(
-        '${ApiConfig.baseUrl}/queries/institution/$institutionId',
-        queryParameters: queryParams,
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true) {
-          final queries = (data['queries'] as List<dynamic>)
-              .map((json) => Query.fromJson(json as Map<String, dynamic>))
-              .toList();
-          return queries;
-        } else {
-          throw Exception(data['message'] ?? 'Failed to fetch queries');
-        }
-      } else {
-        throw Exception('Server error: ${response.statusCode}');
-      }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-          e.response?.data['message'] ?? 'Failed to fetch queries',
-        );
-      } else {
-        throw Exception('Network error: ${e.message}');
-      }
+      return _mapQueriesFromResponse(response);
     } catch (e) {
       throw Exception('Error fetching queries: $e');
     }
@@ -84,36 +86,21 @@ class QueryRepository {
   /// Get single query by ID
   Future<Query> getQueryById(String queryId) async {
     try {
-      final token = _storage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
-      final response = await _dio.get(
-        '${ApiConfig.baseUrl}/queries/$queryId',
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
+      final response = await _apiClient.get(
+        ApiConfig.queryById(queryId),
+        requiresAuth: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true) {
-          return Query.fromJson(data['query'] as Map<String, dynamic>);
-        } else {
-          throw Exception(data['message'] ?? 'Failed to fetch query');
-        }
-      } else {
-        throw Exception('Server error: ${response.statusCode}');
+      if (response['success'] == false) {
+        throw Exception(response['message'] ?? 'Failed to fetch query');
       }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-          e.response?.data['message'] ?? 'Failed to fetch query',
-        );
-      } else {
-        throw Exception('Network error: ${e.message}');
+
+      final query = response['query'];
+      if (query is! Map) {
+        throw Exception('Invalid query response');
       }
+
+      return Query.fromJson(Map<String, dynamic>.from(query));
     } catch (e) {
       throw Exception('Error fetching query: $e');
     }
@@ -128,11 +115,6 @@ class QueryRepository {
     String priority = 'normal',
   }) async {
     try {
-      final token = _storage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
       final requestData = {
         'title': title,
         'description': description,
@@ -140,32 +122,22 @@ class QueryRepository {
         'priority': priority,
       };
 
-      final response = await _dio.post(
-        '${ApiConfig.baseUrl}${ApiConfig.queriesByInstitution(institutionId)}',
-        data: requestData,
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
+      final response = await _apiClient.post(
+        ApiConfig.createQuery(institutionId),
+        body: requestData,
+        requiresAuth: true,
       );
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true) {
-          return Query.fromJson(data['query'] as Map<String, dynamic>);
-        } else {
-          throw Exception(data['message'] ?? 'Failed to create query');
-        }
-      } else {
-        throw Exception('Server error: ${response.statusCode}');
+      if (response['success'] == false) {
+        throw Exception(response['message'] ?? 'Failed to create query');
       }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-          e.response?.data['message'] ?? 'Failed to create query',
-        );
-      } else {
-        throw Exception('Network error: ${e.message}');
+
+      final query = response['query'];
+      if (query is! Map) {
+        throw Exception('Invalid query response');
       }
+
+      return Query.fromJson(Map<String, dynamic>.from(query));
     } catch (e) {
       throw Exception('Error creating query: $e');
     }
@@ -177,39 +149,24 @@ class QueryRepository {
     required String text,
   }) async {
     try {
-      final token = _storage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
       final requestData = {'text': text};
 
-      final response = await _dio.post(
-        '${ApiConfig.baseUrl}/queries/$queryId/reply',
-        data: requestData,
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
+      final response = await _apiClient.post(
+        ApiConfig.addReply(queryId),
+        body: requestData,
+        requiresAuth: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true) {
-          return Query.fromJson(data['query'] as Map<String, dynamic>);
-        } else {
-          throw Exception(data['message'] ?? 'Failed to add reply');
-        }
-      } else {
-        throw Exception('Server error: ${response.statusCode}');
+      if (response['success'] == false) {
+        throw Exception(response['message'] ?? 'Failed to add reply');
       }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-          e.response?.data['message'] ?? 'Failed to add reply',
-        );
-      } else {
-        throw Exception('Network error: ${e.message}');
+
+      final query = response['query'];
+      if (query is! Map) {
+        throw Exception('Invalid query response');
       }
+
+      return Query.fromJson(Map<String, dynamic>.from(query));
     } catch (e) {
       throw Exception('Error adding reply: $e');
     }
@@ -221,39 +178,24 @@ class QueryRepository {
     required String status,
   }) async {
     try {
-      final token = _storage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
       final requestData = {'status': status};
 
-      final response = await _dio.patch(
-        '${ApiConfig.baseUrl}/queries/$queryId/status',
-        data: requestData,
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
+      final response = await _apiClient.patch(
+        ApiConfig.updateQueryStatus(queryId),
+        body: requestData,
+        requiresAuth: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true) {
-          return Query.fromJson(data['query'] as Map<String, dynamic>);
-        } else {
-          throw Exception(data['message'] ?? 'Failed to update status');
-        }
-      } else {
-        throw Exception('Server error: ${response.statusCode}');
+      if (response['success'] == false) {
+        throw Exception(response['message'] ?? 'Failed to update status');
       }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-          e.response?.data['message'] ?? 'Failed to update status',
-        );
-      } else {
-        throw Exception('Network error: ${e.message}');
+
+      final query = response['query'];
+      if (query is! Map) {
+        throw Exception('Invalid query response');
       }
+
+      return Query.fromJson(Map<String, dynamic>.from(query));
     } catch (e) {
       throw Exception('Error updating status: $e');
     }
@@ -262,33 +204,13 @@ class QueryRepository {
   /// Delete a query (admin only)
   Future<void> deleteQuery(String queryId) async {
     try {
-      final token = _storage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
-      final response = await _dio.delete(
-        '${ApiConfig.baseUrl}/queries/$queryId',
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
+      final response = await _apiClient.delete(
+        ApiConfig.deleteQuery(queryId),
+        requiresAuth: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] != true) {
-          throw Exception(data['message'] ?? 'Failed to delete query');
-        }
-      } else {
-        throw Exception('Server error: ${response.statusCode}');
-      }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-          e.response?.data['message'] ?? 'Failed to delete query',
-        );
-      } else {
-        throw Exception('Network error: ${e.message}');
+      if (response['success'] == false) {
+        throw Exception(response['message'] ?? 'Failed to delete query');
       }
     } catch (e) {
       throw Exception('Error deleting query: $e');
@@ -298,38 +220,98 @@ class QueryRepository {
   /// Get query statistics
   Future<QueryStats> getQueryStats(String institutionId) async {
     try {
-      final token = _storage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
-      final response = await _dio.get(
-        '${ApiConfig.baseUrl}/queries/institution/$institutionId/stats',
-        options: Options(
-          headers: {'Authorization': 'Bearer $token'},
-        ),
+      final response = await _apiClient.get(
+        ApiConfig.queryStats(institutionId),
+        requiresAuth: true,
       );
 
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true) {
-          return QueryStats.fromJson(data['stats'] as Map<String, dynamic>);
-        } else {
-          throw Exception(data['message'] ?? 'Failed to fetch stats');
-        }
-      } else {
-        throw Exception('Server error: ${response.statusCode}');
+      if (response['success'] == false) {
+        throw Exception(response['message'] ?? 'Failed to fetch stats');
       }
-    } on DioException catch (e) {
-      if (e.response != null) {
-        throw Exception(
-          e.response?.data['message'] ?? 'Failed to fetch stats',
-        );
-      } else {
-        throw Exception('Network error: ${e.message}');
+
+      final stats = response['stats'];
+      if (stats is! Map) {
+        return QueryStats(total: 0, open: 0, inProgress: 0, resolved: 0);
       }
+
+      return QueryStats.fromJson(Map<String, dynamic>.from(stats));
     } catch (e) {
       throw Exception('Error fetching stats: $e');
+    }
+  }
+
+  /// Resolve institution ID for current user in Cortexa-level dashboard contexts.
+  ///
+  /// Order:
+  /// 1) User model's institutionId
+  /// 2) Hive current institution map (id/_id)
+  /// 3) Backend my-institution endpoint by role
+  Future<String?> resolveInstitutionIdForCurrentUser() async {
+    final currentUser = _storage.getCurrentUser();
+    final fromUser = currentUser?.institutionId?.trim();
+    if (fromUser != null && fromUser.isNotEmpty) {
+      return fromUser;
+    }
+
+    final currentInstitution = _storage.getCurrentInstitution();
+    final fromCurrentInstitution =
+        (currentInstitution?['id'] ?? currentInstitution?['_id'])
+            ?.toString()
+            .trim();
+
+    if (fromCurrentInstitution != null && fromCurrentInstitution.isNotEmpty) {
+      if (currentUser != null &&
+          (currentUser.institutionId == null ||
+              currentUser.institutionId!.isEmpty)) {
+        await _storage.saveUser(
+          currentUser.copyWith(institutionId: fromCurrentInstitution),
+        );
+      }
+      return fromCurrentInstitution;
+    }
+
+    if (currentUser == null) return null;
+
+    String? endpoint;
+    switch (currentUser.role.toLowerCase()) {
+      case 'student':
+        endpoint = ApiConfig.studentMyInstitution;
+        break;
+      case 'teacher':
+        endpoint = ApiConfig.teacherMyInstitution;
+        break;
+      case 'admin':
+        endpoint = ApiConfig.adminInstitution;
+        break;
+    }
+
+    if (endpoint == null) return null;
+
+    try {
+      final response = await _apiClient.get(endpoint, requiresAuth: true);
+      final institution = response['institution'];
+      if (institution is! Map) return null;
+
+      final institutionMap = Map<String, dynamic>.from(institution);
+      final resolvedId = (institutionMap['_id'] ?? institutionMap['id'])
+          ?.toString()
+          .trim();
+
+      if (resolvedId == null || resolvedId.isEmpty) return null;
+
+      final normalizedInstitution = <String, dynamic>{
+        ...institutionMap,
+        'id': resolvedId,
+      };
+
+      await _storage.saveCurrentInstitution(normalizedInstitution);
+      await _storage.saveInstitution(normalizedInstitution);
+
+      await _storage.saveUser(currentUser.copyWith(institutionId: resolvedId));
+
+      return resolvedId;
+    } catch (_) {
+      return null;
     }
   }
 }

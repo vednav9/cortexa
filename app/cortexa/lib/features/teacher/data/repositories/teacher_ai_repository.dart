@@ -1,9 +1,5 @@
-import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart' as http_parser;
 import '../../../../core/network/api_client.dart';
-import '../../../../core/config/api_config.dart';
 import '../../../rag_assistant/data/models/mcq_model.dart';
 
 /// Repository for teacher-specific AI operations
@@ -16,7 +12,8 @@ class TeacherAiRepository {
   /// Generate MCQs from topic, text, or document
   /// 
   /// [courseId] - Course ID for authorization check
-  /// [topic] - Topic/subject for MCQ generation
+  /// [topic] - Topic/subject or Document Name for MCQ generation
+  /// [sourceType] - 'topic' or 'document'
   /// [count] - Number of MCQs to generate (default: 5)
   /// [difficulty] - Difficulty level: 'easy', 'medium', 'hard' (default: 'medium')
   /// 
@@ -24,6 +21,8 @@ class TeacherAiRepository {
   Future<List<McqQuestion>> generateMcqs({
     required String courseId,
     required String topic,
+    required String sourceType, // Added this required field
+    String? documentId,
     int count = 5,
     String difficulty = 'medium',
   }) async {
@@ -33,6 +32,8 @@ class TeacherAiRepository {
         body: {
           'courseId': courseId,
           'topic': topic,
+          'sourceType': sourceType, // Added to payload
+          if (documentId != null && documentId.isNotEmpty) 'documentId': documentId,
           'count': count,
           'difficulty': difficulty,
         },
@@ -177,10 +178,10 @@ class TeacherAiRepository {
 
   /// Upload document bytes for a course.
   ///
-  /// Step 1 → Backend  (/teacher/notes/upload): R2 storage + MongoDB record.
-  ///           Responds immediately — no HF round-trip inside Vercel.
-  /// Step 2 → Flutter calls HF Space (/upload) directly with the file bytes.
-  ///           Flutter has no serverless timeout, so it can handle HF cold-starts.
+  /// Backend pipeline:
+  /// 1) Upload to Cloudflare R2
+  /// 2) AI indexing (/upload) for chunking + embeddings
+  /// 3) Persist to MongoDB (DocumentChunk + EmbeddingStore)
   Future<Map<String, dynamic>> uploadDocument({
     required Uint8List fileBytes,
     required String fileExtension,
@@ -190,7 +191,7 @@ class TeacherAiRepository {
     final mime = _mimeForExtension(fileExtension);
     final fullFileName = '$fileName.$fileExtension';
 
-    // ── Step 1: backend (R2 + MongoDB) ────────────────────────────────────
+    // Single backend call executes full pipeline and returns final status.
     final response = await _apiClient.uploadFileBytes(
       '/teacher/notes/upload',
       fileBytes: fileBytes,
@@ -207,59 +208,37 @@ class TeacherAiRepository {
       throw Exception(response['message'] ?? 'Failed to upload document');
     }
 
-    // Extract institutionId and documentId from the document the backend created.
+    // Robust fallback: if backend upload succeeds but does not report
+    // persisted chunks yet (mixed backend versions or race), force a
+    // mark-processed sync so Mongo DocumentChunk/EmbeddingStore are populated.
     final doc = response['document'] as Map<String, dynamic>?;
-    final institutionId = (doc?['institution'] ?? '').toString();
-    final documentId   = (doc?['_id']         ?? '').toString();
-    final statusSyncSupported = response['statusSyncSupported'] == true;
+    final documentId = (doc?['_id'] ?? '').toString();
+    final chunksPersisted = (response['chunksPersisted'] is num)
+        ? (response['chunksPersisted'] as num).toInt()
+        : 0;
+    final chunksAddedByAi = (response['chunksAddedByAi'] is num)
+        ? (response['chunksAddedByAi'] as num).toInt()
+        : 0;
 
-    // ── Step 2: HF Space AI indexing (directly from Flutter) ──────────────
-    bool aiIndexed = false;
-    bool statusSynced = false;
-    int chunksAdded = 0;
-    String? aiError;
-    try {
-      final parsedChunks = await _indexInAi(
-        fileBytes: fileBytes,
-        fileExtension: fileExtension,
-        fileName: fullFileName,
-        courseId: courseId,
-        institutionId: institutionId,
-      );
-      chunksAdded = parsedChunks ?? 0;
-      aiIndexed = true;
-      // ── Step 3: flip isProcessed:true in MongoDB (if backend supports it) ─
-      if (statusSyncSupported && documentId.isNotEmpty) {
-        try {
-          await _markDocumentProcessed(documentId, chunksCount: chunksAdded);
-          statusSynced = true;
-        } catch (_) {
-          // Non-fatal: HF indexing succeeded; DB status sync can lag/fail.
-          statusSynced = false;
-        }
-      }
-    } catch (e) {
-      aiError = e.toString();
-      // Persist the failure reason when backend supports status sync.
-      if (statusSyncSupported && documentId.isNotEmpty) {
-        try {
-          await _markDocumentFailed(documentId, aiError);
-        } catch (_) {
-          // Non-fatal: file remains uploaded and retry can happen later.
-        }
+    var statusSynced = response['statusSynced'] == true;
+    if (documentId.isNotEmpty && chunksPersisted <= 0) {
+      try {
+        await _markDocumentProcessed(
+          documentId,
+          chunksCount: chunksAddedByAi > 0 ? chunksAddedByAi : 1,
+        );
+        statusSynced = true;
+      } catch (_) {
+        // Keep original response and let caller display partial-success message.
       }
     }
 
     return {
       ...response,
-      'aiIndexed': aiIndexed,
       'statusSynced': statusSynced,
-      'chunksAdded': chunksAdded,
-      if (aiError != null) 'aiError': aiError,
     };
   }
 
-  /// Tells the backend that HF indexing succeeded -> sets isProcessed: true.
   Future<void> _markDocumentProcessed(
     String documentId, {
     required int chunksCount,
@@ -269,63 +248,6 @@ class TeacherAiRepository {
       body: {'chunksCount': chunksCount},
       requiresAuth: true,
     );
-  }
-
-  Future<void> _markDocumentFailed(String documentId, String errorMessage) async {
-    await _apiClient.patch(
-      '/teacher/notes/$documentId/mark-failed',
-      body: {'error': errorMessage},
-      requiresAuth: true,
-    );
-  }
-
-  /// POST the file bytes directly to the HF Space /upload endpoint.
-  /// Throws on any HTTP error so the caller can surface it.
-  Future<int?> _indexInAi({
-    required Uint8List fileBytes,
-    required String fileExtension,
-    required String fileName,
-    required String courseId,
-    required String institutionId,
-  }) async {
-    final base = ApiConfig.aiBaseUrl; 
-    final aiRoot =
-        base.endsWith('/api') ? base.substring(0, base.length - 4) : base;
-
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$aiRoot/upload'),
-    );
-    // institution_id and course_id are Form(None) params in the FastAPI endpoint
-    if (institutionId.isNotEmpty) request.fields['institution_id'] = institutionId;
-    if (courseId.isNotEmpty) request.fields['course_id'] = courseId;
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      fileBytes,
-      filename: fileName,
-      contentType: http_parser.MediaType.parse(_mimeForExtension(fileExtension)),
-    ));
-
-    final streamed = await request.send().timeout(const Duration(minutes: 5));
-    final aiResponse = await http.Response.fromStream(streamed);
-
-    if (aiResponse.statusCode < 200 || aiResponse.statusCode >= 300) {
-      final body = aiResponse.body.length > 200
-          ? aiResponse.body.substring(0, 200)
-          : aiResponse.body;
-      throw Exception('AI service HTTP ${aiResponse.statusCode}: $body');
-    }
-
-    try {
-      final decoded = jsonDecode(aiResponse.body);
-      if (decoded is Map<String, dynamic>) {
-        final chunks = decoded['chunks_added'];
-        if (chunks is num) return chunks.toInt();
-      }
-    } catch (_) {
-      // Response may not be JSON in edge cases; ignore and continue.
-    }
-    return null;
   }
 
   String _mimeForExtension(String ext) {

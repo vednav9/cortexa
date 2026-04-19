@@ -24,9 +24,14 @@ const hexToRgb = (hex) => {
         : '16, 185, 129';
 };
 
+const getMcqClientTimeoutMs = (count, difficulty = "medium") => {
+    return 600000;
+};
+
 export default function GenerateMCQ() {
     const { user } = useAuth();
-    const { currentInstitution } = useOutletContext();
+    const outletContext = useOutletContext();
+    const activeInstitution = outletContext?.currentInstitution || outletContext?.institution;
     const [courses, setCourses] = useState([]);
     const [savedMCQSets, setSavedMCQSets] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -38,9 +43,13 @@ export default function GenerateMCQ() {
     const [numQuestions, setNumQuestions] = useState(5);
     const [difficulty, setDifficulty] = useState("medium");
     const [selectedCourse, setSelectedCourse] = useState("");
+    const [courseDocuments, setCourseDocuments] = useState([]);
+    const [documentsLoading, setDocumentsLoading] = useState(false);
+    const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
 
     // Generated MCQs
     const [generatedMCQs, setGeneratedMCQs] = useState([]);
+    const [editingMcqIndex, setEditingMcqIndex] = useState(null);
 
     // Save modal
     const [showSaveModal, setShowSaveModal] = useState(false);
@@ -57,23 +66,61 @@ export default function GenerateMCQ() {
     const [dueDate, setDueDate] = useState("");
     const [duration, setDuration] = useState(30);
 
-    const brandColor = currentInstitution?.branding?.primaryColor || '#10b981';
+    const brandColor = activeInstitution?.branding?.primaryColor || '#10b981';
     const rgb = hexToRgb(brandColor);
 
     useEffect(() => {
-        if (currentInstitution?._id) {
+        if (user?.role === 'teacher') {
             fetchCourses();
             fetchSavedMCQSets();
         }
-    }, [currentInstitution]);
+    }, [user]);
+
+    useEffect(() => {
+        const fetchCourseDocuments = async () => {
+            if (!selectedCourse || user?.role !== 'teacher') {
+                setCourseDocuments([]);
+                setSelectedDocumentIds([]);
+                return;
+            }
+
+            try {
+                setDocumentsLoading(true);
+                const response = await api.get(`/teacher/notes/${selectedCourse}`, {
+                    params: { _ts: Date.now() },
+                    headers: { 'Cache-Control': 'no-cache' },
+                });
+                const docs = Array.isArray(response.data?.documents) ? response.data.documents : [];
+                setCourseDocuments(docs);
+                setSelectedDocumentIds([]);
+            } catch (error) {
+                console.error("Fetch course documents error:", error);
+                setCourseDocuments([]);
+                setSelectedDocumentIds([]);
+            } finally {
+                setDocumentsLoading(false);
+            }
+        };
+
+        fetchCourseDocuments();
+    }, [selectedCourse, user?.role]);
 
     const fetchCourses = async () => {
         try {
             const response = await api.get('/teacher/authorized-courses');
-            setCourses(response.data.courses || []);
+            const coursesData = response.data.courses || [];
+            setCourses(coursesData);
+
+            if (!selectedCourse && coursesData.length > 0) {
+                setSelectedCourse(coursesData[0]._id);
+            }
+
+            if (coursesData.length === 0) {
+                toast.error('No authorized courses found. Contact your admin.');
+            }
         } catch (error) {
             console.error("Fetch courses error:", error);
-            toast.error("Failed to load courses");
+            toast.error(error.response?.data?.message || "Failed to load courses");
         }
     };
 
@@ -97,25 +144,51 @@ export default function GenerateMCQ() {
     };
 
     const handleGenerateMCQs = async () => {
-        if (!source.trim()) {
-            toast.error("Please enter source content");
+        if (sourceType === "topic" && !source.trim()) {
+            toast.error("Please enter topic details");
+            return;
+        }
+
+        if (sourceType === "document" && selectedDocumentIds.length === 0) {
+            toast.error("Please select at least one document");
             return;
         }
 
         try {
             setGenerating(true);
-            const response = await api.post("/teacher/mcq/generate", {
-                courseId: selectedCourse,
-                topic: source.trim(),
-                count: parseInt(numQuestions),
-                difficulty
-            });
+            const normalizedTopic = source.trim();
+            const requestTimeoutMs = getMcqClientTimeoutMs(numQuestions, difficulty);
+            const response = await api.post(
+                "/teacher/mcq/generate",
+                {
+                    courseId: selectedCourse,
+                    topic: normalizedTopic || "Generate MCQs from selected documents",
+                    count: parseInt(numQuestions),
+                    difficulty,
+                    sourceType,
+                    documentId: selectedDocumentIds[0] || null,
+                    documentIds: selectedDocumentIds,
+                },
+                {
+                    timeout: requestTimeoutMs,
+                }
+            );
 
-            setGeneratedMCQs(response.data.mcqs || []);
-            toast.success(`Generated ${response.data.mcqs?.length || 0} MCQs!`);
+            const normalizedMcqs = normalizeGeneratedMcqs(response.data.mcqs || []);
+            setGeneratedMCQs(normalizedMcqs);
+            toast.success(`Generated ${normalizedMcqs.length || 0} MCQs!`);
         } catch (error) {
-            console.error("Generate MCQs error:", error);
-            toast.error(error.response?.data?.message || "Failed to generate MCQs");
+            console.error("Generate MCQs error:", {
+                message: error?.message,
+                status: error?.response?.status,
+                data: error?.response?.data,
+            });
+            const serverMessage =
+                error?.response?.data?.error ||
+                error?.response?.data?.message ||
+                error?.message ||
+                "Failed to generate MCQs";
+            toast.error(serverMessage);
         } finally {
             setGenerating(false);
         }
@@ -220,6 +293,91 @@ export default function GenerateMCQ() {
         setShowAssignModal(true);
     };
 
+    const toggleDocument = (docId) => {
+        const id = String(docId);
+        setSelectedDocumentIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+        );
+    };
+
+    const selectAllDocuments = () => {
+        setSelectedDocumentIds(courseDocuments.map((doc) => String(doc._id)));
+    };
+
+    const clearSelectedDocuments = () => {
+        setSelectedDocumentIds([]);
+    };
+
+    const normalizeCorrectAnswerIndex = (value) => {
+        if (typeof value === "number" && Number.isFinite(value)) {
+            return Math.max(0, Math.min(3, Math.floor(value)));
+        }
+        if (typeof value === "string") {
+            const v = value.trim().toUpperCase();
+            if (/^[A-D]$/.test(v)) return v.charCodeAt(0) - 65;
+            const n = Number(v);
+            if (Number.isFinite(n)) return Math.max(0, Math.min(3, Math.floor(n)));
+        }
+        return 0;
+    };
+
+    const normalizeGeneratedMcqs = (mcqs = []) => {
+        if (!Array.isArray(mcqs)) return [];
+
+        return mcqs
+            .filter((mcq) => mcq && typeof mcq === 'object')
+            .map((mcq) => {
+                // Backend can return options as:
+                //   1. Array   ["opt a", "opt b", "opt c", "opt d"]
+                //   2. Dict    {A: "opt a", B: "opt b", C: "opt c", D: "opt d"}
+                //   3. Flat    option_a / option_b / option_c / option_d fields
+                let optA = '', optB = '', optC = '', optD = '';
+
+                if (Array.isArray(mcq?.options)) {
+                    const arr = mcq.options.map((o) => String(o ?? '').trim());
+                    optA = arr[0] ?? '';
+                    optB = arr[1] ?? '';
+                    optC = arr[2] ?? '';
+                    optD = arr[3] ?? '';
+                } else if (mcq?.options && typeof mcq.options === 'object') {
+                    optA = String(mcq.options.A ?? mcq.options.a ?? '').trim();
+                    optB = String(mcq.options.B ?? mcq.options.b ?? '').trim();
+                    optC = String(mcq.options.C ?? mcq.options.c ?? '').trim();
+                    optD = String(mcq.options.D ?? mcq.options.d ?? '').trim();
+                }
+
+                // Fall back to flat fields if dict/array left something empty
+                optA = optA || String(mcq?.option_a ?? '').trim();
+                optB = optB || String(mcq?.option_b ?? '').trim();
+                optC = optC || String(mcq?.option_c ?? '').trim();
+                optD = optD || String(mcq?.option_d ?? '').trim();
+
+                // Derive the correct answer index (0-3)
+                // backend returns either a letter ("A") or an index (0)
+                const rawCorrect = mcq?.correct_answer ?? mcq?.correctAnswer;
+                const correctIndex = normalizeCorrectAnswerIndex(rawCorrect);
+
+                return {
+                    ...mcq,
+                    question: String(mcq?.question || 'Question').trim(),
+                    option_a: optA || 'Option A',
+                    option_b: optB || 'Option B',
+                    option_c: optC || 'Option C',
+                    option_d: optD || 'Option D',
+                    correct_answer: correctIndex,
+                    explanation: String(mcq?.explanation || '').trim(),
+                    difficulty: String(mcq?.difficulty || difficulty).toLowerCase(),
+                };
+            })
+            .filter((mcq) => mcq.question && mcq.option_a);
+    };
+
+    const updateGeneratedMcqField = (index, field, value) => {
+        setGeneratedMCQs((prev) =>
+            prev.map((mcq, i) => (i === index ? { ...mcq, [field]: value } : mcq))
+        );
+    };
+
     return (
         <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: `rgba(${rgb},0.02)` }}>
             <div className="max-w-7xl mx-auto">
@@ -292,8 +450,8 @@ export default function GenerateMCQ() {
                                 </label>
                                 <div className="grid grid-cols-2 gap-3 p-1 rounded-xl bg-gray-50/80 border border-gray-100">
                                     {[
-                                        { value: "document", label: "📄 Document" },
-                                        { value: "topic", label: "🎯 Topic" }
+                                        { value: "document", label: "Document" },
+                                        { value: "topic", label: "Topic" }
                                     ].map((type) => (
                                         <button
                                             key={type.value}
@@ -316,24 +474,90 @@ export default function GenerateMCQ() {
                                 </div>
                             </div>
 
-                            {/* Source Input */}
-                            <div className="mb-5">
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                                    {sourceType === "document" ? "Document Details" : "Topic Details"}
-                                </label>
-                                <textarea
-                                    value={source}
-                                    onChange={(e) => setSource(e.target.value)}
-                                    placeholder={
-                                        sourceType === "document"
-                                            ? "Enter the document name from uploaded notes..."
-                                            : "Enter a topic (e.g., 'Data Structures')..."
-                                    }
-                                    rows={4}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all resize-none"
-                                    style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
-                                />
-                            </div>
+                            {/* Source Input (Topic mode only) */}
+                            {sourceType === "topic" && (
+                                <div className="mb-5">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                                        Topic Details
+                                    </label>
+                                    <textarea
+                                        value={source}
+                                        onChange={(e) => setSource(e.target.value)}
+                                        placeholder="Enter a topic (e.g., 'Data Structures')..."
+                                        rows={4}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-medium text-[14px] transition-all resize-none"
+                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                    />
+                                </div>
+                            )}
+
+                            {sourceType === "document" && (
+                                <div className="mb-5">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">
+                                            Available Documents
+                                        </label>
+                                        {courseDocuments.length > 0 && (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={selectAllDocuments}
+                                                    className="text-[11px] font-semibold text-gray-500 hover:text-gray-800"
+                                                >
+                                                    Select all
+                                                </button>
+                                                <button
+                                                    onClick={clearSelectedDocuments}
+                                                    className="text-[11px] font-semibold text-gray-500 hover:text-gray-800"
+                                                >
+                                                    Clear
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {documentsLoading ? (
+                                        <div className="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-[12px] text-gray-500">
+                                            Loading course documents...
+                                        </div>
+                                    ) : courseDocuments.length === 0 ? (
+                                        <div className="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-[12px] text-gray-500">
+                                            No uploaded documents found for selected course.
+                                        </div>
+                                    ) : (
+                                        <div className="max-h-52 overflow-y-auto border border-gray-200 rounded-xl bg-gray-50 p-2 space-y-1.5">
+                                            {courseDocuments.map((doc) => {
+                                                const id = String(doc._id);
+                                                const checked = selectedDocumentIds.includes(id);
+                                                return (
+                                                    <label
+                                                        key={id}
+                                                        className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer border transition-all ${checked ? "bg-white border-emerald-200" : "border-transparent hover:bg-white"}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={() => toggleDocument(id)}
+                                                            className="mt-0.5"
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-[12px] font-semibold text-gray-800 truncate">
+                                                                {doc.originalName || doc.fileName || "Document"}
+                                                            </p>
+                                                            <p className="text-[11px] text-gray-500 mt-0.5">
+                                                                {Number(doc.chunksCount || 0)} chunks
+                                                            </p>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    <p className="mt-2 text-[11px] text-gray-500 font-medium">
+                                        {selectedDocumentIds.length} document(s) selected
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Settings */}
                             <div className="grid grid-cols-2 gap-4 mb-8">
@@ -341,15 +565,16 @@ export default function GenerateMCQ() {
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
                                         Quantity
                                     </label>
-                                    <input
-                                        type="number"
+                                    <select
                                         value={numQuestions}
-                                        onChange={(e) => setNumQuestions(e.target.value)}
-                                        min="1"
-                                        max="20"
+                                        onChange={(e) => setNumQuestions(Number(e.target.value))}
                                         className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 font-bold text-[14px] transition-all"
                                         style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
-                                    />
+                                    >
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={15}>15</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
@@ -386,7 +611,7 @@ export default function GenerateMCQ() {
                             >
                                 {generating ? (
                                     <>
-                                        <div className="w-5 h-5 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                         Generating...
                                     </>
                                 ) : (
@@ -446,15 +671,39 @@ export default function GenerateMCQ() {
                                                 {index + 1}
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="font-bold text-gray-900 mb-4 mt-1 leading-relaxed text-[15px]">
-                                                    {mcq.question}
-                                                </h3>
+                                                <div className="flex items-center justify-between gap-3 mb-4 mt-1">
+                                                    <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                                        Question {index + 1}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => setEditingMcqIndex(editingMcqIndex === index ? null : index)}
+                                                        className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-semibold flex items-center gap-1.5"
+                                                    >
+                                                        <FiEdit2 className="w-3.5 h-3.5" />
+                                                        {editingMcqIndex === index ? "Done" : "Edit"}
+                                                    </button>
+                                                </div>
+
+                                                {editingMcqIndex === index ? (
+                                                    <textarea
+                                                        value={mcq.question}
+                                                        onChange={(e) => updateGeneratedMcqField(index, "question", e.target.value)}
+                                                        rows={3}
+                                                        className="w-full mb-4 px-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 text-[14px] font-semibold"
+                                                        style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                                    />
+                                                ) : (
+                                                    <h3 className="font-bold text-gray-900 mb-4 leading-relaxed text-[15px]">
+                                                        {mcq.question}
+                                                    </h3>
+                                                )}
+
                                                 <div className="grid gap-3 sm:grid-cols-2">
                                                     {[
-                                                        { label: "A", text: mcq.option_a },
-                                                        { label: "B", text: mcq.option_b },
-                                                        { label: "C", text: mcq.option_c },
-                                                        { label: "D", text: mcq.option_d }
+                                                        { label: "A", field: "option_a", text: mcq.option_a },
+                                                        { label: "B", field: "option_b", text: mcq.option_b },
+                                                        { label: "C", field: "option_c", text: mcq.option_c },
+                                                        { label: "D", field: "option_d", text: mcq.option_d }
                                                     ].map((option, idx) => {
                                                         const isCorrect = idx === mcq.correct_answer;
                                                         return (
@@ -471,22 +720,41 @@ export default function GenerateMCQ() {
                                                                 <span className={`w-6 h-6 rounded flex items-center justify-center font-bold text-xs shrink-0 ${isCorrect ? "bg-green-500 text-white" : "bg-white text-gray-500 shadow-sm"}`}>
                                                                     {option.label}
                                                                 </span>
-                                                                <span className={`text-[13px] mt-0.5 font-medium ${isCorrect ? "text-green-900" : "text-gray-700"}`}>
-                                                                    {option.text}
-                                                                </span>
+                                                                {editingMcqIndex === index ? (
+                                                                    <div className="flex-1 min-w-0 space-y-2">
+                                                                        <input
+                                                                            value={option.text}
+                                                                            onChange={(e) => updateGeneratedMcqField(index, option.field, e.target.value)}
+                                                                            className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-[13px] font-medium focus:outline-none focus:ring-2"
+                                                                            style={{ '--tw-ring-color': brandColor, '--tw-ring-opacity': '0.5' }}
+                                                                        />
+                                                                        <div className="flex items-center justify-between">
+                                                                            <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gray-500 whitespace-nowrap">
+                                                                                <input
+                                                                                    type="radio"
+                                                                                    name={`correct-answer-${index}`}
+                                                                                    checked={isCorrect}
+                                                                                    onChange={() => updateGeneratedMcqField(index, "correct_answer", idx)}
+                                                                                />
+                                                                                Mark as correct
+                                                                            </label>
+                                                                            {isCorrect && (
+                                                                                <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                                                                                    Correct
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className={`text-[13px] mt-0.5 font-medium ${isCorrect ? "text-green-900" : "text-gray-700"}`}>
+                                                                        {option.text}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
-                                                {mcq.explanation && (
-                                                    <div className="mt-4 p-4 rounded-xl text-sm" style={{ backgroundColor: `rgba(${rgb},0.04)` }}>
-                                                        <div className="flex items-center gap-1.5 mb-1">
-                                                            <HiSparkles className="w-4 h-4" style={{ color: brandColor }} />
-                                                            <span className="font-bold text-gray-900 text-xs uppercase tracking-wide">AI Explanation</span>
-                                                        </div>
-                                                        <p className="text-gray-700 font-medium leading-relaxed">{mcq.explanation}</p>
-                                                    </div>
-                                                )}
+                                                {/* AI Explanation hidden per user request */}
                                             </div>
                                         </div>
                                     </div>
@@ -505,7 +773,7 @@ export default function GenerateMCQ() {
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h2 className="text-xl font-black text-gray-900">
-                                Component Library
+                                Your Saved Question Sets
                             </h2>
                             <p className="text-gray-500 font-medium mt-1">
                                 Manage and assign your generated question sets
@@ -643,7 +911,7 @@ export default function GenerateMCQ() {
                                     </div>
                                     <div className="mb-8">
                                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                                            Description <span className="text-gray-400 font-semibold lowercase normal-case">(optional)</span>
+                                            Description <span className="text-gray-400 font-semibold normal-case">(optional)</span>
                                         </label>
                                         <textarea
                                             value={mcqSetDescription}

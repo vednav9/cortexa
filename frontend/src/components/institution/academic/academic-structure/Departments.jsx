@@ -5,9 +5,12 @@ import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../../../context/authcontext';
 
 function Departments() {
-  const { hasAccess, institution } = useOutletContext();
+  const { institution } = useOutletContext();
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin';
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -131,7 +134,7 @@ function Departments() {
             className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all shadow-sm hover:shadow-md"
           />
         </div>
-        {hasAccess && (
+        {canManage && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -158,7 +161,7 @@ function Departments() {
               <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
                 <FiLayers className="text-white text-2xl" />
               </div>
-              {hasAccess && (
+              {canManage && (
                 <div className="flex gap-2">
                   <motion.button
                     whileHover={{ scale: 1.1 }}
@@ -230,7 +233,7 @@ function Departments() {
               ? 'Try adjusting your search to find what you\'re looking for.'
               : 'Get started by creating your first department to organize your institution.'}
           </p>
-          {!searchQuery && hasAccess && (
+          {!searchQuery && canManage && (
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}

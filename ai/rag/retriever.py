@@ -2,12 +2,12 @@
 Document retrieval component
 """
 from typing import List, Dict
-from vectordb.json_store import get_json_store
+from vectordb.mongodb_store import get_mongodb_store
 from config import TOP_K, SIMILARITY_THRESHOLD
 
 class DocumentRetriever:
     def __init__(self):
-        self.vector_store = get_json_store()
+        self.vector_store = get_mongodb_store()
     
     def retrieve(
         self,

@@ -25,14 +25,14 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
   final _voiceRepository = VoiceRepository();
   final _lectureTitleController = TextEditingController();
   final _courseIdController = TextEditingController();
-  
+
   bool _isRecording = false;
   bool _isProcessing = false;
   bool _isTitleFilled = false;
   String? _audioFilePath;
   int _recordingDuration = 0;
   DateTime? _recordingStartTime;
-  
+
   Map<String, dynamic>? _transcriptionResult;
   bool _isSaving = false;
   // Non-null when the user is replacing an existing recording's audio.
@@ -71,7 +71,7 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       }
     });
   }
-  
+
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -82,7 +82,7 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    
+
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
@@ -104,7 +104,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     _videoPlayerController?.removeListener(_onVideoPlayerStateChanged);
     _videoPlayerController?.dispose();
     _pulseController.dispose();
-    if (_titleListener != null) _lectureTitleController.removeListener(_titleListener!);
+    if (_titleListener != null)
+      _lectureTitleController.removeListener(_titleListener!);
     _lectureTitleController.dispose();
     _courseIdController.dispose();
     _previewController.dispose();
@@ -121,6 +122,41 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     final mins = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final secs = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$mins:$secs';
+  }
+
+  void _showStatusSnackBar({
+    required String message,
+    required IconData icon,
+    required Color color,
+    int seconds = 3,
+  }) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: seconds),
+      ),
+    );
   }
 
   Future<void> _initAudioPlayer() async {
@@ -145,87 +181,57 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     try {
       if (await _audioRecorder.hasPermission()) {
         final directory = await getTemporaryDirectory();
-        final filePath = '${directory.path}/lecture_${DateTime.now().millisecondsSinceEpoch}.wav';
-        
+        final filePath =
+            '${directory.path}/lecture_${DateTime.now().millisecondsSinceEpoch}.wav';
+
         await _audioRecorder.start(
           const RecordConfig(encoder: AudioEncoder.wav),
           path: filePath,
         );
-        
+
         setState(() {
           _isRecording = true;
           _recordingStartTime = DateTime.now();
           _recordingDuration = 0;
           _audioFilePath = filePath;
         });
-        
+
         // Update duration every second
         Future.doWhile(() async {
           await Future.delayed(const Duration(seconds: 1));
           if (_isRecording && mounted) {
             setState(() {
-              _recordingDuration = DateTime.now().difference(_recordingStartTime!).inSeconds;
+              _recordingDuration = DateTime.now()
+                  .difference(_recordingStartTime!)
+                  .inSeconds;
             });
             return true;
           }
           return false;
         });
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.mic, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Text('Recording started!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                ],
-              ),
-              backgroundColor: AppColors.primary,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              margin: const EdgeInsets.all(16),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
+
+        _showStatusSnackBar(
+          message: 'Recording started',
+          icon: Icons.mic,
+          color: AppColors.primary,
+          seconds: 2,
+        );
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.mic_off, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Expanded(child: Text('Microphone permission denied', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-                ],
-              ),
-              backgroundColor: Colors.red.shade600,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              margin: const EdgeInsets.all(16),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Failed to start recording: ${e.toString()}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
+        _showStatusSnackBar(
+          message: 'Microphone permission denied',
+          icon: Icons.mic_off,
+          color: Colors.red.shade600,
+          seconds: 4,
         );
       }
+    } catch (e) {
+      _showStatusSnackBar(
+        message:
+            'Failed to start recording: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     }
   }
 
@@ -236,81 +242,41 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
         _isRecording = false;
       });
       await _initAudioPlayer();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                SizedBox(width: 12),
-                Text('Recording stopped!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              ],
-            ),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+
+      _showStatusSnackBar(
+        message: 'Recording stopped',
+        icon: Icons.check_circle_outline,
+        color: Colors.green.shade600,
+        seconds: 2,
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Failed to stop recording: ${e.toString()}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message:
+            'Failed to stop recording: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     }
   }
 
   Future<void> _transcribeAudio() async {
     if (_audioFilePath == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 12),
-              Text('No audio recording found', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            ],
-          ),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-        ),
+      _showStatusSnackBar(
+        message: 'No audio recording found',
+        icon: Icons.warning_amber_rounded,
+        color: Colors.orange.shade600,
+        seconds: 3,
       );
       return;
     }
 
     if (_lectureTitleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-              SizedBox(width: 12),
-              Text('Please enter a lecture title', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-            ],
-          ),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-        ),
+      _showStatusSnackBar(
+        message: 'Please enter a lecture title',
+        icon: Icons.warning_amber_rounded,
+        color: Colors.orange.shade600,
+        seconds: 3,
       );
       return;
     }
@@ -320,7 +286,7 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     try {
       final storage = getIt<HiveStorageService>();
       final currentUser = storage.getCurrentUser();
-      
+
       if (currentUser == null || currentUser.institutionId == null) {
         throw Exception('User not found or not enrolled in institution');
       }
@@ -330,8 +296,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
         lectureTitle: _lectureTitleController.text.trim(),
         teacherId: currentUser.id,
         institutionId: currentUser.institutionId!,
-        courseId: _courseIdController.text.trim().isNotEmpty 
-            ? _courseIdController.text.trim() 
+        courseId: _courseIdController.text.trim().isNotEmpty
+            ? _courseIdController.text.trim()
             : null,
       );
 
@@ -342,49 +308,21 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       });
       _previewController.text = formatted;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                SizedBox(width: 12),
-                Text('Lecture transcribed successfully!', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              ],
-            ),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _showStatusSnackBar(
+        message: 'Lecture transcribed successfully',
+        icon: Icons.check_circle_outline,
+        color: Colors.green.shade600,
+      );
     } catch (e) {
       setState(() => _isProcessing = false);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Transcription failed: ${e.toString().replaceAll('Exception: ', '')}',
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+
+      _showStatusSnackBar(
+        message:
+            'Transcription failed: ${e.toString().replaceAll('Exception: ', '')}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     }
   }
 
@@ -392,24 +330,12 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     final text = _previewController.text;
     if (text.isEmpty) return;
     Clipboard.setData(ClipboardData(text: text));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text('Transcript copied to clipboard'),
-            ],
-          ),
-          backgroundColor: AppColors.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    _showStatusSnackBar(
+      message: 'Transcript copied to clipboard',
+      icon: Icons.check_circle,
+      color: AppColors.primary,
+      seconds: 2,
+    );
   }
 
   void _reset() {
@@ -420,7 +346,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     // Remove the title listener before clear() so it cannot fire a setState
     // during the same synchronous call (leading to _dependents.isEmpty and
     // TextEditingController-used-after-disposed crashes).
-    if (_titleListener != null) _lectureTitleController.removeListener(_titleListener!);
+    if (_titleListener != null)
+      _lectureTitleController.removeListener(_titleListener!);
     _lectureTitleController.clear();
     _courseIdController.clear();
     if (!mounted) return;
@@ -437,7 +364,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       _reRecordingTarget = null;
     });
     // Re-register so future text changes are tracked.
-    if (_titleListener != null) _lectureTitleController.addListener(_titleListener!);
+    if (_titleListener != null)
+      _lectureTitleController.addListener(_titleListener!);
   }
 
   // ─── Recordings ────────────────────────────────────────────────────────────
@@ -449,9 +377,17 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     // Show recordings belonging to the current user; also show legacy
     // recordings that have no userId (saved before per-user filtering was added).
     final filtered = currentUser != null
-        ? all.where((r) => r['userId'] == null || r['userId'] == currentUser.id).toList()
+        ? all
+              .where(
+                (r) => r['userId'] == null || r['userId'] == currentUser.id,
+              )
+              .toList()
         : all;
-    if (mounted) setState(() { _savedRecordings = filtered; _isLoadingRecordings = false; });
+    if (mounted)
+      setState(() {
+        _savedRecordings = filtered;
+        _isLoadingRecordings = false;
+      });
     // Background-verify that the local audio file still exists on disk.
     _verifyLocalFiles(filtered);
   }
@@ -476,61 +412,70 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
     final isReRecord = _reRecordingTarget != null;
     String? savedTitle;
     if (!isReRecord) {
-      final nameCtrl = TextEditingController(text: _lectureTitleController.text.trim());
+      final nameCtrl = TextEditingController(
+        text: _lectureTitleController.text.trim(),
+      );
 
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Name Your Recording'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Give this recording a name before saving:',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: nameCtrl,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                labelText: 'Recording Name',
-                hintText: 'e.g. Introduction to ML',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Name Your Recording'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Give this recording a name before saving:',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: 'Recording Name',
+                  hintText: 'e.g. Introduction to ML',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isNotEmpty) {
+                  savedTitle = nameCtrl.text.trim();
+                  Navigator.pop(ctx);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isNotEmpty) {
-                savedTitle = nameCtrl.text.trim();
-                Navigator.pop(ctx);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
+      );
       // Do NOT call nameCtrl.dispose() here — the dialog pop animation still
       // uses the controller for a few frames after showDialog returns.
       if (savedTitle == null) return;
     } else {
-      savedTitle = _reRecordingTarget!['title'] as String? ?? 'Re-recorded Lecture';
+      savedTitle =
+          _reRecordingTarget!['title'] as String? ?? 'Re-recorded Lecture';
     }
 
     setState(() => _isSaving = true);
@@ -539,7 +484,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       final currentUser = storage.getCurrentUser();
 
       // ── 1. Copy WAV to permanent app directory ──────────────────────────────
-      final id = isReRecord ? (_reRecordingTarget!['id'] as String) : const Uuid().v4();
+      final id = isReRecord
+          ? (_reRecordingTarget!['id'] as String)
+          : const Uuid().v4();
       final docsDir = await getApplicationDocumentsDirectory();
       final recDir = Directory('${docsDir.path}/cortexa_recordings');
       await recDir.create(recursive: true);
@@ -550,7 +497,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       if (isReRecord) {
         final oldPath = _reRecordingTarget!['localPath'] as String?;
         if (oldPath != null && oldPath != destPath) {
-          try { await File(oldPath).delete(); } catch (_) {}
+          try {
+            await File(oldPath).delete();
+          } catch (_) {}
         }
       }
 
@@ -571,17 +520,21 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           if (isReRecord) {
             final oldR2Key = _reRecordingTarget!['r2Key'] as String?;
             if (oldR2Key != null) {
-              try { await r2.deleteObject(oldR2Key); } catch (_) {}
+              try {
+                await r2.deleteObject(oldR2Key);
+              } catch (_) {}
             }
           }
           final safeTitle = savedTitle!
               .replaceAll(RegExp(r'[^a-zA-Z0-9-_]'), '_')
               .substring(0, savedTitle!.length > 60 ? 60 : savedTitle!.length);
-          final key = 'audio/${DateTime.now().millisecondsSinceEpoch}-$safeTitle.wav';
+          final key =
+              'audio/${DateTime.now().millisecondsSinceEpoch}-$safeTitle.wav';
           final uploadedKey = await r2.uploadAudio(File(destPath), key);
           if (uploadedKey != null) {
             r2Key = uploadedKey;
-            r2Url = 'https://pub-032e669fa4da47fa85eeca766f953268.r2.dev/$uploadedKey';
+            r2Url =
+                'https://pub-032e669fa4da47fa85eeca766f953268.r2.dev/$uploadedKey';
           }
         } catch (_) {
           // R2 unavailable — recording still saved locally.
@@ -618,52 +571,40 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       // push the (possibly edited) preview text so any edits made before saving
       // are reflected in the knowledge base.
       if (currentUser != null && _previewController.text.trim().isNotEmpty) {
-        _voiceRepository.ingestTextToRag(
-          text: _previewController.text,
-          lectureTitle: savedTitle!,
-          teacherId: currentUser.id,
-          institutionId: currentUser.institutionId ?? '',
-          recordingId: id,
-        ).ignore();
+        _voiceRepository
+            .ingestTextToRag(
+              text: _previewController.text,
+              lectureTitle: savedTitle!,
+              teacherId: currentUser.id,
+              institutionId: currentUser.institutionId ?? '',
+              recordingId: id,
+            )
+            .ignore();
       }
 
       _reRecordingTarget = null;
       await _loadRecordings();
       _reset();
 
-      if (mounted) {
-        final sizeWarning = fileSizeBytes > maxR2Bytes;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-              Expanded(child: Text(
-                sizeWarning
-                    ? 'Saved locally (file >100 MB, skipped cloud)'
-                    : r2Key != null
-                        ? isReRecord ? 'Re-recording saved & synced to cloud!' : 'Saved & uploaded to cloud!'
-                        : 'Saved locally (cloud unavailable)',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              )),
-            ]),
-            backgroundColor: Colors.green.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      final sizeWarning = fileSizeBytes > maxR2Bytes;
+      _showStatusSnackBar(
+        message: sizeWarning
+            ? 'Saved locally (file >100 MB, skipped cloud)'
+            : r2Key != null
+            ? (isReRecord
+                  ? 'Re-recording saved and synced to cloud'
+                  : 'Saved and uploaded to cloud')
+            : 'Saved locally (cloud unavailable)',
+        icon: Icons.check_circle,
+        color: Colors.green.shade600,
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Save failed: ${e.toString().replaceAll("Exception: ", "")}'),
-          backgroundColor: Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          margin: const EdgeInsets.all(16),
-        ));
-      }
+      _showStatusSnackBar(
+        message: 'Save failed: ${e.toString().replaceAll("Exception: ", "")}',
+        icon: Icons.error_outline,
+        color: Colors.red.shade600,
+        seconds: 4,
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -689,7 +630,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade600,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('Delete'),
           ),
@@ -721,24 +664,24 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       } catch (_) {}
     }
 
-    await getIt<HiveStorageService>().deleteVoiceRecording(recording['id'] as String);
+    await getIt<HiveStorageService>().deleteVoiceRecording(
+      recording['id'] as String,
+    );
     await _loadRecordings();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Recording deleted'),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ));
-    }
+    _showStatusSnackBar(
+      message: 'Recording deleted',
+      icon: Icons.delete_outline,
+      color: Colors.red.shade600,
+      seconds: 2,
+    );
   }
 
   Future<void> _renameRecording(Map<String, dynamic> recording) async {
     String? newTitle;
-    final ctrl = TextEditingController(text: recording['title'] as String? ?? '');
+    final ctrl = TextEditingController(
+      text: recording['title'] as String? ?? '',
+    );
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -754,7 +697,10 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               if (ctrl.text.trim().isNotEmpty) {
@@ -765,7 +711,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('Rename'),
           ),
@@ -773,19 +721,17 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       ),
     );
     if (newTitle == null) return;
-    await getIt<HiveStorageService>()
-        .updateVoiceRecording(recording['id'] as String, {'title': newTitle!});
+    await getIt<HiveStorageService>().updateVoiceRecording(
+      recording['id'] as String,
+      {'title': newTitle!},
+    );
     await _loadRecordings();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Recording renamed'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ));
-    }
+    _showStatusSnackBar(
+      message: 'Recording renamed',
+      icon: Icons.edit,
+      color: AppColors.primary,
+      seconds: 2,
+    );
   }
 
   void _openRecordingDetail(Map<String, dynamic> recording) {
@@ -796,35 +742,46 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
       builder: (_) => _RecordingDetailSheet(
         recording: recording,
         onReRecord: () {
-          if (_titleListener != null) _lectureTitleController.removeListener(_titleListener!);
+          if (_titleListener != null)
+            _lectureTitleController.removeListener(_titleListener!);
           _reRecordingTarget = recording;
           _lectureTitleController.text = recording['title'] as String? ?? '';
-          if (_titleListener != null) _lectureTitleController.addListener(_titleListener!);
-          setState(() => _isTitleFilled = _lectureTitleController.text.trim().isNotEmpty);
+          if (_titleListener != null)
+            _lectureTitleController.addListener(_titleListener!);
+          setState(
+            () =>
+                _isTitleFilled = _lectureTitleController.text.trim().isNotEmpty,
+          );
         },
         onTranscriptSaved: (id, transcript) async {
           final storage = getIt<HiveStorageService>();
-          await storage.updateVoiceRecording(id, {'transcriptText': transcript});
+          await storage.updateVoiceRecording(id, {
+            'transcriptText': transcript,
+          });
           await _loadRecordings();
           // Push the edited transcript to the RAG knowledge base so students get
           // answers based on the corrected content, not the original version.
           final currentUser = storage.getCurrentUser();
           if (currentUser != null && transcript.trim().isNotEmpty) {
-            final rec = storage
-                .getVoiceRecordings()
-                .firstWhere((r) => r['id'] == id, orElse: () => {});
-            _voiceRepository.ingestTextToRag(
-              text: transcript,
-              lectureTitle: rec['title'] as String? ?? 'Lecture',
-              teacherId: currentUser.id,
-              institutionId: currentUser.institutionId ?? '',
-              recordingId: id,
-            ).ignore();
+            final rec = storage.getVoiceRecordings().firstWhere(
+              (r) => r['id'] == id,
+              orElse: () => {},
+            );
+            _voiceRepository
+                .ingestTextToRag(
+                  text: transcript,
+                  lectureTitle: rec['title'] as String? ?? 'Lecture',
+                  teacherId: currentUser.id,
+                  institutionId: currentUser.institutionId ?? '',
+                  recordingId: id,
+                )
+                .ignore();
           }
         },
         onRename: (id, newTitle) async {
-          await getIt<HiveStorageService>()
-              .updateVoiceRecording(id, {'title': newTitle});
+          await getIt<HiveStorageService>().updateVoiceRecording(id, {
+            'title': newTitle,
+          });
           await _loadRecordings();
         },
       ),
@@ -850,10 +807,6 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           children: [
             _buildHeader(),
             const SizedBox(height: 20),
-            _buildSavedRecordingsSection(),
-            const SizedBox(height: 16),
-            Divider(color: AppColors.textTertiary.withValues(alpha: 0.2)),
-            const SizedBox(height: 8),
             Row(
               children: [
                 const Text(
@@ -872,7 +825,10 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                     label: const Text('Reset'),
                     style: TextButton.styleFrom(
                       foregroundColor: AppColors.textSecondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                     ),
                   ),
               ],
@@ -883,11 +839,16 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
             if (_reRecordingTarget != null)
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                  border: Border.all(
+                    color: Colors.amber.withValues(alpha: 0.5),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -907,12 +868,23 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                     ),
                     GestureDetector(
                       onTap: () {
-                        if (_titleListener != null) _lectureTitleController.removeListener(_titleListener!);
+                        if (_titleListener != null)
+                          _lectureTitleController.removeListener(
+                            _titleListener!,
+                          );
                         _lectureTitleController.clear();
-                        if (_titleListener != null) _lectureTitleController.addListener(_titleListener!);
-                        setState(() { _reRecordingTarget = null; _isTitleFilled = false; });
+                        if (_titleListener != null)
+                          _lectureTitleController.addListener(_titleListener!);
+                        setState(() {
+                          _reRecordingTarget = null;
+                          _isTitleFilled = false;
+                        });
                       },
-                      child: const Icon(Icons.close, size: 16, color: Colors.amber),
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Colors.amber,
+                      ),
                     ),
                   ],
                 ),
@@ -922,7 +894,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
             _buildStep1Details(),
             const SizedBox(height: 16),
             _buildStep2Recording(),
-            if (_audioFilePath != null && !_isRecording && _transcriptionResult == null) ...[
+            if (_audioFilePath != null &&
+                !_isRecording &&
+                _transcriptionResult == null) ...[
               const SizedBox(height: 16),
               _buildStep3Transcribe(),
             ],
@@ -930,6 +904,10 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               const SizedBox(height: 16),
               _buildStep4Preview(),
             ],
+            const SizedBox(height: 20),
+            Divider(color: AppColors.textTertiary.withValues(alpha: 0.2)),
+            const SizedBox(height: 16),
+            _buildSavedRecordingsSection(),
             const SizedBox(height: 24),
           ],
         ),
@@ -948,9 +926,7 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           ],
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -1034,8 +1010,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                 color: isDone
                     ? AppColors.primary
                     : isActive
-                        ? AppColors.primary.withValues(alpha: 0.15)
-                        : AppColors.surface,
+                    ? AppColors.primary.withValues(alpha: 0.15)
+                    : AppColors.surface,
                 border: Border.all(
                   color: isDone || isActive
                       ? AppColors.primary
@@ -1049,8 +1025,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                 color: isDone
                     ? Colors.white
                     : isActive
-                        ? AppColors.primary
-                        : AppColors.textTertiary,
+                    ? AppColors.primary
+                    : AppColors.textTertiary,
               ),
             ),
             const SizedBox(height: 6),
@@ -1092,11 +1068,16 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               const Spacer(),
               if (_isTitleFilled && !isLocked)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: Colors.green.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1124,7 +1105,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               labelText: 'Lecture Title *',
               hintText: 'e.g. Introduction to Machine Learning',
               prefixIcon: const Icon(Icons.title),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide(
@@ -1143,7 +1126,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               labelText: 'Course ID (Optional)',
               hintText: 'e.g. CS-101',
               prefixIcon: const Icon(Icons.school_outlined),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],
@@ -1174,16 +1159,25 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               const Spacer(),
               if (_audioFilePath != null && !_isRecording)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: Colors.green.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.check_circle, color: Colors.green, size: 14),
+                      const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         _formatDuration(_recordingDuration),
@@ -1210,12 +1204,19 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.lock_outline, color: AppColors.textTertiary, size: 18),
+                  Icon(
+                    Icons.lock_outline,
+                    color: AppColors.textTertiary,
+                    size: 18,
+                  ),
                   const SizedBox(width: 10),
                   Flexible(
                     child: Text(
                       'Enter a lecture title first to unlock recording',
-                      style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textTertiary,
+                      ),
                     ),
                   ),
                 ],
@@ -1233,7 +1234,11 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                     color: AppColors.textTertiary.withValues(alpha: 0.2),
                     border: Border.all(color: AppColors.textTertiary, width: 2),
                   ),
-                  child: const Icon(Icons.mic_off, size: 40, color: AppColors.textTertiary),
+                  child: const Icon(
+                    Icons.mic_off,
+                    size: 40,
+                    color: AppColors.textTertiary,
+                  ),
                 ),
               ),
             ),
@@ -1251,7 +1256,11 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: Colors.green.withValues(alpha: 0.12),
-                  child: const Icon(Icons.audiotrack, color: Colors.green, size: 24),
+                  child: const Icon(
+                    Icons.audiotrack,
+                    color: Colors.green,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Column(
@@ -1325,24 +1334,33 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                         SliderTheme(
                           data: SliderTheme.of(context).copyWith(
                             trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 12,
+                            ),
                           ),
                           child: Slider(
                             value: _audioPlaybackDuration.inMilliseconds > 0
                                 ? (_audioPlaybackPosition.inMilliseconds /
-                                        _audioPlaybackDuration.inMilliseconds)
-                                    .clamp(0.0, 1.0)
+                                          _audioPlaybackDuration.inMilliseconds)
+                                      .clamp(0.0, 1.0)
                                 : 0.0,
                             onChanged: (value) async {
                               final pos = Duration(
                                 milliseconds:
-                                    (value * _audioPlaybackDuration.inMilliseconds).toInt(),
+                                    (value *
+                                            _audioPlaybackDuration
+                                                .inMilliseconds)
+                                        .toInt(),
                               );
                               await _videoPlayerController?.seekTo(pos);
                             },
                             activeColor: AppColors.primary,
-                            inactiveColor: AppColors.textTertiary.withValues(alpha: 0.3),
+                            inactiveColor: AppColors.textTertiary.withValues(
+                              alpha: 0.3,
+                            ),
                           ),
                         ),
                         Padding(
@@ -1380,7 +1398,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                 widthFactor: 0.8,
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    _videoPlayerController?.removeListener(_onVideoPlayerStateChanged);
+                    _videoPlayerController?.removeListener(
+                      _onVideoPlayerStateChanged,
+                    );
                     await _videoPlayerController?.pause();
                     await _videoPlayerController?.dispose();
                     if (!mounted) return;
@@ -1400,7 +1420,9 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
-                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
+                    side: BorderSide(
+                      color: AppColors.primary.withValues(alpha: 0.5),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -1412,7 +1434,10 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           ] else if (_isRecording) ...[
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(32),
@@ -1519,7 +1544,11 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.mic, size: 52, color: Colors.white),
+                      child: const Icon(
+                        Icons.mic,
+                        size: 52,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     const Text(
@@ -1578,13 +1607,18 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                   : const Icon(Icons.auto_awesome),
               label: Text(
                 _isProcessing ? 'Processing...' : 'Transcribe & Format with AI',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -1596,7 +1630,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
   Widget _buildStep4Preview() {
     final transcription = _transcriptionResult!['transcription'];
     final wordCount = transcription?['word_count'] ?? 0;
-    final chunksAdded = _transcriptionResult!['rag_system']?['chunks_added'] ?? 0;
+    final chunksAdded =
+        _transcriptionResult!['rag_system']?['chunks_added'] ?? 0;
 
     return _buildStepCard(
       stepNumber: 4,
@@ -1618,7 +1653,11 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.copy_outlined, size: 20, color: AppColors.primary),
+                icon: const Icon(
+                  Icons.copy_outlined,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
                 tooltip: 'Copy transcript',
                 onPressed: _copyToClipboard,
                 padding: EdgeInsets.zero,
@@ -1629,9 +1668,17 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           const SizedBox(height: 10),
           Row(
             children: [
-              _buildStatChip(Icons.text_fields, '$wordCount words', Colors.blue),
+              _buildStatChip(
+                Icons.text_fields,
+                '$wordCount words',
+                Colors.blue,
+              ),
               const SizedBox(width: 10),
-              _buildStatChip(Icons.library_books, '$chunksAdded chunks added', Colors.green),
+              _buildStatChip(
+                Icons.library_books,
+                '$chunksAdded chunks added',
+                Colors.green,
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1656,7 +1703,8 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
               decoration: const InputDecoration(
                 contentPadding: EdgeInsets.all(16),
                 border: InputBorder.none,
-                hintText: 'Transcript will appear here. You can edit before saving.',
+                hintText:
+                    'Transcript will appear here. You can edit before saving.',
               ),
             ),
           ),
@@ -1673,19 +1721,26 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(Icons.save_outlined, size: 20),
                 label: Text(
                   _isSaving ? 'Saving…' : 'Save Recording',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green.shade600,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 2,
                 ),
               ),
@@ -1711,7 +1766,11 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1834,7 +1893,7 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Record a lecture below and save it to see it here',
+                  'Record a lecture above and save it to see it here',
                   style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
                   textAlign: TextAlign.center,
                 ),
@@ -1920,13 +1979,33 @@ class _VoiceToTextTabState extends State<VoiceToTextTab>
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.access_time, size: 11, color: AppColors.textTertiary),
+                      const Icon(
+                        Icons.access_time,
+                        size: 11,
+                        color: AppColors.textTertiary,
+                      ),
                       const SizedBox(width: 3),
-                      Text(durStr, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                      Text(
+                        durStr,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
                       const SizedBox(width: 10),
-                      const Icon(Icons.calendar_today, size: 11, color: AppColors.textTertiary),
+                      const Icon(
+                        Icons.calendar_today,
+                        size: 11,
+                        color: AppColors.textTertiary,
+                      ),
                       const SizedBox(width: 3),
-                      Text(dateStr, style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                      Text(
+                        dateStr,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -2068,7 +2147,11 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
             child: Row(
               children: [
-                const Icon(Icons.audiotrack, color: AppColors.primary, size: 20),
+                const Icon(
+                  Icons.audiotrack,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -2084,17 +2167,26 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                 ),
                 // Rename button in the sheet header
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.primary),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 17,
+                    color: AppColors.primary,
+                  ),
                   tooltip: 'Rename',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
                   onPressed: () async {
                     String? newTitle;
                     final ctrl = TextEditingController(text: _currentTitle);
                     await showDialog<void>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                         title: const Text('Rename Recording'),
                         content: TextField(
                           controller: ctrl,
@@ -2102,11 +2194,16 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                           textCapitalization: TextCapitalization.sentences,
                           decoration: InputDecoration(
                             labelText: 'New Name',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                         actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancel'),
+                          ),
                           ElevatedButton(
                             onPressed: () {
                               if (ctrl.text.trim().isNotEmpty) {
@@ -2117,7 +2214,9 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
                             child: const Text('Rename'),
                           ),
@@ -2125,17 +2224,24 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                       ),
                     );
                     if (newTitle == null || !mounted) return;
-                    await widget.onRename(widget.recording['id'] as String, newTitle!);
+                    await widget.onRename(
+                      widget.recording['id'] as String,
+                      newTitle!,
+                    );
                     if (mounted) setState(() => _currentTitle = newTitle!);
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: const Text('Renamed successfully'),
-                        backgroundColor: AppColors.primary,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        margin: const EdgeInsets.all(16),
-                        duration: const Duration(seconds: 2),
-                      ));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Renamed successfully'),
+                          backgroundColor: AppColors.primary,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          margin: const EdgeInsets.all(16),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
                     }
                   },
                 ),
@@ -2145,7 +2251,10 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                     widget.onReRecord();
                   },
                   icon: const Icon(Icons.refresh, size: 15),
-                  label: const Text('Re-record', style: TextStyle(fontSize: 13)),
+                  label: const Text(
+                    'Re-record',
+                    style: TextStyle(fontSize: 13),
+                  ),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -2175,7 +2284,9 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                       _controller!.value.isInitialized)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.background,
                         borderRadius: BorderRadius.circular(12),
@@ -2220,23 +2331,28 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                                   data: SliderTheme.of(context).copyWith(
                                     trackHeight: 3,
                                     thumbShape: const RoundSliderThumbShape(
-                                        enabledThumbRadius: 6),
-                                    overlayShape:
-                                        const RoundSliderOverlayShape(
-                                            overlayRadius: 12),
+                                      enabledThumbRadius: 6,
+                                    ),
+                                    overlayShape: const RoundSliderOverlayShape(
+                                      overlayRadius: 12,
+                                    ),
                                   ),
                                   child: Slider(
                                     value: _audioDuration.inMilliseconds > 0
                                         ? (_position.inMilliseconds /
-                                                _audioDuration.inMilliseconds)
-                                            .clamp(0.0, 1.0)
+                                                  _audioDuration.inMilliseconds)
+                                              .clamp(0.0, 1.0)
                                         : 0.0,
                                     onChanged: (v) async {
-                                      await _controller?.seekTo(Duration(
-                                        milliseconds: (v *
-                                                _audioDuration.inMilliseconds)
-                                            .toInt(),
-                                      ));
+                                      await _controller?.seekTo(
+                                        Duration(
+                                          milliseconds:
+                                              (v *
+                                                      _audioDuration
+                                                          .inMilliseconds)
+                                                  .toInt(),
+                                        ),
+                                      );
                                     },
                                     activeColor: AppColors.primary,
                                     inactiveColor: AppColors.textTertiary
@@ -2245,19 +2361,26 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 4),
+                                    horizontal: 4,
+                                  ),
                                   child: Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text(_fmt(_position),
-                                          style: const TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.textTertiary)),
-                                      Text(_fmt(_audioDuration),
-                                          style: const TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.textTertiary)),
+                                      Text(
+                                        _fmt(_position),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textTertiary,
+                                        ),
+                                      ),
+                                      Text(
+                                        _fmt(_audioDuration),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textTertiary,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -2274,18 +2397,24 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                         color: Colors.orange.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.3)),
+                          color: Colors.orange.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded,
-                              color: Colors.orange, size: 18),
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.orange,
+                            size: 18,
+                          ),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Audio file not found on this device',
                               style: TextStyle(
-                                  fontSize: 13, color: Colors.orange),
+                                fontSize: 13,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
                         ],
@@ -2305,21 +2434,28 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.copy,
-                            size: 18, color: AppColors.primary),
+                        icon: const Icon(
+                          Icons.copy,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
                         tooltip: 'Copy transcript',
                         onPressed: () {
                           Clipboard.setData(
-                              ClipboardData(text: _transcriptCtrl.text));
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: const Text('Copied to clipboard'),
-                            backgroundColor: AppColors.primary,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                            margin: const EdgeInsets.all(16),
-                            duration: const Duration(seconds: 1),
-                          ));
+                            ClipboardData(text: _transcriptCtrl.text),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('Copied to clipboard'),
+                              backgroundColor: AppColors.primary,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              margin: const EdgeInsets.all(16),
+                              duration: const Duration(seconds: 1),
+                            ),
+                          );
                         },
                       ),
                     ],
@@ -2364,22 +2500,36 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                                     _transcriptCtrl.text,
                                   );
                                   if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                      content: const Row(children: [
-                                        Icon(Icons.check_circle, color: Colors.white, size: 16),
-                                        SizedBox(width: 8),
-                                        Text('Transcript saved & synced to AI'),
-                                      ]),
-                                      backgroundColor: Colors.green.shade600,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8)),
-                                      margin: const EdgeInsets.all(16),
-                                      duration: const Duration(seconds: 2),
-                                    ));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Row(
+                                          children: [
+                                            Icon(
+                                              Icons.check_circle,
+                                              color: Colors.white,
+                                              size: 16,
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Transcript saved & synced to AI',
+                                            ),
+                                          ],
+                                        ),
+                                        backgroundColor: Colors.green.shade600,
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        margin: const EdgeInsets.all(16),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
                                   }
                                 } finally {
-                                  if (mounted) setState(() => _isSavingTranscript = false);
+                                  if (mounted)
+                                    setState(() => _isSavingTranscript = false);
                                 }
                               },
                         icon: _isSavingTranscript
@@ -2388,16 +2538,22 @@ class _RecordingDetailSheetState extends State<_RecordingDetailSheet> {
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ))
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
                             : const Icon(Icons.save, size: 16),
-                        label: Text(_isSavingTranscript ? 'Saving...' : 'Save Edits'),
+                        label: Text(
+                          _isSavingTranscript ? 'Saving...' : 'Save Edits',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),

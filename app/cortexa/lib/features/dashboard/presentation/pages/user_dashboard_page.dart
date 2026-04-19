@@ -64,28 +64,40 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
   Future<void> _loadMyInstitutions() async {
     final storage = getIt<HiveStorageService>();
     final currentUser = storage.getCurrentUser();
-    
-    if (currentUser?.institutionId != null && currentUser!.institutionId!.isNotEmpty) {
+
+    if (currentUser?.institutionId != null &&
+        currentUser!.institutionId!.isNotEmpty) {
       var userInstitution = _institutions
           .where((i) => i.id == currentUser.institutionId)
           .toList();
-      
+
       if (userInstitution.isEmpty) {
-        final institutionData = storage.findInstitutionById(currentUser.institutionId!);
+        final institutionData = storage.findInstitutionById(
+          currentUser.institutionId!,
+        );
         if (institutionData != null) {
           try {
             final institution = InstitutionDisplayModel(
               id: (institutionData['id'] as String?) ?? '',
-              name: (institutionData['institution_name'] as String?) ?? 'Unknown Institution',
-              description: (institutionData['short_description'] as String?) ?? '',
+              name:
+                  (institutionData['institution_name'] as String?) ??
+                  'Unknown Institution',
+              description:
+                  (institutionData['short_description'] as String?) ?? '',
               logoUrl: institutionData['logo_path'] as String?,
               bannerImageUrl: institutionData['banner_image_path'] as String?,
-              type: (institutionData['institution_type'] as String?) ?? 'Institute',
+              type:
+                  (institutionData['institution_type'] as String?) ??
+                  'Institute',
               city: (institutionData['city'] as String?) ?? 'Unknown',
               country: (institutionData['country'] as String?) ?? 'Unknown',
               studentCount: 0,
-              customUrlSlug: (institutionData['custom_url_slug'] as String?) ?? 'institution',
-              primaryBrandColor: (institutionData['primary_brand_color'] as String?) ?? '#34d399',
+              customUrlSlug:
+                  (institutionData['custom_url_slug'] as String?) ??
+                  'institution',
+              primaryBrandColor:
+                  (institutionData['primary_brand_color'] as String?) ??
+                  '#34d399',
               createdAt: DateTime.now(),
               isOwnInstitution: true,
             );
@@ -95,7 +107,7 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
           }
         }
       }
-      
+
       setState(() {
         _myInstitutions = userInstitution;
       });
@@ -110,20 +122,24 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     setState(() => _isLoadingInstitutions = true);
     try {
       // Fetch institutions from API (force refresh to bypass potentially stale cache)
-      final apiInstitutions = await _repository.getInstitutions(forceRefresh: true);
-      
+      final apiInstitutions = await _repository.getInstitutions(
+        forceRefresh: true,
+      );
+
       setState(() {
         _institutions = apiInstitutions;
         _filteredInstitutions = _institutions;
         _isLoadingInstitutions = false;
       });
-      
+
       // Load user's institutions after main institutions are loaded
       await _loadMyInstitutions();
     } catch (e) {
       setState(() => _isLoadingInstitutions = false);
       if (mounted) {
-        final errorMessage = e is ApiException ? e.message : 'Failed to load institutions. Please try again.';
+        final errorMessage = e is ApiException
+            ? e.message
+            : 'Failed to load institutions. Please try again.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
@@ -157,17 +173,22 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
         bool matchesAffiliation = true;
         if (_selectedAffiliation != null) {
           final isGovernment = institution.studentCount > 5000;
-          matchesAffiliation = (_selectedAffiliation == 'Government' && isGovernment) ||
-                              (_selectedAffiliation == 'Private' && !isGovernment) ||
-                              (_selectedAffiliation == 'Semi-Government' && institution.studentCount > 3000 && institution.studentCount <= 5000) ||
-                              (_selectedAffiliation == 'Autonomous' && institution.studentCount > 8000);
+          matchesAffiliation =
+              (_selectedAffiliation == 'Government' && isGovernment) ||
+              (_selectedAffiliation == 'Private' && !isGovernment) ||
+              (_selectedAffiliation == 'Semi-Government' &&
+                  institution.studentCount > 3000 &&
+                  institution.studentCount <= 5000) ||
+              (_selectedAffiliation == 'Autonomous' &&
+                  institution.studentCount > 8000);
         }
 
         // Board filter (for schools and colleges)
         bool matchesBoard = true;
         if (_selectedBoard != null) {
           // In real app, this would come from institution.board field
-          matchesBoard = institution.type == 'School' || institution.type == 'College';
+          matchesBoard =
+              institution.type == 'School' || institution.type == 'College';
         }
 
         // Student strength filter
@@ -178,10 +199,14 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
               matchesStrength = institution.studentCount <= 1000;
               break;
             case 'Medium (1001-5000)':
-              matchesStrength = institution.studentCount > 1000 && institution.studentCount <= 5000;
+              matchesStrength =
+                  institution.studentCount > 1000 &&
+                  institution.studentCount <= 5000;
               break;
             case 'Large (5001-20000)':
-              matchesStrength = institution.studentCount > 5000 && institution.studentCount <= 20000;
+              matchesStrength =
+                  institution.studentCount > 5000 &&
+                  institution.studentCount <= 20000;
               break;
             case 'Very Large (20000+)':
               matchesStrength = institution.studentCount > 20000;
@@ -189,7 +214,12 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
           }
         }
 
-        return matchesSearch && matchesType && matchesState && matchesAffiliation && matchesBoard && matchesStrength;
+        return matchesSearch &&
+            matchesType &&
+            matchesState &&
+            matchesAffiliation &&
+            matchesBoard &&
+            matchesStrength;
       }).toList();
     });
   }
@@ -245,22 +275,26 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
     );
   }
 
-  void _navigateToInstitutionDetail(InstitutionDisplayModel institution, bool isFromMyInstitutionsTab) {
+  void _navigateToInstitutionDetail(
+    InstitutionDisplayModel institution,
+    bool isFromMyInstitutionsTab,
+  ) {
     final storage = getIt<HiveStorageService>();
     final currentUser = storage.getCurrentUser();
     final isOwnInstitution = currentUser?.institutionId == institution.id;
-    
+
     // If clicked from "My Institutions" tab, navigate to role-specific dashboard
     // If clicked from "Browse Institutions" tab, show public detail view
     if (isFromMyInstitutionsTab && isOwnInstitution) {
       final userRole = currentUser!.role.toLowerCase();
-      
+
       if (userRole == 'teacher') {
         // Navigate to Teacher Dashboard
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => TeacherDashboardPage(institution: institution),
+            builder: (context) =>
+                TeacherDashboardPage(institution: institution),
           ),
         );
       } else if (userRole == 'student') {
@@ -268,7 +302,8 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => StudentDashboardPage(institution: institution),
+            builder: (context) =>
+                StudentDashboardPage(institution: institution),
           ),
         );
       } else {
@@ -381,7 +416,17 @@ class _UserDashboardPageState extends State<UserDashboardPage> {
       case DashboardTab.notifications:
         return const NotificationsPage();
       case DashboardTab.queryDesk:
-        return const QueryDeskPage();
+        final storage = getIt<HiveStorageService>();
+        final currentUser = storage.getCurrentUser();
+        final currentInstitution = storage.getCurrentInstitution();
+        final institutionId =
+            (currentUser?.institutionId != null &&
+                currentUser!.institutionId!.isNotEmpty)
+            ? currentUser.institutionId
+            : (currentInstitution?['id'] ?? currentInstitution?['_id'])
+                  ?.toString();
+
+        return QueryDeskPage(institutionId: institutionId);
     }
   }
 

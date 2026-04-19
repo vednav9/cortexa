@@ -35,6 +35,8 @@ class TeacherMcqBloc extends Bloc<TeacherMcqEvent, TeacherMcqState> {
       final mcqs = await _repository.generateMcqs(
         courseId: event.courseId,
         topic: event.topic,
+        sourceType: event.sourceType,
+        documentId: event.documentId,
         count: event.count,
         difficulty: event.difficulty,
       );

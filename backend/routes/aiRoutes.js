@@ -1,5 +1,7 @@
 import express from "express";
 import aiService from "../services/aiService.js";
+import documentService from "../services/documentService.js";
+import { uploadToR2 } from "../services/cloudflareR2.js";
 import multer from "multer";
 const router = express.Router();
 
@@ -86,15 +88,39 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'File is required' });
     }
 
-    const { institution_id, course_id } = req.body;
+    const { institution_id, course_id, uploaded_by } = req.body;
 
-    const result = await aiService.uploadDocument(
+    if (!institution_id || !course_id || !uploaded_by) {
+      return res.status(400).json({ 
+        error: 'institution_id, course_id, and uploaded_by are required' 
+      });
+    }
+
+    // Get file type from extension
+    const fileExtension = req.file.originalname.split('.').pop().toLowerCase();
+    
+    // Process and store document (R2 + MongoDB + AI server)
+    const result = await documentService.processAndStoreDocument(
       req.file.buffer,
       req.file.originalname,
-      institution_id,
-      course_id
+      {
+        institutionId: institution_id,
+        courseId: course_id,
+        uploadedBy: uploaded_by,
+        fileType: fileExtension,
+        fileSize: req.file.size
+      }
     );
-    res.json(result);
+
+    res.json({
+      success: true,
+      filename: result.document.fileName,
+      fileUrl: result.r2Url,
+      chunksCount: result.chunksCount,
+      embeddingsCount: result.embeddingsCount,
+      documentId: result.document._id,
+      message: result.message
+    });
   } catch (error) {
     console.error('Document upload error:', error);
     res.status(500).json({ error: error.message });
@@ -115,6 +141,23 @@ router.get('/health', async (req, res) => {
 // SPEECH / VOICE-TO-TEXT ROUTES
 // ============================================================
 
+const AUDIO_MIME_BY_EXT = {
+  wav: 'audio/wav',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  ogg: 'audio/ogg',
+  flac: 'audio/flac',
+  webm: 'audio/webm',
+};
+
+const resolveAudioMimeType = (file) => {
+  const incoming = String(file?.mimetype || '').toLowerCase();
+  if (incoming.startsWith('audio/')) return incoming;
+
+  const ext = String(file?.originalname || '').split('.').pop().toLowerCase();
+  return AUDIO_MIME_BY_EXT[ext] || 'audio/wav';
+};
+
 // POST /api/ai/speech/transcribe-and-upload
 router.post('/speech/transcribe-and-upload', upload.single('audio_file'), async (req, res) => {
   try {
@@ -122,11 +165,27 @@ router.post('/speech/transcribe-and-upload', upload.single('audio_file'), async 
       return res.status(400).json({ error: 'audio_file is required' });
     }
     const { lecture_title, teacher_id, institution_id, course_id } = req.body;
+
+    // Persist raw audio in Cloudflare R2 as-is.
+    const audioR2Url = await uploadToR2(
+      req.file.buffer,
+      req.file.originalname,
+      'audio',
+      resolveAudioMimeType(req.file)
+    );
+
     const result = await aiService.transcribeAndUpload(
       req.file.buffer,
       req.file.originalname,
       { lecture_title, teacher_id, institution_id, course_id }
     );
+
+    result.storage = {
+      provider: 'cloudflare-r2',
+      audio_url: audioR2Url,
+      audio_file_name: req.file.originalname,
+    };
+
     res.json(result);
   } catch (error) {
     console.error('Transcribe-and-upload error:', error);

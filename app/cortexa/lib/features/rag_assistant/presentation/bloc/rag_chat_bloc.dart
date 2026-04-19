@@ -20,10 +20,10 @@ class RagChatBloc extends Bloc<RagChatEvent, RagChatState> {
   ) async {
     try {
       emit(RagChatLoading(_messages));
-      
+
       final history = await _aiRepository.getChatHistory();
       _messages = history;
-      
+
       emit(RagChatLoaded(_messages));
     } catch (e) {
       print('❌ Error loading chat history: $e');
@@ -36,48 +36,47 @@ class RagChatBloc extends Bloc<RagChatEvent, RagChatState> {
     Emitter<RagChatState> emit,
   ) async {
     try {
-      // Add user message immediately
+      // Add user message immediately so the UI responds at once
       final userMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: '${DateTime.now().millisecondsSinceEpoch}_q',
         message: event.query,
         isUser: true,
         timestamp: DateTime.now(),
       );
-      
+
       _messages = [..._messages, userMessage];
       emit(RagChatLoading(_messages));
 
-      // Query AI
-      final response = event.useHybrid
-          ? await _aiRepository.queryHybridAssistant(query: event.query)
-          : await _aiRepository.queryRag(
-              query: event.query,
-              institutionId: event.institutionId,
-            );
+      // Always use the Node-backend RAG pipeline (handles RAG + web internally)
+      final response = await _aiRepository.queryRag(
+        query: event.query,
+        institutionId: event.institutionId,
+        courseId: event.courseId,
+        documentIds: event.documentIds,
+      );
 
-      // Add AI response
+      // Add AI response with full source data
       final aiMessage = ChatMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: '${DateTime.now().millisecondsSinceEpoch}_a',
         message: response.answer,
         isUser: false,
         timestamp: DateTime.now(),
         sources: response.sources.map((s) => s.documentName).toList(),
-        context: response.context,
+        richSources: response.sources,
         isWebFallback: response.usedWebSearch,
+        searchMethod: response.searchMethod,
       );
 
       _messages = [..._messages, aiMessage];
       emit(RagChatLoaded(_messages));
     } catch (e) {
       print('❌ Error sending RAG query: $e');
-      emit(RagChatError(
-        'Failed to get response. Please try again.',
-        _messages,
-      ));
-      
-      // Revert to loaded state after showing error
-      await Future.delayed(const Duration(seconds: 2));
-      emit(RagChatLoaded(_messages));
+      emit(
+        RagChatError(
+          'Could not get an answer. Please check your connection and try again.',
+          _messages,
+        ),
+      );
     }
   }
 

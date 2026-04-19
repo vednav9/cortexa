@@ -20,7 +20,7 @@ export default function CourseCatalog() {
 
   const fetchCourses = async () => {
     try {
-      const response = await api.get(`/institutions/${institution.slug}/courses`);
+      const response = await api.get(`/institutions/slug/${institution.slug}/courses`);
       setCourses(response.data.courses || []);
     } catch (error) {
       console.error('Error fetching courses:', error);

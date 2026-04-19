@@ -11,7 +11,6 @@ import {
   FiCheckCircle,
   FiArrowRight,
 } from "react-icons/fi";
-import { HiSparkles } from "react-icons/hi";
 import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
 import GreenParticles from "../ui/GreenParticles";
@@ -119,8 +118,8 @@ const SignUp = () => {
           {/* Logo & Title Section */}
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center justify-center space-x-3 mb-6 group">
-              <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-green-500 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-emerald-500/50 transition-shadow">
-                <HiSparkles className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center shadow-lg group-hover:shadow-emerald-500/50 transition-shadow">
+                <img src="/logo.png" alt="Cortexa logo" className="w-full h-full object-contain scale-125" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-green-500 bg-clip-text text-transparent">
                 Cortexa

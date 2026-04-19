@@ -14,29 +14,38 @@ class MCQRepository {
     required String sourceType, // 'topic' or 'document'
     required int count,
     required String difficulty,
+    String? documentId,
+    List<String>? documentIds,
   }) async {
-    try {
-      final response = await _apiClient.post(
-        ApiConfig.teacherGenerateMCQs,
-        body: {
-          'courseId': courseId,
-          'topic': topic,
-          'sourceType': sourceType,
-          'count': count,
-          'difficulty': difficulty.toLowerCase(),
-        },
-        requiresAuth: true,
-      );
+    final normalizedDifficulty = difficulty.toLowerCase();
+    final normalizedSourceType =
+        (sourceType == 'topic' || sourceType == 'document' || sourceType == 'text')
+            ? sourceType
+            : 'topic';
 
-      if (response['success'] == true) {
-        final mcqsData = response['mcqs'] as List? ?? [];
-        return mcqsData.map((json) => MCQModel.fromJson(json)).toList();
-      } else {
-        throw Exception(response['message'] ?? 'Failed to generate MCQs');
-      }
-    } catch (e) {
-      throw Exception('Failed to generate MCQs: ${e.toString()}');
+    final response = await _apiClient.post(
+      ApiConfig.teacherGenerateMCQs,
+      body: {
+        'courseId': courseId,
+        'topic': topic,
+        'sourceType': normalizedSourceType,
+        'count': count,
+        'difficulty': normalizedDifficulty,
+        if (documentId != null && documentId.isNotEmpty) 'documentId': documentId,
+        if (documentIds != null && documentIds.isNotEmpty) 'documentIds': documentIds,
+      },
+      requiresAuth: true,
+    );
+
+    if (response['success'] != true) {
+      throw Exception(response['message'] ?? 'Failed to generate MCQs');
     }
+
+    final mcqsData = response['mcqs'] as List? ?? [];
+    if (mcqsData.isEmpty) {
+      throw Exception('No MCQs returned');
+    }
+    return mcqsData.map((json) => MCQModel.fromJson(json)).toList();
   }
 
   /// Save MCQ set

@@ -65,7 +65,6 @@ export default function InstitutionMenu({ userRole, hasAccess, brandColor = "#10
         { id: "generate-mcq", label: "Generate MCQ", icon: FiCheckSquare, items: [] },
         { id: "voice-to-text", label: "Voice to Text", icon: FiMic, items: [] },
         { id: "qa-section", label: "Q&A", icon: FiMessageSquare, items: [] },
-        { id: "assessment", label: "Assessment", icon: FiClipboard, items: [] },
         { id: "rag-chatbot", label: "AI Assistant", icon: HiSparkles, items: [] },
         { id: "query-desk", label: "Query Desk", icon: FiHelpCircle, items: [] },
       ];
@@ -85,7 +84,17 @@ export default function InstitutionMenu({ userRole, hasAccess, brandColor = "#10
         { id: "mcq-test", label: "MCQ Test", icon: FiCheckSquare, items: [] },
         { id: "rag-chatbot", label: "AI Assistant", icon: HiSparkles, items: [] },
         { id: "qa-section", label: "Q&A", icon: FiMessageSquare, items: [] },
-        { id: "assessment", label: "Assessment", icon: FiClipboard, items: [] },
+        // { id: "assessment", label: "Assessment", icon: FiClipboard, items: [] },
+                {
+          id: "academic-structure", label: "Academic", icon: FiGrid,
+          items: [
+            { id: "departments", label: "Departments", icon: FiBook },
+            { id: "courses", label: "Courses", icon: FiBook },
+            { id: "semesters", label: "Semesters", icon: FiClipboard },
+            { id: "calendar", label: "Calendar", icon: FiBell },
+            { id: "faculty", label: "Faculty", icon: FiUsers },
+          ],
+        },
         { id: "query-desk", label: "Query Desk", icon: FiHelpCircle, items: [] },
       ];
     }
@@ -99,7 +108,7 @@ export default function InstitutionMenu({ userRole, hasAccess, brandColor = "#10
 
     return [
       { id: "", label: "Home", icon: FiHome, items: [] },
-      { id: "courses", label: "Courses", icon: FiBook, items: [] },
+      { id: "query-desk", label: "Query Desk", icon: FiHelpCircle, items: [] },
     ];
   };
 

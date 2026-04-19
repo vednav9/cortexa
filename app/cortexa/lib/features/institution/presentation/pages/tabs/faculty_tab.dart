@@ -7,7 +7,9 @@ import '../../../data/repositories/department_repository.dart';
 import '../../../data/repositories/faculty_repository.dart';
 
 class FacultyTab extends StatefulWidget {
-  const FacultyTab({super.key});
+  final bool readOnly;
+
+  const FacultyTab({super.key, this.readOnly = false});
 
   @override
   State<FacultyTab> createState() => _FacultyTabState();

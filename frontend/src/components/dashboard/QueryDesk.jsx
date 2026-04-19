@@ -222,8 +222,8 @@ export default function QueryDesk({ institution }) {
   ];
 
   return (
-    <div className="min-h-screen pb-16" style={{ backgroundColor: `rgba(${rgb},0.03)` }}>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+    <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: `rgba(${rgb},0.03)` }}>
+      <div className="max-w-7xl mx-auto">
 
         {/* ── TOP BAR ─────────────────────────────────────────── */}
         <motion.div
@@ -231,13 +231,15 @@ export default function QueryDesk({ institution }) {
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8"
         >
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: `rgba(${rgb},0.12)` }}>
-              <FiHelpCircle className="w-5 h-5" style={{ color: brand }} />
+            <div
+              className="p-3.5 rounded-2xl flex items-center justify-center shrink-0 border"
+              style={{ backgroundColor: `rgba(${rgb},0.1)`, borderColor: `rgba(${rgb},0.2)` }}
+            >
+              <FiHelpCircle className="text-2xl" style={{ color: brand }} />
             </div>
             <div>
-              <h1 className="text-[20px] font-extrabold text-gray-900 tracking-tight">Query Desk</h1>
-              <p className="text-[12px] text-gray-400 font-medium mt-0.5">{institution?.name}</p>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">Query Desk</h1>
+              <p className="text-gray-500 mt-1 font-medium">{institution?.name}</p>
             </div>
           </div>
 

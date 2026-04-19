@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiClock, FiPlus, FiEdit2, FiTrash2, FiX, FiCheck, FiCalendar } from 'react-icons/fi';
+import { FiClock, FiPlus, FiEdit2, FiTrash2, FiX, FiCalendar } from 'react-icons/fi';
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../../../context/authcontext';
 
 function Semesters() {
-  const { hasAccess, institution } = useOutletContext();
+  const { institution } = useOutletContext();
+  const { user } = useAuth();
+  const hasAccess = user?.role === 'admin';
   const [semesters, setSemesters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -17,7 +20,6 @@ function Semesters() {
     academicYear: String(new Date().getFullYear()),
     startDate: '',
     endDate: '',
-    isActive: false,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -97,7 +99,6 @@ function Semesters() {
         academicYear: semester.academicYear,
         startDate: semester.startDate.split('T')[0],
         endDate: semester.endDate.split('T')[0],
-        isActive: semester.isActive,
       });
     } else {
       setEditingSemester(null);
@@ -106,7 +107,6 @@ function Semesters() {
         academicYear: String(new Date().getFullYear()),
         startDate: '',
         endDate: '',
-        isActive: false,
       });
     }
     setShowModal(true);
@@ -150,9 +150,7 @@ function Semesters() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
             whileHover={{ y: -4 }}
-            className={`bg-gradient-to-br from-white to-pink-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border ${
-              sem.isActive ? 'border-pink-400 ring-2 ring-pink-400 ring-offset-2' : 'border-pink-100/50'
-            }`}
+            className="bg-gradient-to-br from-white to-pink-50/30 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 border border-pink-100/50"
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
@@ -163,13 +161,6 @@ function Semesters() {
                 <p className="text-sm text-pink-600 font-semibold bg-pink-50 px-2 py-1 rounded-md inline-block">
                   {sem.academicYear}
                 </p>
-                {sem.isActive && (
-                  <div className="mt-2">
-                    <span className="inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs rounded-full shadow-md">
-                      <FiCheck className="w-3 h-3" /> Active Semester
-                    </span>
-                  </div>
-                )}
               </div>
               {hasAccess && (
                 <div className="flex gap-2">
@@ -322,16 +313,6 @@ function Semesters() {
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-pink-500"
                     />
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    className="w-4 h-4 text-pink-600 rounded focus:ring-pink-500"
-                  />
-                  <label className="text-sm text-gray-700">Mark as active semester</label>
                 </div>
 
                 <div className="flex gap-3 pt-4">

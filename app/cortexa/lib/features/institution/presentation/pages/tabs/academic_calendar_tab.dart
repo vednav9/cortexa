@@ -7,7 +7,9 @@ import '../../../../../../core/di/service_locator.dart';
 import '../../../data/repositories/academic_calendar_repository.dart';
 
 class AcademicCalendarTab extends StatefulWidget {
-  const AcademicCalendarTab({super.key});
+  final bool readOnly;
+
+  const AcademicCalendarTab({super.key, this.readOnly = false});
 
   @override
   State<AcademicCalendarTab> createState() => _AcademicCalendarTabState();
@@ -1023,6 +1025,9 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
   }
 
   Future<void> _deleteEvent(int index) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1056,10 +1061,11 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     final eventId = _events[index]['_id']?.toString();
     if (eventId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Error: Invalid event ID'),
           backgroundColor: AppColors.error,
@@ -1087,9 +1093,9 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Event deleted successfully'),
           backgroundColor: AppColors.success,
@@ -1104,10 +1110,10 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
       print('Error deleting event: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to delete: ${e.toString()}'),
           backgroundColor: AppColors.error,
@@ -1298,20 +1304,22 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
           ),
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: FloatingActionButton.extended(
-          onPressed: _showAddEventDialog,
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          icon: const Icon(Icons.add, size: 24),
-          label: const Text(
-            'Add',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          ),
-        ),
-      ),
+      floatingActionButton: widget.readOnly
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FloatingActionButton.extended(
+                onPressed: _showAddEventDialog,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                icon: const Icon(Icons.add, size: 24),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                ),
+              ),
+            ),
     );
   }
 
@@ -1372,36 +1380,208 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
     );
   }
 
+  Color _eventTypeAccentColor(String eventType) {
+    switch (eventType.toLowerCase()) {
+      case 'exam':
+        return Colors.red;
+      case 'holiday':
+        return Colors.green;
+      case 'deadline':
+        return Colors.orange;
+      case 'other':
+        return Colors.blue;
+      case 'event':
+      default:
+        return Colors.yellow.shade700;
+    }
+  }
+
+  String _formatEventDate(dynamic rawDate) {
+    final parsed = DateTime.tryParse(rawDate?.toString() ?? '');
+    if (parsed == null) {
+      return 'Date not set';
+    }
+    return DateFormat('MMM d, yyyy').format(parsed);
+  }
+
+  String _textOrFallback(dynamic value, String fallback) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty || text.toLowerCase() == 'null') {
+      return fallback;
+    }
+    return text;
+  }
+
+  int _resolveEventSourceIndex(Map<String, dynamic> event, int fallbackIndex) {
+    final eventId = event['_id']?.toString() ?? '';
+    if (eventId.isNotEmpty) {
+      final sourceIndex = _events.indexWhere(
+        (item) => item['_id']?.toString() == eventId,
+      );
+      if (sourceIndex >= 0) {
+        return sourceIndex;
+      }
+    }
+
+    final sourceIndex = _events.indexOf(event);
+    if (sourceIndex >= 0) {
+      return sourceIndex;
+    }
+
+    return fallbackIndex;
+  }
+
+  Widget _buildReadOnlyDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.borderDark.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEventDetailsSheet(Map<String, dynamic> event) {
+    final title = _textOrFallback(event['title'], 'Untitled event');
+    final description = _textOrFallback(
+      event['description'],
+      'No description added',
+    );
+    final eventType = _textOrFallback(event['eventType'], 'event').toUpperCase();
+    final audience = _textOrFallback(event['targetAudience'], 'all').toUpperCase();
+    final startDate = _formatEventDate(event['startDate']);
+    final endDate = _formatEventDate(event['endDate']);
+    final location = _textOrFallback(event['location'], 'Not specified');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            minChildSize: 0.45,
+            maxChildSize: 0.92,
+            builder: (context, scrollController) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderDark.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Event Details',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _buildReadOnlyDetailRow('Title', title),
+                          _buildReadOnlyDetailRow('Description', description),
+                          _buildReadOnlyDetailRow('Event Type', eventType),
+                          _buildReadOnlyDetailRow('Audience', audience),
+                          _buildReadOnlyDetailRow('Start Date', startDate),
+                          _buildReadOnlyDetailRow('End Date', endDate),
+                          _buildReadOnlyDetailRow('Location', location),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEventsList() {
     final filteredEvents = _filteredEvents;
-    return GridView.builder(
+    return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 0.9,
-      ),
       itemCount: filteredEvents.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final event = filteredEvents[index];
-        final startDate = event['startDate'] != null
-            ? DateTime.parse(event['startDate'])
-            : DateTime.now();
-        final day = DateFormat('dd').format(startDate);
-        final month = DateFormat('MMM').format(startDate).toUpperCase();
+        final sourceIndex = _resolveEventSourceIndex(event, index);
+        final eventType = _textOrFallback(
+          event['eventType'],
+          'event',
+        ).toLowerCase();
+        final accentColor = _eventTypeAccentColor(eventType);
+        final eventTypeLabel = eventType.toUpperCase();
+        final title = _textOrFallback(event['title'], 'Untitled event');
+        final description = _textOrFallback(
+          event['description'],
+          'No description added',
+        );
+        final dateLabel = _formatEventDate(event['startDate']);
+        final location = _textOrFallback(event['location'], 'Not specified');
 
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showAddEventDialog(event, index),
+            onTap: widget.readOnly
+                ? () => _showEventDetailsSheet(event)
+                : () => _showAddEventDialog(event, sourceIndex),
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.cardBackground,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: AppColors.borderDark.withValues(alpha: 0.3),
+                  color: AppColors.borderDark.withValues(alpha: 0.28),
                   width: 1,
                 ),
                 boxShadow: [
@@ -1412,113 +1592,152 @@ class _AcademicCalendarTabState extends State<AcademicCalendarTab> {
                   ),
                 ],
               ),
-              child: Stack(
-                children: [
-                  // Main content - centered
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Oval date container
-                        Container(
-                          width: 80,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primary.withValues(alpha: 0.2),
-                                AppColors.primaryLight.withValues(alpha: 0.1),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.4),
-                              width: 2,
-                            ),
-                          ),
+                        Expanded(
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                day,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                  height: 1,
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                    letterSpacing: -0.3,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                month,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.8,
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: accentColor.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  eventTypeLabel,
+                                  style: TextStyle(
+                                    color: accentColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.25,
                                   ),
-                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        // Event name
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            event['title'],
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                              letterSpacing: -0.3,
+                        const SizedBox(width: 8),
+                        if (!widget.readOnly)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _deleteEvent(sourceIndex),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.error.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.close_rounded,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.9),
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 15,
+                          color: accentColor.withValues(alpha: 0.85),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            dateLabel,
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.9,
+                              ),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  // Delete button
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => _deleteEvent(index),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.error.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: Colors.white,
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: AppColors.textSecondary.withValues(
+                            alpha: 0.75,
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            location,
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.86,
+                              ),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

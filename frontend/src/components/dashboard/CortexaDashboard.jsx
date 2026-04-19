@@ -12,7 +12,6 @@ import {
     FiBell,
     FiHelpCircle
 } from "react-icons/fi";
-import { HiSparkles } from "react-icons/hi";
 import { useAuth } from "../../context/authcontext";
 import Sidebar from "./Sidebar";
 import BrowseInstitutionsTab from "./BrowseInstitutionsTab";
@@ -206,8 +205,8 @@ const CortexaDashboard = () => {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50">
                 <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse">
-                        <HiSparkles className="w-8 h-8 text-white" />
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 animate-pulse overflow-hidden shadow-sm">
+                        <img src="/logo.png" alt="Cortexa logo" className="w-full h-full object-contain scale-125" />
                     </div>
                     <p className="text-gray-600 font-medium">Loading dashboard...</p>
                 </div>
@@ -373,9 +372,9 @@ const CortexaDashboard = () => {
                                         <motion.div
                                             animate={{ rotate: [0, 10, -10, 0] }}
                                             transition={{ duration: 2, repeat: Infinity }}
-                                            className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg"
+                                            className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg overflow-hidden"
                                         >
-                                            <HiSparkles className="w-7 h-7" />
+                                            <img src="/logo.png" alt="Cortexa logo" className="w-full h-full object-contain scale-125" />
                                         </motion.div>
                                         <div>
                                             <h1 className="text-3xl font-bold">Welcome to Cortexa</h1>

@@ -2,9 +2,15 @@ import http from "http";
 import mongoose from "mongoose";
 import { Server } from "socket.io";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import app from "./app.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, ".env") });
+
+const SOCKET_DEBUG = process.env.SOCKET_DEBUG === "true";
 
 // Debug endpoint to confirm this server instance is running
 app.get('/api/__ping', (req, res) => {
@@ -31,15 +37,32 @@ const io = new Server(server, {
 global.io = io;
 
 io.on("connection", (socket) => {
-    console.log("🟢 SOCKET CONNECTED:", socket.id);
+    if (SOCKET_DEBUG) {
+        console.log("[socket] connected", { socketId: socket.id });
+    }
 
     socket.on("join:user", (userId) => {
-        console.log("👤 User joined room:", userId);
+        if (!userId) {
+            console.warn("[socket] join:user received without userId", { socketId: socket.id });
+            return;
+        }
         socket.join(`user:${userId}`);
+        if (SOCKET_DEBUG) {
+            console.log("[socket] joined room", { socketId: socket.id, userId });
+        }
     });
 
-    socket.on("disconnect", () => {
-        console.log("🔴 Socket disconnected:", socket.id);
+    socket.on("disconnect", (reason) => {
+        if (SOCKET_DEBUG) {
+            console.log("[socket] disconnected", { socketId: socket.id, reason });
+        }
+    });
+});
+
+io.engine.on("connection_error", (err) => {
+    console.error("[socket] connection error", {
+        code: err.code,
+        message: err.message,
     });
 });
 

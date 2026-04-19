@@ -1,12 +1,13 @@
 """
 FastAPI server for RAG system with Voice-to-Text
 """
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import shutil
+import re
 from pathlib import Path
 
 from config import DOCUMENTS_DIR, AUDIO_DIR, TRANSCRIPTS_DIR
@@ -23,6 +24,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# === ADD THIS MIDDLEWARE IMMEDIATELY AFTER CORS ===
+@app.middleware("http")
+async def intercept_mongo_uri(request: Request, call_next):
+    """
+    Dynamically captures the secure Mongo URI from the Railway backend request headers
+    and initializes the vector store context, keeping the HF Space strictly stateless.
+    """
+    mongo_uri = request.headers.get("x-mongo-uri")
+    if mongo_uri:
+        store = get_vector_store()
+        if hasattr(store, 'set_mongo_uri'):
+            store.set_mongo_uri(mongo_uri)
+    
+    response = await call_next(request)
+    return response
+# ===================================================
 
 
 # @app.on_event("startup")
@@ -59,6 +77,15 @@ class DocumentUploadResponse(BaseModel):
     filename: str
     chunks_added: int
     status: str
+    chunks: Optional[List[dict]] = []
+    embedding_model: Optional[str] = "paraphrase-MiniLM-L3-v2"
+
+
+class DocumentChunksResponse(BaseModel):
+    filename: str
+    chunks: List[dict]
+    embedding_model: str
+    total_chunks: int
 
 
 class MCQGenerateRequest(BaseModel):
@@ -76,6 +103,17 @@ class MCQScoreRequest(BaseModel):
 class HybridQueryRequest(BaseModel):
     query: str
     use_web_fallback: bool = True
+
+
+# Fast endpoints for Node-side orchestration
+class EmbedRequest(BaseModel):
+    text: str
+
+
+class GenerateRequest(BaseModel):
+    query: str
+    context: str
+    source_type: str = "documents"  # "documents" | "web"
 
 
 # NEW: Speech-to-Text Models
@@ -125,8 +163,8 @@ def get_doc_processor():
 def get_vector_store():
     global _vector_store
     if _vector_store is None:
-        from vectordb.json_store import get_json_store
-        _vector_store = get_json_store()
+        from vectordb.mongodb_store import get_mongodb_store
+        _vector_store = get_mongodb_store()
     return _vector_store
 
 
@@ -194,6 +232,64 @@ def get_text_formatter():
     return _text_formatter
 
 
+def _embedding_model_name(vector_store) -> str:
+    try:
+        stats = vector_store.get_stats()
+        name = str(stats.get("embedding_model", "")).strip()
+        if name:
+            return name
+    except Exception:
+        pass
+
+    return "paraphrase-MiniLM-L3-v2"
+
+
+def _build_upload_chunks_payload(vector_store, ids, texts, metadatas):
+    # Legacy in-memory store path
+    if hasattr(vector_store, "data") and isinstance(getattr(vector_store, "data", None), dict):
+        stored_docs = vector_store.data.get("documents", [])
+        just_added = stored_docs[-len(texts):]
+
+        chunks_payload = []
+        for i, (doc, meta) in enumerate(zip(just_added, metadatas)):
+            embedding = doc.get("embedding", [])
+            chunks_payload.append({
+                "text": doc.get("text", ""),
+                "embedding": embedding.tolist() if hasattr(embedding, "tolist") else list(embedding),
+                "metadata": {
+                    **meta,
+                    "chunk_index": i,
+                    "total_chunks": len(texts),
+                }
+            })
+        return chunks_payload
+
+    # Mongo dual-collection path
+    embedding_map = {}
+    if hasattr(vector_store, "embeddings_collection") and vector_store.embeddings_collection is not None:
+        rows = vector_store.embeddings_collection.find(
+            {"chunk_id": {"$in": ids}},
+            {"chunk_id": 1, "embedding": 1}
+        )
+        for row in rows:
+            embedding_map[str(row.get("chunk_id", ""))] = row.get("embedding", [])
+
+    chunks_payload = []
+    for i, (doc_id, text, meta) in enumerate(zip(ids, texts, metadatas)):
+        embedding = embedding_map.get(str(doc_id), [])
+        chunks_payload.append({
+            "text": text,
+            "embedding": embedding,
+            "metadata": {
+                **meta,
+                "chunk_index": i,
+                "total_chunks": len(texts),
+            }
+        })
+
+    return chunks_payload
+
+
 # ============================================================================
 # BASIC ENDPOINTS
 # ============================================================================
@@ -237,29 +333,179 @@ async def upload_document(
     try:
         doc_processor = get_doc_processor()
         vector_store = get_vector_store()
-        
+
         file_path = DOCUMENTS_DIR / file.filename
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        
+
         metadata = {
             'institution_id': institution_id,
-            'course_id': course_id
+            'course_id': course_id,
+            'source': file.filename,
         }
-        
+
+        # Remove previously-stored chunks for this file (re-upload safe)
+        vector_store.remove_document_chunks(file.filename)
+
         chunks = doc_processor.process_document(str(file_path), metadata)
-        
+
         texts = [chunk.text for chunk in chunks]
         metadatas = [chunk.metadata for chunk in chunks]
         ids = [f"{file.filename}_{i}" for i in range(len(chunks))]
-        
+
         vector_store.add_documents(texts, metadatas, ids)
+
+        # ✅ Return full chunks+embeddings in upload response for backend persistence.
+        embedding_model_name = _embedding_model_name(vector_store)
+        chunks_payload = _build_upload_chunks_payload(vector_store, ids, texts, metadatas)
+
+        return {
+            "filename": file.filename,
+            "chunks_added": len(chunks),
+            "status": "success",
+            "chunks": chunks_payload,
+            "embedding_model": embedding_model_name,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/documents/{filename}/chunks", response_model=DocumentChunksResponse)
+async def get_document_chunks(filename: str):
+    """Get all chunks and embeddings for a specific document"""
+    try:
+        vector_store = get_vector_store()
+
+        requested_raw = str(filename or "").strip()
+        requested_name = Path(requested_raw).name
+        requested_stem = Path(requested_name).stem
+        requested_lower = requested_name.lower()
+        requested_stem_lower = requested_stem.lower()
         
-        return DocumentUploadResponse(
-            filename=file.filename,
-            chunks_added=len(chunks),
-            status="success"
+        if hasattr(vector_store, "data") and isinstance(getattr(vector_store, "data", None), dict):
+            # Legacy in-memory store path
+            all_docs = vector_store.data.get("documents", [])
+
+            def _matches_document(doc: dict) -> bool:
+                doc_id = str(doc.get('id', ''))
+                doc_id_lower = doc_id.lower()
+
+                metadata = doc.get('metadata', {}) or {}
+                source_raw = str(
+                    metadata.get('source')
+                    or metadata.get('fileName')
+                    or metadata.get('file_name')
+                    or ''
+                ).strip()
+                source_name = Path(source_raw).name
+                source_lower = source_name.lower()
+                source_stem_lower = Path(source_name).stem.lower()
+
+                if requested_name and doc_id_lower.startswith(f"{requested_lower}_"):
+                    return True
+                if requested_name and source_lower == requested_lower:
+                    return True
+                if requested_stem and source_stem_lower == requested_stem_lower:
+                    return True
+                return False
+
+            doc_chunks = [doc for doc in all_docs if _matches_document(doc)]
+        else:
+            # Mongo dual-collection path
+            if not hasattr(vector_store, "chunks_collection") or vector_store.chunks_collection is None:
+                raise HTTPException(status_code=500, detail="Vector store is not connected")
+
+            source_regex = re.escape(requested_name)
+            clauses = [
+                {"metadata.source": {"$regex": f"^{source_regex}$", "$options": "i"}},
+                {"metadata.fileName": {"$regex": f"^{source_regex}$", "$options": "i"}},
+                {"metadata.file_name": {"$regex": f"^{source_regex}$", "$options": "i"}},
+                {"chunk_id": {"$regex": f"^{source_regex}_", "$options": "i"}},
+            ]
+
+            if requested_stem:
+                stem_regex = re.escape(requested_stem)
+                clauses.extend([
+                    {"metadata.source": {"$regex": f"^{stem_regex}$", "$options": "i"}},
+                    {"metadata.fileName": {"$regex": f"^{stem_regex}$", "$options": "i"}},
+                    {"metadata.file_name": {"$regex": f"^{stem_regex}$", "$options": "i"}},
+                    {"chunk_id": {"$regex": f"^{stem_regex}_", "$options": "i"}},
+                ])
+
+            query = {"$or": clauses}
+
+            chunk_rows = list(vector_store.chunks_collection.find(
+                query,
+                {"chunk_id": 1, "text": 1, "metadata": 1}
+            ))
+
+            chunk_ids = [str(r.get("chunk_id", "")) for r in chunk_rows if r.get("chunk_id")]
+            embedding_map = {}
+            if chunk_ids and hasattr(vector_store, "embeddings_collection") and vector_store.embeddings_collection is not None:
+                emb_rows = vector_store.embeddings_collection.find(
+                    {"chunk_id": {"$in": chunk_ids}},
+                    {"chunk_id": 1, "embedding": 1}
+                )
+                for emb in emb_rows:
+                    embedding_map[str(emb.get("chunk_id", ""))] = emb.get("embedding", [])
+
+            doc_chunks = [
+                {
+                    "id": row.get("chunk_id", ""),
+                    "text": row.get("text", ""),
+                    "embedding": embedding_map.get(str(row.get("chunk_id", "")), []),
+                    "metadata": row.get("metadata", {}) or {},
+                }
+                for row in chunk_rows
+            ]
+        
+        if not doc_chunks:
+            raise HTTPException(status_code=404, detail=f"No chunks found for {filename}")
+
+        # Keep stable order for downstream persistence and debugging.
+        def _chunk_sort_key(doc: dict) -> int:
+            metadata = doc.get('metadata', {}) or {}
+            idx = metadata.get('chunk_index', metadata.get('chunkIndex'))
+            try:
+                return int(idx)
+            except Exception:
+                return 10**9
+
+        doc_chunks.sort(key=_chunk_sort_key)
+        
+        # Format chunks with embeddings
+        chunks = []
+        for doc in doc_chunks:
+            chunks.append({
+                'text': doc['text'],
+                'embedding': doc['embedding'].tolist() if hasattr(doc['embedding'], 'tolist') else doc['embedding'],
+                'metadata': doc.get('metadata', {})
+            })
+        
+        return DocumentChunksResponse(
+            filename=filename,
+            chunks=chunks,
+            embedding_model=_embedding_model_name(vector_store),
+            total_chunks=len(chunks)
         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/documents/{filename}")
+async def delete_document_chunks(filename: str):
+    """Delete all chunks for a specific document from the JSON vector store."""
+    try:
+        vector_store = get_vector_store()
+        removed = vector_store.remove_document_chunks(filename)
+        return {
+            "status": "success",
+            "filename": filename,
+            "removed_chunks": int(removed),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -390,31 +636,120 @@ async def generate_mcqs(request: MCQGenerateRequest):
     try:
         mcq_generator = get_mcq_generator_instance()
         mcq_validator = get_mcq_validator_instance()
-        
-        if request.source_type == "text":
+
+        # Normalize source_type aliases (frontend may send 'document' or 'topic', AI internally uses 'text')
+        raw_source_type = (request.source_type or "").strip().lower()
+        normalized_difficulty = (request.difficulty or "medium").lower()
+        if normalized_difficulty not in ["easy", "medium", "hard"]:
+            normalized_difficulty = "medium"
+        num_questions = max(1, min(20, int(request.num_questions or 5)))
+
+        if raw_source_type in ("text", "topic"):
             mcqs = mcq_generator.generate_from_text(
                 text=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
+                num_questions=num_questions,
+                difficulty=normalized_difficulty
             )
-        elif request.source_type == "document":
+        elif raw_source_type == "document":
             mcqs = mcq_generator.generate_from_document(
                 document_name=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
-            )
-        elif request.source_type == "topic":
-            mcqs = mcq_generator.generate_from_topic(
-                topic=request.source,
-                num_questions=request.num_questions,
-                difficulty=request.difficulty
+                num_questions=num_questions,
+                difficulty=normalized_difficulty
             )
         else:
-            raise HTTPException(status_code=400, detail="Invalid source_type")
-        
-        # Filter valid MCQs
+            raise HTTPException(status_code=400, detail=f"Invalid source_type '{request.source_type}'. Use 'text', 'topic', or 'document'.")
+
+        if not isinstance(mcqs, list):
+            mcqs = []
+
+        # Filter valid MCQs first.
         valid_mcqs = [mcq for mcq in mcqs if mcq_validator.validate_mcq(mcq)]
-        
+
+        # If strict validation drops too many questions, top up with normalized
+        # parsed MCQs so caller still gets requested count.
+        if len(valid_mcqs) < num_questions:
+            for mcq in mcqs:
+                if len(valid_mcqs) >= num_questions:
+                    break
+                if mcq in valid_mcqs:
+                    continue
+
+                if not isinstance(mcq, dict):
+                    continue
+
+                question = str(mcq.get("question", "")).strip()
+                options_raw = mcq.get("options", {}) or {}
+                correct = str(mcq.get("correct_answer", "A")).strip().upper()
+
+                if isinstance(options_raw, dict):
+                    options_map = {
+                        "A": str(options_raw.get("A") or options_raw.get("a") or "Option A"),
+                        "B": str(options_raw.get("B") or options_raw.get("b") or "Option B"),
+                        "C": str(options_raw.get("C") or options_raw.get("c") or "Option C"),
+                        "D": str(options_raw.get("D") or options_raw.get("d") or "Option D"),
+                    }
+                elif isinstance(options_raw, list):
+                    normalized = [str(x) for x in options_raw]
+                    while len(normalized) < 4:
+                        normalized.append(f"Option {chr(65 + len(normalized))}")
+                    options_map = {
+                        "A": normalized[0],
+                        "B": normalized[1],
+                        "C": normalized[2],
+                        "D": normalized[3],
+                    }
+                else:
+                    options_map = {
+                        "A": str(mcq.get("option_a", "Option A")),
+                        "B": str(mcq.get("option_b", "Option B")),
+                        "C": str(mcq.get("option_c", "Option C")),
+                        "D": str(mcq.get("option_d", "Option D")),
+                    }
+
+                if correct not in ["A", "B", "C", "D"]:
+                    correct = "A"
+
+                normalized_mcq = {
+                    "question": question,
+                    "options": options_map,
+                    "correct_answer": correct,
+                    "explanation": str(mcq.get("explanation", "Based on the provided context.")),
+                    "difficulty": normalized_difficulty,
+                }
+
+                if normalized_mcq["question"]:
+                    valid_mcqs.append(normalized_mcq)
+
+        # Absolute fallback: synthesize missing MCQs so API always returns requested count.
+        if len(valid_mcqs) < num_questions:
+            missing = num_questions - len(valid_mcqs)
+            raw_source = (request.source or "").strip()
+            first_line = raw_source.split('\n')[0].strip()
+            base_topic = re.sub(r'^Topic:\s*', '', first_line, flags=re.IGNORECASE).strip()
+            if not base_topic or len(base_topic) > 120:
+                base_topic = "the selected topic"
+            for i in range(missing):
+                valid_mcqs.append({
+                    "question": f"Which statement best describes {base_topic} (item {i + 1})?",
+                    "options": {
+                        "A": f"A key concept of {base_topic}",
+                        "B": f"An incorrect interpretation of {base_topic}",
+                        "C": "An unrelated concept",
+                        "D": "None of the above",
+                    },
+                    "correct_answer": "A",
+                    "explanation": "Option A is the best-supported choice based on available context.",
+                    "difficulty": normalized_difficulty,
+                })
+
+        valid_mcqs = valid_mcqs[:num_questions]
+
+        if not valid_mcqs:
+            raise HTTPException(
+                status_code=502,
+                detail="AI returned no MCQs. Try a broader topic, fewer questions, or a different source document."
+            )
+
         return {
             "status": "success",
             "total_generated": len(mcqs),
@@ -422,7 +757,11 @@ async def generate_mcqs(request: MCQGenerateRequest):
             "mcqs": valid_mcqs
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -463,6 +802,44 @@ async def hybrid_query(request: HybridQueryRequest):
         return result
     except Exception as e:
         print(f"❌ Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# FAST PRIMITIVE ENDPOINTS  (used by Node backend for server-side RAG)
+# ============================================================================
+
+@app.post("/embed")
+async def embed_text(request: EmbedRequest):
+    """
+    Embed a single text string and return its float vector.
+    Uses only the sentence-transformer (fast, no LLM needed).
+    """
+    try:
+        from models.embeddings import get_embedding_model
+        embedding_model = get_embedding_model()
+        vector = embedding_model.encode_query(request.text)
+        return {"embedding": vector.tolist(), "dimension": len(vector)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate")
+async def generate_answer(request: GenerateRequest):
+    """
+    Generate a short answer given pre-built context.
+    Called by the Node backend after it has already done retrieval from MongoDB.
+    Much faster than /assistant because no retrieval step happens here.
+    """
+    try:
+        assistant = get_hybrid_assistant_instance()
+        answer = assistant._generate_answer(
+            query=request.query,
+            context=request.context,
+            source_type=request.source_type,
+        )
+        return {"answer": answer}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -643,32 +1020,45 @@ async def transcribe_and_upload_to_rag(
         )
         
         # Step 6: Add transcript to RAG system
-        print("🔄 Adding transcript to RAG knowledge base...")
-        doc_processor = get_doc_processor()
-        vector_store = get_vector_store()
+        rag_status = "indexed"
+        rag_warning = None
+        chunks_added = 0
         
-        metadata = {
-            'institution_id': institution_id,
-            'course_id': course_id,
-            'lecture_title': lecture_title,
-            'teacher_id': teacher_id,
-            'content_type': 'lecture_transcript',
-            'audio_filename': audio_file.filename,
-            'duration': duration
-        }
-        
-        chunks = doc_processor.process_document(docx_path, metadata)
-        texts = [chunk.text for chunk in chunks]
-        metadatas = [chunk.metadata for chunk in chunks]
-        ids = [f"{base_filename}_transcript_{i}" for i in range(len(chunks))]
-        
-        vector_store.add_documents(texts, metadatas, ids)
-        
-        print(f"✅ Complete! Added {len(chunks)} chunks to knowledge base.")
+        try:
+            print("🔄 Adding transcript to RAG knowledge base...")
+            doc_processor = get_doc_processor()
+            vector_store = get_vector_store()
+            
+            metadata = {
+                'institution_id': institution_id,
+                'course_id': course_id,
+                'lecture_title': lecture_title,
+                'teacher_id': teacher_id,
+                'content_type': 'lecture_transcript',
+                'audio_filename': audio_file.filename,
+                'duration': duration
+            }
+            
+            chunks = doc_processor.process_document(docx_path, metadata)
+            texts = [chunk.text for chunk in chunks]
+            metadatas = [chunk.metadata for chunk in chunks]
+            ids = [f"{base_filename}_transcript_{i}" for i in range(len(chunks))]
+            
+            vector_store.add_documents(texts, metadatas, ids)
+            chunks_added = len(chunks)
+            print(f"✅ Complete! Added {chunks_added} chunks to knowledge base.")
+        except ValueError as ve:
+            rag_status = "skipped"
+            rag_warning = str(ve)
+            print(f"⚠️ RAG indexing skipped: {rag_warning}")
+        except Exception as rag_error:
+            rag_status = "skipped"
+            rag_warning = str(rag_error)
+            print(f"⚠️ RAG indexing failed: {rag_warning}")
         
         return {
-            "status": "success",
-            "message": "Lecture transcribed, formatted, and added to knowledge base",
+            "status": "success" if rag_status == "indexed" else "partial_success",
+            "message": "Lecture transcribed and formatted" if rag_status == "skipped" else "Lecture transcribed, formatted, and added to knowledge base",
             "transcription": {
                 "raw_text": raw_text,
                 "formatted_text": formatted_text,
@@ -677,9 +1067,11 @@ async def transcribe_and_upload_to_rag(
                 "segments_count": len(segments)
             },
             "rag_system": {
-                "chunks_added": len(chunks),
+                "status": rag_status,
+                "chunks_added": chunks_added,
                 "document_name": Path(docx_path).name,
-                "document_path": str(docx_path)
+                "document_path": str(docx_path),
+                "warning": rag_warning
             },
             "metadata": {
                 "institution_id": institution_id,

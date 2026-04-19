@@ -93,9 +93,11 @@ const Navbar = () => {
           onClick={() => navigate("/")}
           className="group flex items-center gap-2.5 focus:outline-none"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 shadow-md shadow-emerald-500/20 transition-transform duration-300 group-hover:scale-105">
-            <HiSparkles className="h-4 w-4 text-black" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Cortexa logo"
+            className="h-11 w-11 object-contain scale-150 transition-transform duration-300 group-hover:scale-[1.6]"
+          />
           <span className="text-base font-extrabold tracking-tight text-white transition-colors group-hover:text-emerald-300">
             Cortexa
           </span>

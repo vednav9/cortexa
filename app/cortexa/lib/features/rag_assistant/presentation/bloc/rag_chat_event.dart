@@ -8,11 +8,15 @@ class LoadChatHistory extends RagChatEvent {}
 class SendRagQuery extends RagChatEvent {
   final String query;
   final String? institutionId;
+  final String? courseId;
+  final List<String>? documentIds;
   final bool useHybrid;
 
   SendRagQuery({
     required this.query,
     this.institutionId,
+    this.courseId,
+    this.documentIds,
     this.useHybrid = false,
   });
 }

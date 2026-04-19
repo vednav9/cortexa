@@ -1,14 +1,18 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { InstitutionContext } from '../../context/InstitutionContext';
 import { useParams, Link } from 'react-router-dom';
-import { FiBook, FiClock, FiUsers, FiStar, FiAward, FiCheckCircle, FiArrowLeft, FiCalendar } from 'react-icons/fi';
+import { FiBook, FiClock, FiUsers, FiStar, FiAward, FiCheckCircle, FiArrowLeft, FiCalendar, FiDownload } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import api from '../../services/api';
+import { API_BASE_URL } from '../../config/api';
+import { useAuth } from '../../context/authcontext';
 
 export default function CourseDetails() {
   const { institution } = useContext(InstitutionContext);
+  const { user } = useAuth();
   const { courseCode } = useParams();
   const [course, setCourse] = useState(null);
+  const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,19 +23,41 @@ export default function CourseDetails() {
 
   const fetchCourseDetails = async () => {
     try {
-      const response = await api.get(`/institutions/${institution.slug}/courses/${courseCode}`);
+      const response = await api.get(`/institutions/slug/${institution.slug}/courses/${courseCode}`);
       setCourse(response.data.course);
+      setDocuments(Array.isArray(response.data.documents) ? response.data.documents : []);
     } catch (error) {
       console.error('Error fetching course:', error);
+      setDocuments([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatBytes = (bytes = 0) => {
+    if (!bytes || Number.isNaN(Number(bytes))) return 'Unknown size';
+    const val = Number(bytes);
+    if (val < 1024) return `${val} B`;
+    if (val < 1024 * 1024) return `${(val / 1024).toFixed(1)} KB`;
+    return `${(val / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getDownloadHref = (doc) => {
+    if (doc?.downloadUrl) {
+      return doc.downloadUrl.startsWith('http')
+        ? doc.downloadUrl
+        : `${API_BASE_URL}${doc.downloadUrl}`;
+    }
+
+    if (doc?.fileUrl) return doc.fileUrl;
+    return '#';
   };
 
   if (!institution) return null;
 
   const brandColor = institution.branding?.primaryColor || '#003D7A';
   const accentColor = institution.branding?.accentColor || brandColor;
+  const canDownload = user?.role?.toLowerCase?.() === 'student';
 
   if (loading) {
     return (
@@ -108,7 +134,7 @@ export default function CourseDetails() {
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6 md:space-y-8">
             {/* Course Overview */}
-            <motion.div
+            {/* <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-white rounded-xl md:rounded-2xl shadow-md md:shadow-xl p-6 md:p-8"
@@ -120,7 +146,7 @@ export default function CourseDetails() {
               <div className="prose max-w-none text-sm md:text-base text-gray-700">
                 <p>{course.fullDescription || course.description}</p>
               </div>
-            </motion.div>
+            </motion.div> */}
 
             {/* Learning Outcomes */}
             {course.outcomes && course.outcomes.length > 0 && (
@@ -169,6 +195,55 @@ export default function CourseDetails() {
                 </div>
               </motion.div>
             )}
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="bg-white rounded-xl md:rounded-2xl shadow-md md:shadow-xl p-6 md:p-8"
+            >
+              <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6" style={{ color: brandColor }}>
+                Uploaded Course Content
+              </h2>
+
+              {documents.length === 0 ? (
+                <p className="text-sm md:text-base text-gray-600">No uploaded content available for this course yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc._id}
+                      className="border border-gray-200 rounded-xl p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm md:text-base font-semibold text-gray-900 truncate">{doc.originalName}</p>
+                        <p className="text-xs md:text-sm text-gray-500 mt-1">
+                          {String(doc.fileType || '').toUpperCase()} • {formatBytes(doc.fileSize)} • Uploaded by {doc.uploadedBy || 'Unknown'}
+                        </p>
+                        <p className="text-xs md:text-sm text-gray-500 mt-1">
+                          MongoDB Index: {doc.isProcessed ? 'Ready' : 'Pending'} ({doc.chunksCount || 0} chunks) • Downloads: {doc.downloadCount || 0}
+                        </p>
+                      </div>
+
+                      {canDownload ? (
+                        <a
+                          href={getDownloadHref(doc)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
+                          style={{ backgroundColor: brandColor }}
+                        >
+                          <FiDownload className="w-4 h-4" />
+                          Download
+                        </a>
+                      ) : (
+                        <span className="text-xs md:text-sm text-gray-500">Download available for students only</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
           </div>
 
           {/* Sidebar */}
@@ -235,12 +310,12 @@ export default function CourseDetails() {
                 )}
               </div>
 
-              <button
+              {/* <button
                 className="w-full mt-5 md:mt-6 py-2.5 md:py-3 rounded-lg md:rounded-xl text-sm md:text-base font-bold text-white shadow-lg hover:shadow-xl transition-all"
                 style={{ backgroundColor: brandColor }}
               >
                 Enroll Now
-              </button>
+              </button> */}
             </motion.div>
           </div>
         </div>

@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { FiCalendar, FiPlus, FiEdit2, FiTrash2, FiX } from 'react-icons/fi';
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
 import GenericPage from '../../shared/GenericPage';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../../../context/authcontext';
 
 function Calendar() {
-  const { hasAccess, institution } = useOutletContext();
+  const { institution } = useOutletContext();
+  const { user } = useAuth();
+  const hasAccess = user?.role === 'admin';
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -25,24 +28,29 @@ function Calendar() {
 
   const eventTypes = ['event', 'exam', 'holiday', 'deadline', 'other'];
   const audiences = ['all', 'students', 'faculty', 'staff'];
-  const eventColors = {
-    event: 'yellow',
-    exam: 'red',
-    holiday: 'green',
-    deadline: 'orange',
-    other: 'blue',
-  };
 
-  useEffect(() => {
-    if (institution?._id) fetchEvents();
-  }, [institution]);
+  const fetchEvents = useCallback(async () => {
+    if (!institution?._id) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
 
-  const fetchEvents = async () => {
     try {
       setLoading(true);
       const response = await academicAPI.getCalendarEvents(institution._id);
-      // Backend returns { success, count, data: [...] }
-      const eventsData = response.data.data || response.data || [];
+
+      // Backend currently returns { success, count, events: [...] }
+      // Keep compatibility with old payloads too.
+      const payload = response?.data;
+      const eventsData = Array.isArray(payload?.events)
+        ? payload.events
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload)
+            ? payload
+            : [];
+
       setEvents(Array.isArray(eventsData) ? eventsData : []);
     } catch (error) {
       console.error('Error:', error);
@@ -50,7 +58,17 @@ function Calendar() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [institution?._id]);
+
+  useEffect(() => {
+    if (!institution?._id) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+
+    fetchEvents();
+  }, [institution?._id, fetchEvents]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -86,6 +104,7 @@ function Calendar() {
       toast.success('Event deleted successfully!');
       await fetchEvents();
     } catch (error) {
+      console.error('Delete event error:', error);
       toast.error('Failed to delete event');
     }
   };
@@ -138,14 +157,14 @@ function Calendar() {
     <GenericPage title="Academic Calendar" icon={FiCalendar} description="Manage events, exams, and deadlines">
       {hasAccess && (
         <div className="mb-8">
-          <motion.button
+          <Motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => openModal()}
             className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg hover:shadow-xl font-medium"
           >
             <FiPlus className="w-5 h-5" /> Add Event
-          </motion.button>
+          </Motion.button>
         </div>
       )}
 
@@ -161,7 +180,7 @@ function Calendar() {
           const colors = colorMap[event.eventType] || colorMap.event;
           
           return (
-            <motion.div
+            <Motion.div
               key={event._id}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -202,32 +221,32 @@ function Calendar() {
                 </div>
                 {hasAccess && (
                   <div className="flex gap-2 ml-4">
-                    <motion.button
+                    <Motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => openModal(event)}
                       className="p-2 text-gray-600 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                     >
                       <FiEdit2 className="w-4 h-4" />
-                    </motion.button>
-                    <motion.button
+                    </Motion.button>
+                    <Motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleDelete(event._id)}
                       className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <FiTrash2 className="w-4 h-4" />
-                    </motion.button>
+                    </Motion.button>
                   </div>
                 )}
               </div>
-            </motion.div>
+            </Motion.div>
           );
         })}
       </div>
 
       {events.length === 0 && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center py-16 px-4"
@@ -240,28 +259,28 @@ function Calendar() {
             Start organizing your academic calendar by adding events, exams, and important deadlines.
           </p>
           {hasAccess && (
-            <motion.button
+            <Motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => openModal()}
               className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white px-6 py-3 rounded-xl hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg hover:shadow-xl font-medium"
             >
               <FiPlus className="w-5 h-5" /> Create First Event
-            </motion.button>
+            </Motion.button>
           )}
-        </motion.div>
+        </Motion.div>
       )}
 
       <AnimatePresence>
         {showModal && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={closeModal}
           >
-            <motion.div
+            <Motion.div
               initial={{ scale: 0.9 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
@@ -373,8 +392,8 @@ function Calendar() {
                   </button>
                 </div>
               </form>
-            </motion.div>
-          </motion.div>
+            </Motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </GenericPage>
