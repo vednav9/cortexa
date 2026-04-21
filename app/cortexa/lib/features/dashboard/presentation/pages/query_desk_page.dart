@@ -29,7 +29,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
     {'value': 'academic', 'label': 'Academic'},
     {'value': 'administrative', 'label': 'Administrative'},
   ];
-  
+
   final List<Map<String, String>> _priorities = [
     {'value': 'low', 'label': 'Low'},
     {'value': 'normal', 'label': 'Normal'},
@@ -50,15 +50,34 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
     _initializeData();
   }
 
+  String? _firstNonEmpty(List<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    }
+    return null;
+  }
+
   Future<void> _initializeData() async {
     final currentUser = _storage.getCurrentUser();
     _userRole = currentUser?.role;
 
-    // Resolve institutionId: explicit param → stored user model → saved current institution
-    final candidateId = widget.institutionId ??
-        currentUser?.institutionId ??
-        (_storage.getCurrentInstitution()?['id'] as String?);
-    _institutionId = (candidateId != null && candidateId.isNotEmpty) ? candidateId : null;
+    final currentInstitution = _storage.getCurrentInstitution();
+    final institutionIdFromStorage =
+        (currentInstitution?['id'] ?? currentInstitution?['_id'])?.toString();
+
+    // Resolve institutionId: explicit param → stored user model → saved current institution.
+    _institutionId = _firstNonEmpty([
+      widget.institutionId,
+      currentUser?.institutionId,
+      institutionIdFromStorage,
+    ]);
+
+    // Final fallback: ask backend for current user's institution (role-aware endpoint).
+    _institutionId ??= await _queryRepository
+        .resolveInstitutionIdForCurrentUser();
 
     // If still null, update the stored user model with the current institution data so
     // subsequent navigations don't hit the same gap.
@@ -81,7 +100,9 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Institution not found. Please re-login and try again.'),
+            content: Text(
+              'Institution not found. Please re-login and try again.',
+            ),
             backgroundColor: AppColors.error,
           ),
         );
@@ -94,7 +115,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
 
     try {
       setState(() => _isLoading = true);
-      
+
       final queries = await _queryRepository.getQueries(
         institutionId: _institutionId!,
         status: _filterStatus,
@@ -196,7 +217,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
             backgroundColor: AppColors.success,
           ),
         );
-        
+
         // Reload queries and stats
         await _loadQueries();
         await _loadStats();
@@ -421,7 +442,9 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                   }).toList(),
                                   onChanged: (value) {
                                     if (value != null) {
-                                      setDialogState(() => _selectedCategory = value);
+                                      setDialogState(
+                                        () => _selectedCategory = value,
+                                      );
                                       setState(() => _selectedCategory = value);
                                     }
                                   },
@@ -511,7 +534,9 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                   }).toList(),
                                   onChanged: (value) {
                                     if (value != null) {
-                                      setDialogState(() => _selectedPriority = value);
+                                      setDialogState(
+                                        () => _selectedPriority = value,
+                                      );
                                       setState(() => _selectedPriority = value);
                                     }
                                   },
@@ -598,7 +623,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
   void _showQueryDetails(Query query) {
     // Local state for this modal
     Query currentQuery = query;
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -664,7 +689,7 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            
+
                             // Tags and Status Dropdown Row
                             Row(
                               children: [
@@ -683,7 +708,9 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                           color: _getStatusColor(
                                             currentQuery.status,
                                           ).withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
                                           border: Border.all(
                                             color: _getStatusColor(
                                               currentQuery.status,
@@ -711,7 +738,9 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                           color: _getPriorityColor(
                                             currentQuery.priority,
                                           ).withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
                                           border: Border.all(
                                             color: _getPriorityColor(
                                               currentQuery.priority,
@@ -748,13 +777,19 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                     ],
                                   ),
                                 ),
-                                
+
                                 // Status update dropdown for admin/teacher
-                                if (_userRole == 'admin' || _userRole == 'teacher') ...[
+                                if (_userRole == 'admin' ||
+                                    _userRole == 'teacher') ...[
                                   const SizedBox(width: 8),
                                   Container(
-                                    constraints: const BoxConstraints(maxWidth: 140),
-                                    padding: const EdgeInsets.only(left: 8, right: 4),
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 140,
+                                    ),
+                                    padding: const EdgeInsets.only(
+                                      left: 8,
+                                      right: 4,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: AppColors.background,
                                       borderRadius: BorderRadius.circular(8),
@@ -797,38 +832,44 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                             final updatedQuery =
                                                 await _queryRepository
                                                     .updateQueryStatus(
-                                              queryId: currentQuery.id,
-                                              status: newStatus,
-                                            );
+                                                      queryId: currentQuery.id,
+                                                      status: newStatus,
+                                                    );
                                             setModalState(() {
                                               currentQuery = updatedQuery;
                                             });
                                             setState(() {
                                               _queries = _queries
-                                                  .map((q) => q.id ==
-                                                          currentQuery.id
-                                                      ? updatedQuery
-                                                      : q)
+                                                  .map(
+                                                    (q) =>
+                                                        q.id == currentQuery.id
+                                                        ? updatedQuery
+                                                        : q,
+                                                  )
                                                   .toList();
                                             });
                                             _loadStats();
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
                                               const SnackBar(
                                                 content: Text(
                                                   'Status updated successfully',
                                                 ),
-                                                backgroundColor: AppColors.success,
+                                                backgroundColor:
+                                                    AppColors.success,
                                               ),
                                             );
                                           } catch (e) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
                                               SnackBar(
                                                 content: Text(
                                                   'Error updating status: $e',
                                                 ),
-                                                backgroundColor: AppColors.error,
+                                                backgroundColor:
+                                                    AppColors.error,
                                               ),
                                             );
                                           }
@@ -1037,8 +1078,8 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                                       color: AppColors
                                                           .textTertiary
                                                           .withValues(
-                                                        alpha: 0.7,
-                                                      ),
+                                                            alpha: 0.7,
+                                                          ),
                                                     ),
                                                   ),
                                                 ],
@@ -1135,11 +1176,11 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                 }
 
                                 try {
-                                  final updatedQuery =
-                                      await _queryRepository.addReply(
-                                    queryId: currentQuery.id,
-                                    text: _replyController.text.trim(),
-                                  );
+                                  final updatedQuery = await _queryRepository
+                                      .addReply(
+                                        queryId: currentQuery.id,
+                                        text: _replyController.text.trim(),
+                                      );
 
                                   _replyController.clear();
                                   setModalState(() {
@@ -1147,10 +1188,11 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                                   });
                                   setState(() {
                                     _queries = _queries
-                                        .map((q) =>
-                                            q.id == currentQuery.id
-                                                ? updatedQuery
-                                                : q)
+                                        .map(
+                                          (q) => q.id == currentQuery.id
+                                              ? updatedQuery
+                                              : q,
+                                        )
                                         .toList();
                                   });
 
@@ -1389,7 +1431,12 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 24),
               children: [
-                _buildFilterChip('all', 'All', _filterStatus == 'all', Icons.list),
+                _buildFilterChip(
+                  'all',
+                  'All',
+                  _filterStatus == 'all',
+                  Icons.list,
+                ),
                 const SizedBox(width: 8),
                 _buildFilterChip(
                   'open',
@@ -1420,55 +1467,53 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
           Expanded(
             child: _isLoading
                 ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.primary,
-                    ),
+                    child: CircularProgressIndicator(color: AppColors.primary),
                   )
                 : filteredQueries.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.help_outline,
-                              size: 80,
-                              color: AppColors.textTertiary.withValues(alpha: 0.3),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No queries yet',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary.withValues(
-                                  alpha: 0.8,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Tap the + button to create your first query',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textTertiary.withValues(
-                                  alpha: 0.6,
-                                ),
-                              ),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.help_outline,
+                          size: 80,
+                          color: AppColors.textTertiary.withValues(alpha: 0.3),
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 8,
+                        const SizedBox(height: 16),
+                        Text(
+                          'No queries yet',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary.withValues(
+                              alpha: 0.8,
+                            ),
+                          ),
                         ),
-                        itemCount: filteredQueries.length,
-                        itemBuilder: (context, index) {
-                          final query = filteredQueries[index];
-                          return _buildQueryCard(query);
-                        },
-                      ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tap the + button to create your first query',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textTertiary.withValues(
+                              alpha: 0.6,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    itemCount: filteredQueries.length,
+                    itemBuilder: (context, index) {
+                      final query = filteredQueries[index];
+                      return _buildQueryCard(query);
+                    },
+                  ),
           ),
         ],
       ),
@@ -1537,7 +1582,12 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
     );
   }
 
-  Widget _buildFilterChip(String value, String label, bool isSelected, IconData icon) {
+  Widget _buildFilterChip(
+    String value,
+    String label,
+    bool isSelected,
+    IconData icon,
+  ) {
     return FilterChip(
       label: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1624,9 +1674,9 @@ class _QueryDeskPageState extends State<QueryDeskPage> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(query.status).withValues(
-                          alpha: 0.15,
-                        ),
+                        color: _getStatusColor(
+                          query.status,
+                        ).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

@@ -20,10 +20,10 @@ class RagChatBloc extends Bloc<RagChatEvent, RagChatState> {
   ) async {
     try {
       emit(RagChatLoading(_messages));
-      
+
       final history = await _aiRepository.getChatHistory();
       _messages = history;
-      
+
       emit(RagChatLoaded(_messages));
     } catch (e) {
       print('❌ Error loading chat history: $e');
@@ -51,6 +51,8 @@ class RagChatBloc extends Bloc<RagChatEvent, RagChatState> {
       final response = await _aiRepository.queryRag(
         query: event.query,
         institutionId: event.institutionId,
+        courseId: event.courseId,
+        documentIds: event.documentIds,
       );
 
       // Add AI response with full source data
@@ -69,10 +71,12 @@ class RagChatBloc extends Bloc<RagChatEvent, RagChatState> {
       emit(RagChatLoaded(_messages));
     } catch (e) {
       print('❌ Error sending RAG query: $e');
-      emit(RagChatError(
-        'Could not get an answer. Please check your connection and try again.',
-        _messages,
-      ));
+      emit(
+        RagChatError(
+          'Could not get an answer. Please check your connection and try again.',
+          _messages,
+        ),
+      );
     }
   }
 

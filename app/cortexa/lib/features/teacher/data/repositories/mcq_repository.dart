@@ -15,6 +15,7 @@ class MCQRepository {
     required int count,
     required String difficulty,
     String? documentId,
+    List<String>? documentIds,
   }) async {
     final normalizedDifficulty = difficulty.toLowerCase();
     final normalizedSourceType =
@@ -31,6 +32,7 @@ class MCQRepository {
         'count': count,
         'difficulty': normalizedDifficulty,
         if (documentId != null && documentId.isNotEmpty) 'documentId': documentId,
+        if (documentIds != null && documentIds.isNotEmpty) 'documentIds': documentIds,
       },
       requiresAuth: true,
     );
