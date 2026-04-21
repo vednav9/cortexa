@@ -7,12 +7,16 @@ abstract class TeacherMcqEvent {}
 class GenerateMcqsEvent extends TeacherMcqEvent {
   final String courseId;
   final String topic;
+  final String sourceType;
+  final String? documentId;
   final int count;
   final String difficulty;
 
   GenerateMcqsEvent({
     required this.courseId,
     required this.topic,
+    this.sourceType = 'topic',
+    this.documentId,
     this.count = 5,
     this.difficulty = 'medium',
   });

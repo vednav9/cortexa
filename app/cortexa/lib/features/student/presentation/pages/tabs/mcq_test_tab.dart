@@ -1,8 +1,7 @@
-﻿import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import '../../../../../../core/constants/app_colors.dart';
-import '../../../../../../core/services/hive_storage_service.dart';
 import '../../../../../../core/di/service_locator.dart';
+import '../../../../../../core/services/hive_storage_service.dart';
 import '../../../../teacher/data/models/mcq_model.dart';
 import '../../../data/repositories/student_mcq_repository.dart';
 import 'take_mcq_test_page.dart';
@@ -19,11 +18,10 @@ class _MCQTestTabState extends State<MCQTestTab> {
   late final StudentMcqRepository _repository;
 
   List<MCQSetModel> _mcqSets = [];
-  final Map<String, _TestResult> _completedTests = {};
   String? _institutionId;
   bool _isLoading = true;
   String? _errorMessage;
-  String _filterStatus = 'all';
+  String? _startingTestId;
 
   @override
   void initState() {
@@ -34,17 +32,24 @@ class _MCQTestTabState extends State<MCQTestTab> {
 
   Future<void> _initializeAndLoad() async {
     final currentUser = _storage.getCurrentUser();
-    _institutionId = currentUser?.institutionId ??
-        (_storage.getCurrentInstitution()?['id'] as String?);
+    final currentInstitution = _storage.getCurrentInstitution();
+    final candidateInstitutionId =
+        currentUser?.institutionId ??
+        currentInstitution?['id']?.toString() ??
+        currentInstitution?['_id']?.toString();
+
+    _institutionId = candidateInstitutionId?.trim();
 
     if (_institutionId != null && _institutionId!.isNotEmpty) {
       await _loadMCQSets();
-    } else {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Institution not found. Please re-login and try again.';
-      });
+      return;
     }
+
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _errorMessage = 'Institution not found. Please re-login and try again.';
+    });
   }
 
   Future<void> _loadMCQSets() async {
@@ -52,50 +57,22 @@ class _MCQTestTabState extends State<MCQTestTab> {
       _isLoading = true;
       _errorMessage = null;
     });
+
     try {
       final sets = await _repository.getAssignedMCQSets(_institutionId!);
-      if (mounted) {
-        setState(() {
-          _mcqSets = sets;
-          _isLoading = false;
-        });
-      }
-    } on DioException catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          if (e.type == DioExceptionType.connectionError ||
-              e.type == DioExceptionType.connectionTimeout) {
-            _errorMessage = 'No internet connection. Please check your network.';
-          } else if (e.response?.statusCode == 401) {
-            _errorMessage = 'Session expired. Please log in again.';
-          } else {
-            _errorMessage = 'Failed to load tests. Please try again.';
-          }
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _mcqSets = sets;
+        _isLoading = false;
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Something went wrong. Please try again.';
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load tests. Please try again.';
+      });
     }
   }
-
-  List<MCQSetModel> get _filteredSets {
-    if (_filterStatus == 'completed') {
-      return _mcqSets.where((s) => _completedTests.containsKey(s.id)).toList();
-    } else if (_filterStatus == 'available') {
-      return _mcqSets.where((s) => !_completedTests.containsKey(s.id)).toList();
-    }
-    return _mcqSets;
-  }
-
-  int get _completedCount => _completedTests.length;
-  int get _availableCount =>
-      _mcqSets.where((s) => !_completedTests.containsKey(s.id)).length;
 
   @override
   Widget build(BuildContext context) {
@@ -117,13 +94,8 @@ class _MCQTestTabState extends State<MCQTestTab> {
                 _buildLoadingState()
               else if (_errorMessage != null)
                 _buildErrorState()
-              else ...[
-                _buildStatsRow(),
-                const SizedBox(height: 16),
-                _buildFilterChips(),
-                const SizedBox(height: 16),
+              else
                 _buildTestsList(),
-              ],
             ],
           ),
         ),
@@ -191,171 +163,45 @@ class _MCQTestTabState extends State<MCQTestTab> {
     );
   }
 
-  Widget _buildStatsRow() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth = (constraints.maxWidth - 12) / 2;
-        return Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    icon: Icons.check_circle_outline,
-                    label: 'Available',
-                    count: _availableCount,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatCard(
-                    icon: Icons.emoji_events_outlined,
-                    label: 'Completed',
-                    count: _completedCount,
-                    color: Colors.orange,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: cardWidth,
-              child: _buildStatCard(
-                icon: Icons.quiz,
-                label: 'Total',
-                count: _mcqSets.length,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String label,
-    required int count,
-    required Color color,
-  }) {
-    return Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 5),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      );
-  }
-
-  Widget _buildFilterChips() {
-    const filters = [
-      {'value': 'all', 'label': 'All'},
-      {'value': 'available', 'label': 'Available'},
-      {'value': 'completed', 'label': 'Completed'},
-    ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: filters.map((f) {
-          final isSelected = _filterStatus == f['value'];
-          return Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: GestureDetector(
-              onTap: () => setState(() => _filterStatus = f['value']!),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : AppColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.primary
-                        : AppColors.textTertiary.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Text(
-                  f['label']!,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color:
-                        isSelected ? Colors.white : AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   Widget _buildTestsList() {
-    final sets = _filteredSets;
-    if (sets.isEmpty) return _buildEmptyState();
+    if (_mcqSets.isEmpty) return _buildEmptyState();
+
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: sets.length,
+      itemCount: _mcqSets.length,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
-      itemBuilder: (context, i) => _buildTestCard(sets[i]),
+      itemBuilder: (context, index) => _buildTestCard(_mcqSets[index]),
     );
   }
 
   Widget _buildTestCard(MCQSetModel mcqSet) {
-    final result = _completedTests[mcqSet.id];
-    final isCompleted = result != null;
+    final isCompleted = mcqSet.hasAttempted;
+    final isStarting = _startingTestId == mcqSet.id;
     final difficulty = _overallDifficulty(mcqSet.questions);
+    final difficultyColor = _difficultyColor(difficulty);
+
+    String completedText = 'Completed';
+    if (mcqSet.attemptScore != null) {
+      final score = mcqSet.attemptScore!;
+      final scoreText = score == score.roundToDouble()
+          ? score.toStringAsFixed(0)
+          : score.toStringAsFixed(1);
+      completedText = 'Completed - $scoreText%';
+    }
 
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isCompleted
-              ? AppColors.primary.withValues(alpha: 0.25)
-              : AppColors.textTertiary.withValues(alpha: 0.18),
+          color: AppColors.textTertiary.withValues(alpha: 0.18),
         ),
       ),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -373,52 +219,38 @@ class _MCQTestTabState extends State<MCQTestTab> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    isCompleted
-                        ? Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.check_circle,
-                                    size: 14, color: AppColors.primary),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${result.score}%',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text(
-                              'Available',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.blue,
-                              ),
-                            ),
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: difficultyColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        difficulty[0].toUpperCase() + difficulty.substring(1),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: difficultyColor,
+                        ),
+                      ),
+                    ),
                   ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  mcqSet.courseName.isNotEmpty ? mcqSet.courseName : 'General',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 if (mcqSet.description != null &&
                     mcqSet.description!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     mcqSet.description!,
                     maxLines: 2,
@@ -431,22 +263,59 @@ class _MCQTestTabState extends State<MCQTestTab> {
                   ),
                 ],
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
+                Row(
                   children: [
-                    _buildInfoChip(
-                      icon: Icons.question_answer_outlined,
-                      label: '${mcqSet.questionCount} Questions',
-                    ),
-                    _buildDifficultyChip(difficulty),
-                    if (mcqSet.courseName.isNotEmpty)
-                      _buildInfoChip(
-                        icon: Icons.book_outlined,
-                        label: mcqSet.courseName,
+                    Expanded(
+                      child: _buildMetaItem(
+                        icon: Icons.schedule,
+                        label: '${mcqSet.duration} mins',
                       ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMetaItem(
+                        icon: Icons.quiz_outlined,
+                        label: '${mcqSet.questionCount} questions',
+                      ),
+                    ),
                   ],
                 ),
+                if (isCompleted) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          completedText,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -454,37 +323,56 @@ class _MCQTestTabState extends State<MCQTestTab> {
             decoration: BoxDecoration(
               border: Border(
                 top: BorderSide(
-                    color: AppColors.textTertiary.withValues(alpha: 0.15)),
+                  color: AppColors.textTertiary.withValues(alpha: 0.15),
+                ),
               ),
             ),
             child: SizedBox(
               width: double.infinity,
               child: TextButton(
-                onPressed: () => _openTest(mcqSet, isCompleted, result),
+                onPressed: isCompleted || isStarting
+                    ? null
+                    : () => _openTest(mcqSet),
                 style: TextButton.styleFrom(
-                  foregroundColor:
-                      isCompleted ? AppColors.primary : Colors.white,
+                  foregroundColor: Colors.white,
                   backgroundColor: isCompleted
-                      ? AppColors.primary.withValues(alpha: 0.05)
+                      ? AppColors.textTertiary.withValues(alpha: 0.35)
                       : AppColors.primary,
+                  disabledForegroundColor: AppColors.textSecondary,
+                  disabledBackgroundColor: AppColors.textTertiary.withValues(
+                    alpha: 0.35,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: const RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.vertical(bottom: Radius.circular(16)),
+                    borderRadius: BorderRadius.vertical(
+                      bottom: Radius.circular(16),
+                    ),
                   ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      isCompleted
-                          ? Icons.visibility_outlined
-                          : Icons.play_arrow_rounded,
-                      size: 18,
-                    ),
+                    if (isStarting)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    else
+                      Icon(
+                        isCompleted
+                            ? Icons.check_circle_outline
+                            : Icons.play_arrow_rounded,
+                        size: 18,
+                      ),
                     const SizedBox(width: 8),
                     Text(
-                      isCompleted ? 'View Results' : 'Start Test',
+                      isCompleted
+                          ? 'Already Attempted'
+                          : (isStarting ? 'Starting...' : 'Start Test'),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -500,51 +388,20 @@ class _MCQTestTabState extends State<MCQTestTab> {
     );
   }
 
-  Widget _buildInfoChip({required IconData icon, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.textTertiary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: AppColors.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style:
-                const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDifficultyChip(String difficulty) {
-    final color = _difficultyColor(difficulty);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        difficulty[0].toUpperCase() + difficulty.substring(1),
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: color,
+  Widget _buildMetaItem({required IconData icon, required String label}) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: AppColors.textSecondary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildEmptyState() {
-    final isFiltered = _filterStatus != 'all';
-    final label =
-        _filterStatus[0].toUpperCase() + _filterStatus.substring(1);
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
@@ -566,28 +423,25 @@ class _MCQTestTabState extends State<MCQTestTab> {
               ),
             ),
             const SizedBox(height: 10),
-            Text(
-              isFiltered ? 'No $label Tests' : 'No MCQ Tests Yet',
+            const Text(
+              'No Tests Available',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 10),
-            Text(
-              isFiltered
-                  ? 'You haven\'t ${ _filterStatus == 'completed' ? 'completed' : 'started' } any tests yet.'
-                  : 'Your teacher hasn\'t assigned any MCQ tests yet.',
+            const Text(
+              'Check back later for new tests from your teachers.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
                 height: 1.6,
               ),
             ),
-            
           ],
         ),
       ),
@@ -604,8 +458,7 @@ class _MCQTestTabState extends State<MCQTestTab> {
             SizedBox(height: 16),
             Text(
               'Loading tests...',
-              style: TextStyle(
-                  color: AppColors.textSecondary, fontSize: 14),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
           ],
         ),
@@ -625,8 +478,11 @@ class _MCQTestTabState extends State<MCQTestTab> {
               color: AppColors.error.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.wifi_off_rounded,
-                size: 36, color: AppColors.error),
+            child: const Icon(
+              Icons.wifi_off_rounded,
+              size: 36,
+              color: AppColors.error,
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -639,7 +495,7 @@ class _MCQTestTabState extends State<MCQTestTab> {
           ),
           const SizedBox(height: 8),
           Text(
-            _errorMessage!,
+            _errorMessage ?? 'Something went wrong. Please try again.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 14,
@@ -655,10 +511,10 @@ class _MCQTestTabState extends State<MCQTestTab> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
               elevation: 0,
             ),
           ),
@@ -667,38 +523,94 @@ class _MCQTestTabState extends State<MCQTestTab> {
     );
   }
 
-  Future<void> _openTest(
-      MCQSetModel mcqSet, bool isCompleted, _TestResult? result) async {
-    final testResult = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => TakeMCQTestPage(
-          mcqSet: mcqSet,
-          isReviewMode: isCompleted,
-          previousAnswers: result?.answers,
-          previousScore: result?.score,
+  Future<void> _openTest(MCQSetModel mcqSet) async {
+    if (mcqSet.hasAttempted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You have already attempted this test.'),
+          backgroundColor: AppColors.textPrimary,
         ),
-      ),
-    );
+      );
+      return;
+    }
 
-    if (testResult != null && mounted && !isCompleted) {
-      setState(() {
-        _completedTests[mcqSet.id] = _TestResult(
-          score: testResult['score'] as int,
-          answers: Map<int, int>.from(testResult['answers'] as Map),
-        );
-      });
+    setState(() => _startingTestId = mcqSet.id);
+
+    try {
+      // Match web flow: verify and fetch latest test details before starting.
+      final details = await _repository.getMCQSetDetails(mcqSet.id);
+
+      // Keep full question payload when already available in assigned list data.
+      final questions = mcqSet.questions.isNotEmpty
+          ? mcqSet.questions
+          : details.questions;
+
+      final launchSet = MCQSetModel(
+        id: details.id,
+        title: details.title,
+        description: details.description,
+        courseId: details.courseId,
+        courseName: details.courseName,
+        createdById: details.createdById,
+        createdByName: details.createdByName,
+        questions: questions,
+        createdAt: details.createdAt,
+        dueDate: details.dueDate,
+        duration: details.duration,
+        isAssigned: details.isAssigned,
+        hasAttempted: details.hasAttempted,
+        attemptScore: details.attemptScore,
+        attemptId: details.attemptId,
+        totalAttempts: details.totalAttempts,
+        averageScore: details.averageScore,
+      );
+
+      final testResult = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TakeMCQTestPage(mcqSet: launchSet),
+        ),
+      );
+
+      if (testResult != null && mounted) {
+        await _loadMCQSets();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to start test: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      await _loadMCQSets();
+    } finally {
+      if (mounted) {
+        setState(() => _startingTestId = null);
+      }
     }
   }
 
   String _overallDifficulty(List<MCQModel> questions) {
     if (questions.isEmpty) return 'medium';
+
     final counts = <String, int>{'easy': 0, 'medium': 0, 'hard': 0};
-    for (final q in questions) {
-      final d = (q.difficulty ?? 'medium').toLowerCase();
-      counts[d] = (counts[d] ?? 0) + 1;
+    for (final question in questions) {
+      final value = (question.difficulty ?? 'medium').toLowerCase();
+      counts[value] = (counts[value] ?? 0) + 1;
     }
-    return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+
+    String best = 'medium';
+    var bestCount = -1;
+    for (final entry in counts.entries) {
+      if (entry.value > bestCount) {
+        best = entry.key;
+        bestCount = entry.value;
+      }
+    }
+
+    return best;
   }
 
   Color _difficultyColor(String difficulty) {
@@ -713,11 +625,4 @@ class _MCQTestTabState extends State<MCQTestTab> {
         return AppColors.primary;
     }
   }
-}
-
-class _TestResult {
-  final int score;
-  final Map<int, int> answers;
-
-  const _TestResult({required this.score, required this.answers});
 }

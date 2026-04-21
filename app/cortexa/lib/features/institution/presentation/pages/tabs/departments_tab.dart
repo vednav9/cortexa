@@ -7,7 +7,9 @@ import '../../../../../../core/di/service_locator.dart';
 import '../../../data/repositories/department_repository.dart';
 
 class DepartmentsTab extends StatefulWidget {
-  const DepartmentsTab({super.key});
+  final bool readOnly;
+
+  const DepartmentsTab({super.key, this.readOnly = false});
 
   @override
   State<DepartmentsTab> createState() => _DepartmentsTabState();
@@ -614,7 +616,134 @@ class _DepartmentsTabState extends State<DepartmentsTab> {
     return (words[0].substring(0, 1) + words[1].substring(0, 1)).toUpperCase();
   }
 
+  String _textOrFallback(dynamic value, {String fallback = 'Not available'}) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty || text.toLowerCase() == 'null') {
+      return fallback;
+    }
+    return text;
+  }
+
+  Widget _buildReadOnlyDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.borderDark.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDepartmentDetailsSheet(Map<String, dynamic> department) {
+    final unitLabel = TerminologyService.getOrganizationalUnitLabel(context);
+    final unitFields = TerminologyService.getOrganizationalUnitFields(context);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.55,
+            minChildSize: 0.4,
+            maxChildSize: 0.85,
+            builder: (context, scrollController) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderDark.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$unitLabel Details',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _buildReadOnlyDetailRow(
+                            unitFields.nameLabel,
+                            _textOrFallback(department['name']),
+                          ),
+                          _buildReadOnlyDetailRow(
+                            unitFields.codeLabel,
+                            _textOrFallback(department['code']),
+                          ),
+                          _buildReadOnlyDetailRow(
+                            unitFields.descriptionLabel,
+                            _textOrFallback(
+                              department['description'],
+                              fallback: 'No description provided',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _deleteDepartment(int index) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final unitLabel = TerminologyService.getOrganizationalUnitLabel(context);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -648,10 +777,11 @@ class _DepartmentsTabState extends State<DepartmentsTab> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     final departmentId = _departments[index]['_id']?.toString();
     if (departmentId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Error: Invalid department ID'),
           backgroundColor: AppColors.error,
@@ -679,13 +809,11 @@ class _DepartmentsTabState extends State<DepartmentsTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            '${TerminologyService.getOrganizationalUnitLabel(context)} deleted successfully',
-          ),
+          content: Text('$unitLabel deleted successfully'),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -698,10 +826,10 @@ class _DepartmentsTabState extends State<DepartmentsTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
       print('Error deleting department: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to delete: ${e.toString()}'),
           backgroundColor: AppColors.error,
@@ -898,20 +1026,22 @@ class _DepartmentsTabState extends State<DepartmentsTab> {
           ),
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: FloatingActionButton.extended(
-          onPressed: _showAddDepartmentDialog,
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          icon: const Icon(Icons.add, size: 24),
-          label: const Text(
-            'Add',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          ),
-        ),
-      ),
+      floatingActionButton: widget.readOnly
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FloatingActionButton.extended(
+                onPressed: _showAddDepartmentDialog,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                icon: const Icon(Icons.add, size: 24),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                ),
+              ),
+            ),
     );
   }
 
@@ -990,7 +1120,9 @@ class _DepartmentsTabState extends State<DepartmentsTab> {
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showAddDepartmentDialog(department, index),
+            onTap: widget.readOnly
+                ? () => _showDepartmentDetailsSheet(department)
+                : () => _showAddDepartmentDialog(department, index),
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
@@ -1067,37 +1199,37 @@ class _DepartmentsTabState extends State<DepartmentsTab> {
                       ],
                     ),
                   ),
-                  // Delete button - inside the card at top-right
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => _deleteDepartment(index),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.error.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: Colors.white,
+                  if (!widget.readOnly)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _deleteDepartment(index),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.error.withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

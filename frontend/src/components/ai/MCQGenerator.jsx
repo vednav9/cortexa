@@ -33,8 +33,9 @@ export default function MCQGenerator() {
         formData.difficulty
       );
 
-      if (response.valid_mcqs > 0) {
-        setMcqs(response.mcqs);
+      const generatedMcqs = Array.isArray(response?.mcqs) ? response.mcqs : [];
+      if (generatedMcqs.length > 0) {
+        setMcqs(generatedMcqs);
         setStep('quiz');
       } else {
         alert('No valid MCQs generated. Try a different topic.');
@@ -48,6 +49,17 @@ export default function MCQGenerator() {
 
   const handleAnswerSelect = (questionIndex, answer) => {
     setUserAnswers({ ...userAnswers, [questionIndex]: answer });
+  };
+
+  const getOptionEntries = (mcq) => {
+    const rawOptions = mcq?.options;
+    if (Array.isArray(rawOptions)) {
+      return rawOptions.slice(0, 4).map((text, idx) => [String.fromCharCode(65 + idx), text]);
+    }
+    if (rawOptions && typeof rawOptions === 'object') {
+      return Object.entries(rawOptions);
+    }
+    return [];
   };
 
   const handleSubmit = async () => {
@@ -205,7 +217,7 @@ export default function MCQGenerator() {
                 </h3>
 
                 <div className="space-y-3">
-                  {Object.entries(mcq.options).map(([letter, text]) => (
+                  {getOptionEntries(mcq).map(([letter, text]) => (
                     <label
                       key={letter}
                       className={`flex items-center space-x-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${

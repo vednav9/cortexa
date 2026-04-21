@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AI_URL } from '../../../config/api';
+import { AI_URL, API_BASE_URL } from '../../../config/api';
 import {
   FiMic,
   FiStopCircle,
@@ -19,6 +19,7 @@ import { HiSparkles } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../../context/authcontext';
 import { useOutletContext } from 'react-router-dom';
+import { Document as DocxDocument, Packer, Paragraph, HeadingLevel } from 'docx';
 
 const hexToRgb = (hex) => {
   const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -170,11 +171,14 @@ const LectureRecorder = () => {
       // 10-minute timeout for cold start + transcription
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 600000);
+      const token = localStorage.getItem('token');
 
-      // Call AI server directly (long-running operation, bypasses Vercel 10s timeout)
-      const response = await fetch(`${AI_URL}/speech/transcribe-and-upload`, {
+      // Route through backend so Mongo context + R2 persistence are applied.
+      const response = await fetch(`${API_BASE_URL}/ai/speech/transcribe-and-upload`, {
         method: 'POST',
         body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
         signal: controller.signal
       });
 
@@ -187,8 +191,8 @@ const LectureRecorder = () => {
 
       const result = await response.json();
 
-      setTranscription(result.transcription);
-      setFormattedText(result.transcription.formatted_text);
+      setTranscription(result);
+      setFormattedText(result?.transcription?.formatted_text || result?.transcription?.raw_text || '');
 
       toast.success('Lecture transcribed successfully!');
 
@@ -205,16 +209,77 @@ const LectureRecorder = () => {
     }
   };
 
-  // Download formatted document
+  // Download transcript as DOCX (edited text if available)
   const handleDownload = async () => {
     if (!transcription) return;
 
     try {
-      const docxUrl = transcription.downloads?.docx;
-      if (docxUrl) {
-        window.open(`${AI_URL}/speech/download/${docxUrl.split('/').pop()}`, '_blank');
-        toast.success('Downloading document...');
+      const sourceText = String(
+        formattedText
+        || transcription?.transcription?.formatted_text
+        || transcription?.transcription?.raw_text
+        || ''
+      ).trim();
+
+      if (!sourceText) {
+        toast.error('No transcript content available to download');
+        return;
       }
+
+      const title = String(lectureTitle || 'lecture-transcript')
+        .replace(/[^a-zA-Z0-9\s-_]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .toLowerCase();
+      const fileName = `${title || 'lecture-transcript'}.docx`;
+
+      const lines = sourceText.split(/\r?\n/);
+      const children = lines.map((lineRaw) => {
+        const line = lineRaw.trim();
+
+        if (!line) {
+          return new Paragraph({ text: '' });
+        }
+
+        if (line.startsWith('### ')) {
+          return new Paragraph({
+            text: line.replace(/^###\s+/, ''),
+            heading: HeadingLevel.HEADING_3,
+          });
+        }
+
+        if (line.startsWith('## ')) {
+          return new Paragraph({
+            text: line.replace(/^##\s+/, ''),
+            heading: HeadingLevel.HEADING_2,
+          });
+        }
+
+        if (line.startsWith('# ')) {
+          return new Paragraph({
+            text: line.replace(/^#\s+/, ''),
+            heading: HeadingLevel.HEADING_1,
+          });
+        }
+
+        return new Paragraph({ text: line });
+      });
+
+      const doc = new DocxDocument({
+        sections: [{ children }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success('Transcript DOCX downloaded');
     } catch (error) {
       console.error('Download error:', error);
       toast.error('Failed to download document');
@@ -483,24 +548,13 @@ const LectureRecorder = () => {
                   <div>
                     <h3 className="text-lg font-black text-gray-900">Transcription Complete</h3>
                     <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">
-                      <span>{transcription.duration_seconds}s</span>
+                      <span>{transcription?.transcription?.duration_seconds || 0}s</span>
                       <span>•</span>
-                      <span>{transcription.word_count} Words</span>
-                      <span>•</span>
-                      <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded-md">+{transcription.rag_system?.chunks_added || 0} Knowledge Chunks</span>
+                      <span>{transcription?.transcription?.word_count || 0} Words</span>
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3 w-full md:w-auto">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleDownload}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-900 text-white font-bold rounded-xl hover:bg-black shadow-md transition-all text-sm hover:-translate-y-0.5"
-                  >
-                    <FiDownload className="w-4 h-4" />
-                    Download DOCX
-                  </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -527,24 +581,35 @@ const LectureRecorder = () => {
                       <p className="text-[12px] font-semibold text-gray-400 mt-0.5">Formatted text output</p>
                     </div>
                   </div>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsEditing(!isEditing)}
-                    className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 border border-gray-200 shadow-sm transition-all text-sm w-full sm:w-auto"
-                  >
-                    {isEditing ? (
-                      <>
-                        <FiSave className="w-4 h-4 text-green-600" />
-                        Save Edits
-                      </>
-                    ) : (
-                      <>
-                        <FiEdit3 className="w-4 h-4 text-gray-500" />
-                        Edit Transcript
-                      </>
-                    )}
-                  </motion.button>
+                  <div className="flex w-full sm:w-auto items-center gap-2">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleDownload}
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 border border-gray-200 shadow-sm transition-all text-sm w-full sm:w-auto"
+                    >
+                      <FiDownload className="w-4 h-4 text-gray-500" />
+                      Download Transcript
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setIsEditing(!isEditing)}
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-700 font-bold rounded-xl hover:bg-gray-50 border border-gray-200 shadow-sm transition-all text-sm w-full sm:w-auto"
+                    >
+                      {isEditing ? (
+                        <>
+                          <FiSave className="w-4 h-4 text-green-600" />
+                          Save Edits
+                        </>
+                      ) : (
+                        <>
+                          <FiEdit3 className="w-4 h-4 text-gray-500" />
+                          Edit Transcript
+                        </>
+                      )}
+                    </motion.button>
+                  </div>
                 </div>
               </div>
 

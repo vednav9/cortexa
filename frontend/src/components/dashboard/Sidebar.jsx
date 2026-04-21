@@ -1,7 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiHome, FiBell, FiHelpCircle, FiLogOut, FiX } from "react-icons/fi";
-import { HiSparkles } from "react-icons/hi";
 import { useNavigate } from "react-router-dom";
 import { authAPI } from "../../services/api";
 import { useAuth } from "../../context/authcontext";
@@ -63,8 +62,8 @@ export default function Sidebar({
         {/* Branding Header */}
         <div className="flex items-center justify-between h-[72px] px-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500 shadow-sm shadow-emerald-500/20">
-              <HiSparkles className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-white shadow-sm shadow-emerald-500/20">
+              <img src="/logo.png" alt="Cortexa logo" className="w-full h-full object-contain scale-125" />
             </div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-[17px] text-gray-900 tracking-tight">Cortexa</span>

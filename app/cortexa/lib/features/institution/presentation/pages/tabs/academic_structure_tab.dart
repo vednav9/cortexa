@@ -8,7 +8,9 @@ import 'academic_calendar_tab.dart';
 import 'faculty_tab.dart';
 
 class AcademicStructureTab extends StatefulWidget {
-  const AcademicStructureTab({super.key});
+  final bool readOnly;
+
+  const AcademicStructureTab({super.key, this.readOnly = false});
 
   @override
   State<AcademicStructureTab> createState() => _AcademicStructureTabState();
@@ -137,12 +139,12 @@ class _AcademicStructureTabState extends State<AcademicStructureTab>
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
-                  children: const [
-                    DepartmentsTab(),
-                    SemestersTab(),
-                    CoursesTab(),
-                    AcademicCalendarTab(),
-                    FacultyTab(),
+                  children: [
+                    DepartmentsTab(readOnly: widget.readOnly),
+                    SemestersTab(readOnly: widget.readOnly),
+                    CoursesTab(readOnly: widget.readOnly),
+                    AcademicCalendarTab(readOnly: widget.readOnly),
+                    FacultyTab(readOnly: widget.readOnly),
                   ],
                 ),
               ),

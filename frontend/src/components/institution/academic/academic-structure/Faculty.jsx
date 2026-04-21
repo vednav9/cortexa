@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion as Motion } from 'framer-motion';
 import { FiUsers, FiMail, FiPhone, FiFilter, FiSearch } from 'react-icons/fi';
 import { useOutletContext } from 'react-router-dom';
 import { academicAPI } from '../../../../services/api';
@@ -13,22 +13,38 @@ function Faculty() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('');
 
-  useEffect(() => {
-    if (institution?._id) {
-      fetchData();
+  const fetchData = useCallback(async () => {
+    if (!institution?._id) {
+      setLoading(false);
+      return;
     }
-  }, [institution]);
 
-  const fetchData = async () => {
     try {
       setLoading(true);
       const [facultyRes, deptsRes] = await Promise.all([
         academicAPI.getFaculty(institution._id),
         academicAPI.getDepartments(institution._id),
       ]);
-      // Backend returns { success, count, data: [...] }
-      const facultyData = facultyRes.data.data || facultyRes.data || [];
-      const deptsData = deptsRes.data.data || deptsRes.data || [];
+
+      // Support multiple backend payload shapes
+      const facultyPayload = facultyRes?.data;
+      const deptsPayload = deptsRes?.data;
+
+      const facultyData = Array.isArray(facultyPayload?.faculty)
+        ? facultyPayload.faculty
+        : Array.isArray(facultyPayload?.data)
+          ? facultyPayload.data
+          : Array.isArray(facultyPayload)
+            ? facultyPayload
+            : [];
+
+      const deptsData = Array.isArray(deptsPayload?.data)
+        ? deptsPayload.data
+        : Array.isArray(deptsPayload?.departments)
+          ? deptsPayload.departments
+          : Array.isArray(deptsPayload)
+            ? deptsPayload
+            : [];
       
       setFaculty(Array.isArray(facultyData) ? facultyData : []);
       setDepartments(Array.isArray(deptsData) ? deptsData : []);
@@ -39,7 +55,11 @@ function Faculty() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [institution?._id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const filteredFaculty = Array.isArray(faculty) 
   ? faculty.filter(member => {
@@ -106,7 +126,7 @@ function Faculty() {
       {/* Faculty Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredFaculty.map((member, index) => (
-          <motion.div
+          <Motion.div
             key={member._id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -181,12 +201,12 @@ function Faculty() {
 )}
 
 
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
 
       {filteredFaculty.length === 0 && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center py-16 px-4"
@@ -202,12 +222,12 @@ function Faculty() {
               ? 'Try adjusting your search or filters to find what you\'re looking for.'
               : 'Faculty members will appear here once they are added to the system.'}
           </p>
-        </motion.div>
+        </Motion.div>
       )}
 
       {/* Summary Stats */}
       {faculty.length > 0 && (
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mt-8 bg-gradient-to-r from-indigo-50 via-red-50 to-pink-50 rounded-2xl p-6 border border-indigo-100"
@@ -248,7 +268,7 @@ function Faculty() {
               </p>
             </div>
           </div>
-        </motion.div>
+        </Motion.div>
       )}
     </GenericPage>
   );

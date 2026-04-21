@@ -1,79 +1,72 @@
-import 'package:dio/dio.dart';
 import '../../../../core/config/api_config.dart';
 import '../../../../core/di/service_locator.dart';
-import '../../../../core/services/hive_storage_service.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../teacher/data/models/mcq_model.dart';
 
 class StudentMcqRepository {
-  final Dio _dio;
-  final HiveStorageService _storage;
+  final ApiClient _apiClient;
 
-  StudentMcqRepository({Dio? dio, HiveStorageService? storage})
-      : _dio = dio ?? getIt<Dio>(),
-        _storage = storage ?? getIt<HiveStorageService>();
-
-  Map<String, String> get _authHeaders {
-    final token = _storage.getToken();
-    return token != null ? {'Authorization': 'Bearer $token'} : {};
-  }
+  StudentMcqRepository({ApiClient? apiClient})
+    : _apiClient = apiClient ?? getIt<ApiClient>();
 
   /// Fetch MCQ sets assigned to this student for the given institution.
-  /// Returns an empty list when the backend endpoint is not yet available (404/405).
   Future<List<MCQSetModel>> getAssignedMCQSets(String institutionId) async {
     try {
-      final response = await _dio.get(
-        '${ApiConfig.baseUrl}${ApiConfig.studentGetAssignedMCQs}',
-        queryParameters: {'institutionId': institutionId},
-        options: Options(headers: _authHeaders),
-      );
+      final endpoint =
+          '${ApiConfig.studentGetAssignedMCQs}?institutionId=${Uri.encodeQueryComponent(institutionId)}';
 
-      if (response.statusCode == 200) {
-        final data = response.data as Map<String, dynamic>;
-        if (data['success'] == true) {
-          final list = data['mcqSets'] as List<dynamic>? ?? [];
-          return list
-              .map((json) => MCQSetModel.fromJson(json as Map<String, dynamic>))
-              .toList();
-        }
-      }
-      return [];
-    } on DioException catch (e) {
-      // Endpoint not implemented yet — silently return empty list
-      if (e.response?.statusCode == 404 || e.response?.statusCode == 405) {
+      final response = await _apiClient.get(endpoint, requiresAuth: true);
+
+      if (response['success'] == false) {
         return [];
       }
+
+      final list = (response['mcqSets'] as List?) ?? const [];
+      return list
+          .whereType<Map>()
+          .map((json) => MCQSetModel.fromJson(Map<String, dynamic>.from(json)))
+          .toList();
+    } catch (_) {
       rethrow;
     }
   }
 
+  /// Fetch details of a selected MCQ set.
+  Future<MCQSetModel> getMCQSetDetails(String mcqSetId) async {
+    final response = await _apiClient.get(
+      ApiConfig.studentGetMCQDetails(mcqSetId),
+      requiresAuth: true,
+    );
+
+    if (response['success'] == false || response['mcqSet'] is! Map) {
+      throw Exception(response['error'] ?? 'Failed to load test details');
+    }
+
+    return MCQSetModel.fromJson(Map<String, dynamic>.from(response['mcqSet']));
+  }
+
   /// Submit a completed MCQ attempt to the backend.
-  /// Returns true on success, false on any failure (non-fatal).
   Future<bool> submitAttempt({
     required String mcqSetId,
     required Map<int, int> answers,
     required int timeTaken,
-    required int score,
-    required int totalQuestions,
-    required double percentage,
+    int? score,
+    int? totalQuestions,
+    double? percentage,
   }) async {
     try {
       final answersList = answers.entries
           .map((e) => {'questionIndex': e.key, 'selectedAnswer': e.value})
           .toList();
 
-      final response = await _dio.post(
-        '${ApiConfig.baseUrl}${ApiConfig.studentSubmitMCQ(mcqSetId)}',
-        data: {
-          'answers': answersList,
-          'timeTaken': timeTaken,
-          'score': score,
-          'totalQuestions': totalQuestions,
-          'percentage': percentage,
-        },
-        options: Options(headers: _authHeaders),
+      final response = await _apiClient.post(
+        ApiConfig.studentSubmitMCQ(mcqSetId),
+        body: {'answers': answersList, 'timeTaken': timeTaken},
+        requiresAuth: true,
       );
-      return response.statusCode == 200 || response.statusCode == 201;
-    } on DioException {
+
+      return response['success'] == true;
+    } catch (_) {
       return false;
     }
   }

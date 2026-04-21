@@ -608,7 +608,7 @@ const InvitePeople = () => {
                   <div className="flex-1">
                     <h4 className="text-sm font-bold text-blue-900 mb-2">CSV Format Guidelines</h4>
                     <div className="space-y-1 text-sm text-blue-800">
-                      <p><strong>Required columns:</strong> emailOrUsername</p>
+                      <p><strong>Required columns:</strong> email/Username</p>
                       <p><strong>Optional:</strong> message</p>
                       <p className="text-xs text-blue-700 mt-1">
                         <strong>Note:</strong> You can use either email addresses (john@example.com) or usernames (john_doe) in the emailOrUsername column.

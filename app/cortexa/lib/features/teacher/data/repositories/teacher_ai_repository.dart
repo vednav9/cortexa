@@ -12,7 +12,8 @@ class TeacherAiRepository {
   /// Generate MCQs from topic, text, or document
   /// 
   /// [courseId] - Course ID for authorization check
-  /// [topic] - Topic/subject for MCQ generation
+  /// [topic] - Topic/subject or Document Name for MCQ generation
+  /// [sourceType] - 'topic' or 'document'
   /// [count] - Number of MCQs to generate (default: 5)
   /// [difficulty] - Difficulty level: 'easy', 'medium', 'hard' (default: 'medium')
   /// 
@@ -20,6 +21,8 @@ class TeacherAiRepository {
   Future<List<McqQuestion>> generateMcqs({
     required String courseId,
     required String topic,
+    required String sourceType, // Added this required field
+    String? documentId,
     int count = 5,
     String difficulty = 'medium',
   }) async {
@@ -29,6 +32,8 @@ class TeacherAiRepository {
         body: {
           'courseId': courseId,
           'topic': topic,
+          'sourceType': sourceType, // Added to payload
+          if (documentId != null && documentId.isNotEmpty) 'documentId': documentId,
           'count': count,
           'difficulty': difficulty,
         },
