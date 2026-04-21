@@ -28,6 +28,8 @@ class AiRepository {
   Future<RagResponse> queryRag({
     required String query,
     String? institutionId,
+    String? courseId,
+    List<String>? documentIds,
     int topK = 5,
   }) async {
     try {
@@ -38,20 +40,28 @@ class AiRepository {
         body: {
           'query': query,
           if (institutionId != null) 'institutionId': institutionId,
+          if (courseId != null && courseId.isNotEmpty) 'courseId': courseId,
+          if (documentIds != null) 'documentIds': documentIds,
         },
         requiresAuth: true,
       );
 
       final ragResponse = RagResponse.fromJson(response);
-      print('✅ RAG [${ragResponse.searchMethod}]: ${ragResponse.answer.length} chars');
+      print(
+        '✅ RAG [${ragResponse.searchMethod}]: ${ragResponse.answer.length} chars',
+      );
 
       await _cacheMessages(query, ragResponse);
       return ragResponse;
     } on ApiException catch (e) {
-      throw ServerException(message: e.message, statusCode: e.statusCode ?? 400);
+      throw ServerException(
+        message: e.message,
+        statusCode: e.statusCode ?? 400,
+      );
     } catch (e) {
       throw ServerException(
-        message: 'Could not get an answer. Please check your connection and try again.',
+        message:
+            'Could not get an answer. Please check your connection and try again.',
         statusCode: 500,
       );
     }
@@ -61,8 +71,7 @@ class AiRepository {
   Future<RagResponse> queryHybridAssistant({
     required String query,
     bool useWebFallback = true,
-  }) =>
-      queryRag(query: query);
+  }) => queryRag(query: query);
 
   /// Generate MCQs from text, document, or topic
   Future<List<McqQuestion>> generateMcqs({
@@ -104,7 +113,7 @@ class AiRepository {
   }) async {
     try {
       print('📊 Scoring ${mcqs.length} MCQ answers');
-      
+
       final response = await _apiClient.post(
         '/ai/mcq/score',
         body: {
@@ -114,7 +123,9 @@ class AiRepository {
         requiresAuth: true,
       );
 
-      print('✅ Score: ${response['score']}/${response['total']} (${response['percentage']}%)');
+      print(
+        '✅ Score: ${response['score']}/${response['total']} (${response['percentage']}%)',
+      );
       return response;
     } catch (e) {
       print('❌ MCQ scoring error: $e');
@@ -131,7 +142,10 @@ class AiRepository {
     try {
       final history = _storage.getRagChatHistory();
       return history
-          .map((msg) => ChatMessage.fromJson(Map<String, dynamic>.from(msg as Map)))
+          .map(
+            (msg) =>
+                ChatMessage.fromJson(Map<String, dynamic>.from(msg as Map)),
+          )
           .toList();
     } catch (e) {
       print('❌ Error loading chat history: $e');
@@ -149,23 +163,27 @@ class AiRepository {
   // ──────────────────────────────────────────────────────────────
 
   Future<void> _cacheMessages(String query, RagResponse response) async {
-    await _saveChatMessage(ChatMessage(
-      id: '${DateTime.now().millisecondsSinceEpoch}_q',
-      message: query,
-      isUser: true,
-      timestamp: DateTime.now(),
-    ));
+    await _saveChatMessage(
+      ChatMessage(
+        id: '${DateTime.now().millisecondsSinceEpoch}_q',
+        message: query,
+        isUser: true,
+        timestamp: DateTime.now(),
+      ),
+    );
 
-    await _saveChatMessage(ChatMessage(
-      id: '${DateTime.now().millisecondsSinceEpoch}_a',
-      message: response.answer,
-      isUser: false,
-      timestamp: DateTime.now(),
-      sources: response.sources.map((s) => s.documentName).toList(),
-      richSources: response.sources,
-      isWebFallback: response.usedWebSearch,
-      searchMethod: response.searchMethod,
-    ));
+    await _saveChatMessage(
+      ChatMessage(
+        id: '${DateTime.now().millisecondsSinceEpoch}_a',
+        message: response.answer,
+        isUser: false,
+        timestamp: DateTime.now(),
+        sources: response.sources.map((s) => s.documentName).toList(),
+        richSources: response.sources,
+        isWebFallback: response.usedWebSearch,
+        searchMethod: response.searchMethod,
+      ),
+    );
   }
 
   /// Save chat message to Hive

@@ -11,7 +11,6 @@ import '../../../institution/presentation/pages/tabs/institution_dashboard_tab.d
 import 'tabs/teacher_announcements_tab.dart';
 import 'tabs/see_students_tab.dart';
 import 'tabs/teacher_qa_portal_tab.dart';
-import 'tabs/teacher_assessment_tab.dart';
 import 'tabs/ai_chatbot_personal_tab.dart';
 import 'tabs/generate_mcqs_tab.dart';
 import 'tabs/upload_notes_tab.dart';
@@ -25,7 +24,6 @@ enum TeacherTab {
   generateMCQs,
   voiceToText,
   qaPortal,
-  assessment,
   aiChatbot,
   queryDesk,
 }
@@ -33,10 +31,7 @@ enum TeacherTab {
 class TeacherDashboardPage extends StatefulWidget {
   final InstitutionDisplayModel institution;
 
-  const TeacherDashboardPage({
-    super.key,
-    required this.institution,
-  });
+  const TeacherDashboardPage({super.key, required this.institution});
 
   @override
   State<TeacherDashboardPage> createState() => _TeacherDashboardPageState();
@@ -58,7 +53,8 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
   Widget build(BuildContext context) {
     final storage = getIt<HiveStorageService>();
     final currentUser = storage.getCurrentUser();
-    final userName = currentUser?.fullName ?? currentUser?.username ?? 'Teacher';
+    final userName =
+        currentUser?.fullName ?? currentUser?.username ?? 'Teacher';
     final userEmail = currentUser?.email ?? '';
 
     return Scaffold(
@@ -88,8 +84,10 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         titleSpacing: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined,
-                color: AppColors.primary),
+            icon: const Icon(
+              Icons.notifications_outlined,
+              color: AppColors.primary,
+            ),
             onPressed: () {
               setState(() => _currentTab = TeacherTab.announcements);
             },
@@ -167,7 +165,9 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                           Text(
                             userEmail,
                             style: TextStyle(
-                              color: AppColors.textSecondary.withValues(alpha: 0.8),
+                              color: AppColors.textSecondary.withValues(
+                                alpha: 0.8,
+                              ),
                               fontSize: 13,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -238,12 +238,6 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                     context: context,
                   ),
                   _buildDrawerItem(
-                    icon: Icons.assignment_outlined,
-                    title: 'Assessment',
-                    tab: TeacherTab.assessment,
-                    context: context,
-                  ),
-                  _buildDrawerItem(
                     icon: Icons.smart_toy_outlined,
                     title: 'AI Chatbot Personal',
                     tab: TeacherTab.aiChatbot,
@@ -273,10 +267,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                   decoration: BoxDecoration(
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primary,
-                      width: 2,
-                    ),
+                    border: Border.all(color: AppColors.primary, width: 2),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -366,8 +357,6 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         return const VoiceToTextTab();
       case TeacherTab.qaPortal:
         return const TeacherQAPortalTab();
-      case TeacherTab.assessment:
-        return const TeacherAssessmentTab();
       case TeacherTab.aiChatbot:
         return const AIChatbotPersonalTab();
       case TeacherTab.queryDesk:

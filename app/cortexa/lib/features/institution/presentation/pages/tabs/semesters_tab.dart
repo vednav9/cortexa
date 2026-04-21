@@ -7,7 +7,9 @@ import '../../../../../../core/di/service_locator.dart';
 import '../../../data/repositories/semester_repository.dart';
 
 class SemestersTab extends StatefulWidget {
-  const SemestersTab({super.key});
+  final bool readOnly;
+
+  const SemestersTab({super.key, this.readOnly = false});
 
   @override
   State<SemestersTab> createState() => _SemestersTabState();
@@ -809,7 +811,147 @@ class _SemestersTabState extends State<SemestersTab> {
     return (words[0].substring(0, 1) + words[1].substring(0, 1)).toUpperCase();
   }
 
+  String _textOrFallback(dynamic value, {String fallback = 'Not available'}) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty || text.toLowerCase() == 'null') {
+      return fallback;
+    }
+    return text;
+  }
+
+  String _formatDate(dynamic value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) {
+      return 'Not set';
+    }
+    final day = parsed.day.toString().padLeft(2, '0');
+    final month = parsed.month.toString().padLeft(2, '0');
+    return '$day-$month-${parsed.year}';
+  }
+
+  Widget _buildReadOnlyDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.borderDark.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSemesterDetailsSheet(Map<String, dynamic> semester) {
+    final timePeriodLabel = TerminologyService.getTimePeriodLabel(context);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (modalContext) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Align(
+          alignment: Alignment.bottomCenter,
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.62,
+            minChildSize: 0.45,
+            maxChildSize: 0.9,
+            builder: (context, scrollController) => Container(
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderDark.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$timePeriodLabel Details',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _buildReadOnlyDetailRow(
+                            'Name',
+                            _textOrFallback(semester['name']),
+                          ),
+                          _buildReadOnlyDetailRow(
+                            'Academic Year',
+                            _textOrFallback(semester['academicYear']),
+                          ),
+                          _buildReadOnlyDetailRow(
+                            'Start Date',
+                            _formatDate(semester['startDate']),
+                          ),
+                          _buildReadOnlyDetailRow(
+                            'End Date',
+                            _formatDate(semester['endDate']),
+                          ),
+                          _buildReadOnlyDetailRow(
+                            'Status',
+                            semester['isActive'] == true ? 'Active' : 'Inactive',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _deleteSemester(int index) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -843,10 +985,11 @@ class _SemestersTabState extends State<SemestersTab> {
     );
 
     if (confirmed != true) return;
+    if (!mounted) return;
 
     final semesterId = _semesters[index]['_id']?.toString();
     if (semesterId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Error: Invalid semester ID'),
           backgroundColor: AppColors.error,
@@ -874,9 +1017,9 @@ class _SemestersTabState extends State<SemestersTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Semester deleted successfully'),
           backgroundColor: AppColors.success,
@@ -891,10 +1034,10 @@ class _SemestersTabState extends State<SemestersTab> {
       if (!mounted) return;
 
       // Close loading dialog
-      Navigator.pop(context);
+      navigator.pop();
 
       print('Error deleting semester: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to delete: ${e.toString()}'),
           backgroundColor: AppColors.error,
@@ -1091,20 +1234,22 @@ class _SemestersTabState extends State<SemestersTab> {
           ),
         ),
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: FloatingActionButton.extended(
-          onPressed: _showAddSemesterDialog,
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          icon: const Icon(Icons.add, size: 24),
-          label: const Text(
-            'Add',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-          ),
-        ),
-      ),
+      floatingActionButton: widget.readOnly
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: FloatingActionButton.extended(
+                onPressed: _showAddSemesterDialog,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 4,
+                icon: const Icon(Icons.add, size: 24),
+                label: const Text(
+                  'Add',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                ),
+              ),
+            ),
     );
   }
 
@@ -1184,7 +1329,9 @@ class _SemestersTabState extends State<SemestersTab> {
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showAddSemesterDialog(semester, index),
+            onTap: widget.readOnly
+                ? () => _showSemesterDetailsSheet(semester)
+                : () => _showAddSemesterDialog(semester, index),
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
@@ -1267,37 +1414,37 @@ class _SemestersTabState extends State<SemestersTab> {
                       ],
                     ),
                   ),
-                  // Delete button
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => _deleteSemester(index),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.error,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.error.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 14,
-                            color: Colors.white,
+                  if (!widget.readOnly)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _deleteSemester(index),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.error,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.error.withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
