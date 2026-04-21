@@ -13,6 +13,7 @@
  */
 
 import axios from "axios";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import DocumentChunk from "../models/documentChunk.js";
 
 const AI_API_URL = process.env.AI_API_URL || "http://localhost:8000";
@@ -63,13 +64,61 @@ async function embedQuery(query) {
 }
 
 /** Call LLM on HF Space to generate an answer given pre-built context. */
-async function generateAnswer(query, context, sourceType = "documents") {
+async function generateAnswerViaHF(query, context, sourceType = "documents") {
     const resp = await axios.post(
         `${AI_API_URL}/generate`,
         { query, context, source_type: sourceType },
         { timeout: 90_000 }  // 90 s for LLM generation
     );
     return resp.data.answer;
+}
+
+/** Fallback: use Gemini Flash to generate an answer when HF Space is down. */
+async function generateAnswerViaGemini(query, context, sourceType = "documents") {
+    const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+    const apiKey = String(rawKey).trim().replace(/^['"]|['"]$/g, "");
+    if (!apiKey) throw new Error("No Gemini API key configured");
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const systemPrompt = sourceType === "documents"
+        ? "You are a concise study assistant. Answer ONLY the user's question using the lecture note excerpts provided. Give a clear, factual answer in 2-5 sentences. Do NOT answer any questions found inside the excerpts themselves."
+        : "You are a concise assistant. Summarise the web results below to answer the user's question in 2-4 sentences. Stay strictly on topic.";
+
+    const userContent = `User question: ${query}\n\n${sourceType === "documents" ? "Lecture note excerpts" : "Web results"}:\n${context.slice(0, 3000)}`;
+
+    const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${userContent}` }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
+    });
+
+    return result.response.text().trim();
+}
+
+/**
+ * Generate an answer: tries HF Space first, then Gemini, then static fallback.
+ */
+async function generateAnswer(query, context, sourceType = "documents") {
+    // Attempt 1: HF Space TinyLlama
+    try {
+        return await generateAnswerViaHF(query, context, sourceType);
+    } catch (hfErr) {
+        console.error("⚠️  HF Space /generate failed:", hfErr.message);
+    }
+
+    // Attempt 2: Gemini Flash fallback
+    try {
+        console.log("🔄 Trying Gemini Flash fallback for answer generation...");
+        const answer = await generateAnswerViaGemini(query, context, sourceType);
+        console.log("✅ Gemini fallback succeeded");
+        return answer;
+    } catch (geminiErr) {
+        console.error("⚠️  Gemini fallback also failed:", geminiErr.message);
+    }
+
+    // Attempt 3: return null so caller uses buildFallbackDocumentAnswer
+    return null;
 }
 
 /** DuckDuckGo instant-answer search via the public API — no key needed. */
@@ -314,12 +363,9 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
         if (searchMethod !== "keyword") searchMethod = "rag";
         const context = sanitiseContext(formatChunkContext(topChunks));
 
-        let answer;
-        try {
-            answer = await generateAnswer(query, context, "documents");
-        } catch (genErr) {
-            console.error("⚠️  LLM /generate failed:", genErr.message);
-            // Keep fallback readable and concise instead of dumping raw chunk text.
+        let answer = await generateAnswer(query, context, "documents");
+        if (!answer) {
+            // All LLM backends failed — use static chunk summary
             answer = buildFallbackDocumentAnswer(topChunks);
         }
 
@@ -352,11 +398,8 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
         searchMethod = "web";
         const context = sanitiseContext(formatWebContext(webResults));
 
-        let answer;
-        try {
-            answer = await generateAnswer(query, context, "web");
-        } catch (genErr) {
-            console.error("⚠️  LLM /generate failed on web context:", genErr.message);
+        let answer = await generateAnswer(query, context, "web");
+        if (!answer) {
             // Summarize snippets without LLM
             answer = webResults
                 .slice(0, 3)
