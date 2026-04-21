@@ -44,7 +44,7 @@ MAX_CHUNKS_PER_DOC = 1000
 
 # Retrieval settings
 TOP_K = 3  # Reduced from 5 for faster retrieval
-SIMILARITY_THRESHOLD = 0.3
+SIMILARITY_THRESHOLD = 0.50
 
 # Generation settings
 MAX_NEW_TOKENS = 256  # Reduced from 512 for faster generation
