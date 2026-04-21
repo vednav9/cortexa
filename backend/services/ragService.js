@@ -21,14 +21,16 @@ const AI_API_URL = process.env.AI_API_URL || "http://localhost:8000";
 // Similarity threshold: chunks with cosine similarity below this are ignored.
 // 0.50 is a reasonable cutoff for paraphrase-MiniLM-L3-v2 — below this the
 // chunk has very little semantic overlap with the query.
-const SIMILARITY_THRESHOLD = 0.50;
+const SIMILARITY_THRESHOLD = 0.40;
 // If the average similarity of the top chunks is below this, the match is
 // considered "weak" and we also fetch web results to supplement the answer.
-const WEAK_MATCH_THRESHOLD = 0.60;
+const WEAK_MATCH_THRESHOLD = 0.55;
 // How many top chunks to send to the LLM as context
 const TOP_K = 4;
 // How many web results to fetch on fallback
 const WEB_RESULTS_COUNT = 5;
+const WEB_SEARCH_ENGINE_NAME = "DuckDuckGo";
+const WEB_SEARCH_ENGINE_HOST = "duckduckgo.com";
 
 // English stop-words to strip before keyword matching
 const STOP_WORDS = new Set([
@@ -134,61 +136,177 @@ async function generateAnswer(query, context, sourceType = "documents") {
     return null;
 }
 
+function safeDecodeURIComponent(value = "") {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
+
+function normalizeWebUrl(rawUrl = "") {
+    const value = String(rawUrl || "").trim();
+    if (!value) return "";
+
+    const decoded = safeDecodeURIComponent(value);
+
+    try {
+        return new URL(decoded).toString();
+    } catch {
+        try {
+            return new URL(decoded, "https://duckduckgo.com").toString();
+        } catch {
+            return decoded;
+        }
+    }
+}
+
+function getWebsiteFromUrl(url = "") {
+    try {
+        return new URL(url).hostname.replace(/^www\./i, "");
+    } catch {
+        return "";
+    }
+}
+
+function stripHtmlTags(text = "") {
+    return cleanSnippet(String(text).replace(/<[^>]+>/g, " "));
+}
+
+function buildDuckDuckGoSearchUrl(query = "") {
+    return `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+}
+
+function createWebSearchAuditSource(
+    query,
+    note = "No directly relevant web results were found for this query.",
+) {
+    return {
+        type: "web",
+        document_name: `${WEB_SEARCH_ENGINE_NAME} search`,
+        url: buildDuckDuckGoSearchUrl(query),
+        source_site: WEB_SEARCH_ENGINE_HOST,
+        chunk_text: note,
+        similarity_score: null,
+    };
+}
+
+function buildWebResult({ title = "", snippet = "", url = "" }) {
+    const normalizedUrl = normalizeWebUrl(url);
+    return {
+        title: cleanSnippet(title) || "Web result",
+        snippet: cleanSnippet(snippet) || cleanSnippet(title) || "",
+        url: normalizedUrl,
+        source_site: getWebsiteFromUrl(normalizedUrl),
+        type: "web",
+    };
+}
+
 /** DuckDuckGo instant-answer search via the public API — no key needed. */
 async function webSearch(query, maxResults = WEB_RESULTS_COUNT) {
+    const results = [];
+
+    const pushResult = (candidate) => {
+        if (!candidate) return;
+        const normalized = buildWebResult(candidate);
+        if (!normalized.url && !normalized.snippet) return;
+        results.push(normalized);
+    };
+
     try {
-        const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-        const resp = await axios.get(url, { timeout: 10_000 });
-        const data = resp.data;
+        // DuckDuckGo HTML scraper — returns actual search results, not just instant answers
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        const resp = await axios.get(url, {
+            timeout: 12_000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; CortexaBot/1.0)',
+                'Accept': 'text/html',
+            }
+        });
 
-        const results = [];
+        const html = resp.data;
 
-        // Abstract (best single hit)
-        if (data.AbstractText) {
-            results.push({
-                title: data.Heading || query,
-                snippet: data.AbstractText,
-                url: data.AbstractURL || "",
-                type: "web",
+        // Extract result titles, snippets, URLs using regex
+        const linkRe = /class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+        const snippetRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/(?:span|a|div)>/g;
+
+        const links = [...html.matchAll(linkRe)].slice(0, maxResults);
+        const snippets = [...html.matchAll(snippetRe)].map((m) => stripHtmlTags(m[1]));
+
+        links.forEach((m, i) => {
+            let rawUrl = m[1];
+            // DDG wraps URLs — extract the actual `uddg=` param
+            try {
+                const parsed = new URL("https://duckduckgo.com" + rawUrl);
+                rawUrl = parsed.searchParams.get("uddg") || rawUrl;
+            } catch { /* keep raw */ }
+
+            pushResult({
+                title: stripHtmlTags(m[2]),
+                snippet: snippets[i] || stripHtmlTags(m[2]),
+                url: rawUrl,
             });
-        }
+        });
 
-        // Related topics
-        for (const topic of (data.RelatedTopics || [])) {
-            if (results.length >= maxResults) break;
-            if (topic.Text && topic.FirstURL) {
-                results.push({
-                    title: topic.Text.split(" - ")[0] || query,
-                    snippet: topic.Text,
-                    url: topic.FirstURL,
-                    type: "web",
-                });
-            }
-        }
-
-        // If DDG instant answers gave nothing, try the lite search fallback
-        if (results.length === 0) {
-            const liteUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&t=cortexa`;
-            const liteResp = await axios.get(liteUrl, { timeout: 8_000 });
-            const liteData = liteResp.data;
-            for (const topic of (liteData.RelatedTopics || [])) {
-                if (results.length >= maxResults) break;
-                if (topic.Text) {
-                    results.push({
-                        title: topic.Text.split(" - ")[0] || "Web result",
-                        snippet: topic.Text,
-                        url: topic.FirstURL || "",
-                        type: "web",
-                    });
-                }
-            }
-        }
-
-        return results;
+        console.log(`🌐 DDG HTML search returned ${results.length} results`);
     } catch (err) {
         console.error("⚠️  Web search failed:", err.message);
-        return [];
     }
+
+    // Fallback: DDG instant-answer API (useful if HTML endpoint format changes)
+    if (results.length < maxResults) {
+        try {
+            const instantUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1&no_redirect=1`;
+            const resp = await axios.get(instantUrl, {
+                timeout: 10_000,
+                headers: { Accept: "application/json" },
+            });
+            const data = resp.data || {};
+
+            if (data.AbstractText) {
+                pushResult({
+                    title: data.Heading || query,
+                    snippet: data.AbstractText,
+                    url: data.AbstractURL || buildDuckDuckGoSearchUrl(query),
+                });
+            }
+
+            const queue = Array.isArray(data.RelatedTopics)
+                ? [...data.RelatedTopics]
+                : [];
+
+            while (queue.length > 0 && results.length < maxResults) {
+                const topic = queue.shift();
+                if (!topic) continue;
+
+                if (Array.isArray(topic.Topics)) {
+                    queue.push(...topic.Topics);
+                    continue;
+                }
+
+                if (!topic.Text) continue;
+                pushResult({
+                    title: String(topic.Text).split(" - ")[0] || "Web result",
+                    snippet: topic.Text,
+                    url: topic.FirstURL || buildDuckDuckGoSearchUrl(query),
+                });
+            }
+
+            console.log(`🌐 DDG instant API added up to ${results.length} total results`);
+        } catch (err) {
+            console.error("⚠️  DDG instant API fallback failed:", err.message);
+        }
+    }
+
+    const seen = new Set();
+    const uniqueResults = results.filter((r) => {
+        const key = r.url || `${r.title}__${(r.snippet || "").slice(0, 80)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+
+    return uniqueResults.slice(0, maxResults);
 }
 
 /**
@@ -384,11 +502,14 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
 
         if (avgSimilarity < WEAK_MATCH_THRESHOLD) {
             console.log("🌐 Weak document match — supplementing with web search...");
+            usedWebSearch = true;
             webResults = await webSearch(query);
             if (webResults.length > 0) {
-                usedWebSearch = true;
                 searchMethod = "rag+web";
                 console.log(`✅ Got ${webResults.length} web results to supplement`);
+            } else {
+                searchMethod = "rag+web_no_results";
+                console.log("📭 Web search attempted but returned no relevant results");
             }
         }
 
@@ -398,7 +519,11 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
             context += "\n\n--- Web Search Results ---\n\n" + sanitiseContext(formatWebContext(webResults));
         }
 
-        let answer = await generateAnswer(query, context, usedWebSearch ? "documents_and_web" : "documents");
+        let answer = await generateAnswer(
+            query,
+            context,
+            webResults.length > 0 ? "documents_and_web" : "documents",
+        );
         if (!answer) {
             // All LLM backends failed — use static chunk summary
             answer = buildFallbackDocumentAnswer(topChunks);
@@ -420,9 +545,19 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
             type: "web",
             document_name: r.title,
             url: r.url,
+            source_site: r.source_site || getWebsiteFromUrl(r.url),
             chunk_text: r.snippet,
             similarity_score: null,
         }));
+
+        if (usedWebSearch && webSources.length === 0) {
+            webSources.push(
+                createWebSearchAuditSource(
+                    query,
+                    "Searched DuckDuckGo but found no relevant web snippets for this query.",
+                ),
+            );
+        }
 
         const allSources = [...docSources, ...webSources];
 
@@ -458,6 +593,7 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
             type: "web",
             document_name: r.title,
             url: r.url,
+            source_site: r.source_site || getWebsiteFromUrl(r.url),
             chunk_text: r.snippet,
             similarity_score: null,
         }));
@@ -476,9 +612,14 @@ export async function queryRAG(query, institutionId, courseId = null, documentId
 
     // ── Step 4: Total fallback ────────────────────────────────────────────
     return {
-        answer: "I couldn't find relevant information in your course materials or on the web for this question. Try rephrasing or ask your teacher.",
-        sources: [],
-        searchMethod: "none",
-        usedWebSearch: false,
+        answer: "I couldn't find relevant information in your course materials, and web search also returned no strong matches. Try rephrasing your question with specific keywords.",
+        sources: [
+            createWebSearchAuditSource(
+                query,
+                "Web search was attempted on DuckDuckGo, but no relevant results were found.",
+            ),
+        ],
+        searchMethod: "web_no_results",
+        usedWebSearch: true,
     };
 }
