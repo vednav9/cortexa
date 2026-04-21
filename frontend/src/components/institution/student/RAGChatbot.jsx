@@ -49,8 +49,45 @@ const normalizeSourcesForDisplay = (sources = []) => {
             source_site: getSourceWebsite(src),
         }));
 
+    // Collapse duplicate citations:
+    // - web: one per website
+    // - document: one per document (or per page if page info exists)
+    const grouped = new Map();
+
+    normalized.forEach((src) => {
+        let key;
+        if (src.type === "web") {
+            key = `web::${src.source_site || src.url || src.document_name || "unknown"}`;
+        } else {
+            const docName = String(
+                src.document_name || src.source || "document",
+            ).toLowerCase();
+            const pagePart = src.page_number != null ? `::p${src.page_number}` : "";
+            key = `doc::${docName}${pagePart}`;
+        }
+
+        const existing = grouped.get(key);
+        if (!existing) {
+            grouped.set(key, { ...src, citation_count: 1 });
+            return;
+        }
+
+        existing.citation_count += 1;
+        if (
+            src.type === "document" &&
+            Number(src.similarity_score || 0) > Number(existing.similarity_score || 0)
+        ) {
+            grouped.set(key, {
+                ...src,
+                citation_count: existing.citation_count,
+            });
+        }
+    });
+
+    const deduped = Array.from(grouped.values());
+
     // Show web citations first so fallback websites are always visible.
-    return normalized.sort((a, b) => {
+    return deduped.sort((a, b) => {
         if (a.type === b.type) return 0;
         return a.type === "web" ? -1 : 1;
     });
@@ -166,6 +203,9 @@ const Message = ({ msg, brand, rgb }) => {
                                                     {src.page_number
                                                         ? ` (p.${src.page_number})`
                                                         : ""}
+                                                    {src.citation_count > 1
+                                                        ? ` (x${src.citation_count})`
+                                                        : ""}
                                                 </span>
                                             </>
                                         ) : (
@@ -183,6 +223,9 @@ const Message = ({ msg, brand, rgb }) => {
                                                         src.document_name ||
                                                         src.title ||
                                                         "Web source"}
+                                                    {src.citation_count > 1
+                                                        ? ` (x${src.citation_count})`
+                                                        : ""}
                                                 </a>
                                             </>
                                         )}

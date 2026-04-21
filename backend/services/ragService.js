@@ -169,6 +169,32 @@ function getWebsiteFromUrl(url = "") {
     }
 }
 
+function isDuckDuckGoHost(host = "") {
+    const normalizedHost = String(host || "").toLowerCase();
+    return (
+        normalizedHost === WEB_SEARCH_ENGINE_HOST ||
+        normalizedHost.endsWith(`.${WEB_SEARCH_ENGINE_HOST}`)
+    );
+}
+
+function unwrapDuckDuckGoUrl(url = "") {
+    const normalizedUrl = normalizeWebUrl(url);
+
+    try {
+        const parsed = new URL(normalizedUrl);
+        if (isDuckDuckGoHost(parsed.hostname)) {
+            const uddg = parsed.searchParams.get("uddg");
+            if (uddg) {
+                return normalizeWebUrl(safeDecodeURIComponent(uddg));
+            }
+        }
+    } catch {
+        return normalizedUrl;
+    }
+
+    return normalizedUrl;
+}
+
 function stripHtmlTags(text = "") {
     return cleanSnippet(String(text).replace(/<[^>]+>/g, " "));
 }
@@ -192,7 +218,7 @@ function createWebSearchAuditSource(
 }
 
 function buildWebResult({ title = "", snippet = "", url = "" }) {
-    const normalizedUrl = normalizeWebUrl(url);
+    const normalizedUrl = unwrapDuckDuckGoUrl(url);
     return {
         title: cleanSnippet(title) || "Web result",
         snippet: cleanSnippet(snippet) || cleanSnippet(title) || "",
@@ -210,6 +236,7 @@ async function webSearch(query, maxResults = WEB_RESULTS_COUNT) {
         if (!candidate) return;
         const normalized = buildWebResult(candidate);
         if (!normalized.url && !normalized.snippet) return;
+        if (isDuckDuckGoHost(normalized.source_site)) return;
         results.push(normalized);
     };
 
