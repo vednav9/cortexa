@@ -37,3 +37,4 @@ openai-whisper>=20231117
 
 # Using chocolatey
 # choco install ffmpeg
+
