@@ -1,211 +1,485 @@
-# CORTEXA — AI Knowledge Intelligence Platform
-**RAG • FastAPI • LangChain • Node.js • MongoDB • Cloudflare R2**
+<div align="center">
 
-Cortexa is a full-stack **Retrieval-Augmented Generation (RAG)** platform designed for intelligent document analysis and interactive knowledge workflows.  
-It provides **document chat, semantic search, MCQ generation, text extraction, and web-search fallback**, built using scalable cloud-native architecture.
+# 🧠 Cortexa
 
----
+### AI-Powered Educational Platform for Institutions
 
-## 🚀 Key Features
+**An intelligent LMS where AI understands course materials, answers student questions, generates quizzes, and transcribes lectures automatically.**
 
-### 🔍 1. RAG-Powered Document Chat
-- Upload PDFs, text docs, or images  
-- Automatic chunking + embeddings via **LangChain**  
-- Semantic retrieval using vector search  
-- FastAPI pipelines for high-accuracy responses  
+</div>
 
-### 📄 2. Intelligent Document Processing
-- Text extraction (OCR + parsing)  
-- Summaries, insights, contextual answers  
-- Multi-file knowledge workspace  
+***
 
-### 📝 3. Automatic MCQ Generator
-- Creates topic-wise MCQs directly from document context  
-- Supports difficulty levels & answer reasoning  
+## 📖 Overview
 
-### 🌐 4. Web-Search Fallback
-- When the document lacks info, Cortexa performs online search  
-- Ensures accurate, updated answers  
+Cortexa is a **multi-tenant AI-powered educational platform** built for schools, colleges, coaching centers, and universities. Each institution gets its own workspace, its own users, its own academic structure, and its own AI-powered knowledge system.
 
-### ☁️ 5. Scalable Storage + Backend
-- File storage on **Cloudflare R2**  
-- User, workspace & workflow management on **Node.js + Express.js**  
-- MongoDB for persistent, flexible document metadata  
+The main idea is simple:
 
----
+- Teachers upload study materials.
+- AI converts those materials into a searchable knowledge base.
+- Students ask questions and get answers from their own course content.
+- Teachers generate MCQs, transcribe lectures, and manage learning resources.
+- Admins manage the institution, users, courses, and academic setup.
 
-## 🏗️ Tech Stack Overview
+Cortexa is designed as a **three-service architecture**:
+
+1. **Frontend** — React + Vite user interface.
+2. **Backend** — Node.js + Express API, auth, business logic, real-time events.
+3. **AI Service** — Python + FastAPI service for RAG, MCQ generation, and speech-to-text.
+
+***
+
+## 🌐 Live Links
+
+- **Deployment (Vercel):** [https://cortexa-ai-project.vercel.app](https://cortexa-ai-project.vercel.app)
+
+***
+
+## ✨ Core Features
+
+### For Students
+- Ask questions to an AI chatbot that answers from uploaded study materials.
+- Attempt AI-generated MCQ tests.
+- Participate in Q&A discussion sections.
+- View announcements and institution updates.
+- Raise support or academic queries through the query desk.
+
+### For Teachers
+- Upload PDF, DOCX, and TXT notes.
+- Generate MCQs automatically from documents or custom text.
+- Upload lecture audio and convert it into structured transcript notes.
+- Review student assessments and performance.
+- Share announcements and learning resources.
+
+### For Institution Admins
+- Invite users to the institution.
+- Manage teachers, students, and institution members.
+- Create and manage departments, courses, semesters, and academic calendar.
+- Control institution-level content and operations.
+
+### For Cortexa Super Admins
+- View platform-wide institutions and activity.
+- Manage the entire product ecosystem from a central dashboard.
+
+***
+
+## 🖼️ Screenshots
+
+
+### 1. Landing Page
+
+![Landing Page](./docs/home.png)
+
+### 2. Login / Authentication
+
+![Login Page](./docs/login.png)
+
+### 3. Institution Dashboard
+
+![Institution Dashboard](./docs/dashboard.png)
+
+### 4. Upload Notes Module
+
+![Upload Notes](./docs/upload-notes.png)
+
+### 5. RAG Chatbot
+
+![RAG Chatbot](./docs/assisstant.png)
+
+### 6. MCQ Generator
+
+![MCQ Generator](./docs/mcq.png)
+
+<p align="center">
+  <img src="./docs/phone-mcq.png" alt="Voice To Text" width="300"/>
+</p>
+
+### 7. Voice to Text
+
+![Voice To Text](./docs/voice-to-text.png)
+
+<p align="center">
+  <img src="./docs/phone-voice.png" alt="Voice To Text" width="300"/>
+</p>
+
+### 8. Academic Structure
+
+![Academic Structure](./docs/academic-structure.png)
+
+### 9. Manage Users
+
+![Manage Users](./docs/manage-user.png)
+
+***
+
+## 🏗️ Architecture
+
+```text
+User Browser
+   │
+   ▼
+Frontend (React + Vite)
+   │
+   ├── Public pages
+   ├── Institution pages
+   ├── Student modules
+   ├── Teacher modules
+   └── Admin modules
+   │
+   ▼
+Backend (Node.js + Express)
+   │
+   ├── Authentication
+   ├── Institution management
+   ├── Academic management
+   ├── Announcements
+   ├── Query desk
+   ├── MCQ results
+   ├── Q&A system
+   ├── Socket.IO events
+   └── AI proxy routes
+   │
+   ▼
+AI Service (Python + FastAPI)
+   │
+   ├── Document processing
+   ├── Embeddings generation
+   ├── Vector retrieval
+   ├── Answer generation
+   ├── MCQ generation
+   ├── MCQ scoring
+   └── Speech transcription
+   │
+   ▼
+MongoDB Atlas
+```
+![Architecture](./docs/architecture.png)
+
+### Why this architecture?
+
+- **Frontend** focuses only on user experience and interaction.
+- **Backend** handles business rules, auth, permissions, routes, and DB writes.
+- **AI Service** handles all heavy ML/AI work in Python where the best AI libraries exist.
+- This separation keeps the project scalable, maintainable, and easier to deploy.
+
+***
+
+## 🛠️ Tech Stack
 
 ### Frontend
-- React.js  
-- TailwindCSS  
-- Redux Toolkit  
+- React 19
+- Vite
+- React Router DOM
+- TailwindCSS
+- DaisyUI
+- Axios
+- Framer Motion
+- Socket.IO Client
+- Lucide React
+- React Hot Toast
 
-### Backend (Node.js)
-- Auth, workspaces, file mgmt  
-- API routing  
-- MongoDB integration  
+### Backend
+- Node.js
+- Express
+- MongoDB + Mongoose
+- JWT Authentication
+- bcryptjs
+- Socket.IO
+- Multer
+- AWS SDK / S3 utilities
+- Axios
 
-### AI Engine (FastAPI)
-- LangChain pipelines  
-- Embeddings  
-- Semantic search  
-- RAG orchestration  
+### AI Service
+- Python
+- FastAPI
+- TinyLlama
+- sentence-transformers MiniLM
+- Whisper tiny
+- PyMuPDF
+- python-docx
+- NumPy
+- PyMongo
 
-### Cloud & Infrastructure
-- Cloudflare R2  
-- Docker  
-- CI/CD (GitHub Actions recommended)
+***
 
----
+## 📁 Project Structure
 
-## 🧩 System Architecture
-
-**High-level flow:**
-
-1. User uploads document → Frontend  
-2. File stored securely in **Cloudflare R2**  
-3. Metadata stored in **MongoDB**  
-4. FastAPI performs chunking + embedding  
-5. Vector store queried → RAG output generated  
-6. Node backend controls workflows  
-7. Result returned to user  
-
----
-
-## 📂 Folder Structure (Recommended)
-
-```
+```text
 cortexa/
-│── frontend/               # React frontend
-│   ├── components/
-│   ├── pages/
-│   └── utils/
+├── frontend/
+│   └── src/
+│       ├── App.jsx
+│       ├── main.jsx
+│       ├── socket.js
+│       ├── context/
+│       ├── pages/
+│       ├── components/
+│       ├── layout/
+│       ├── services/
+│       ├── config/
+│       └── ui/
 │
-│── backend/                 # Node.js backend
+├── backend/
+│   ├── app.js
+│   ├── server.js
 │   ├── routes/
-│   ├── controllers/
 │   ├── models/
+│   ├── controllers/
+│   ├── middleware/
+│   ├── services/
+│   ├── api/
 │   └── utils/
 │
-│── ai/            # FastAPI + LangChain microservice
-│   ├── pipelines/
-│   ├── embeddings/
-│   ├── retrieval/
-│   └── api/
+├── ai/
+│   ├── api/
+│   ├── rag/
+│   ├── mcq/
+│   ├── speech/
+│   ├── vectordb/
+│   ├── hybrid/
+│   ├── models/
+│   ├── tests/
+│   ├── config.py
+│   ├── main.py
+│   ├── start.py
+│   ├── requirements.txt
+│   └── Dockerfile
 │
-│── storage/               # R2 configs
-│── docker/                # Docker setup
-│── README.md
-│── package.json
-│── requirements.txt
+└── app/
+    └── cortexa/
+        ├── android/
+        ├── assets/
+        ├── pubspec.yaml
+        ├── pubspec.lock                
+        ├── analysis_options.yaml       
+        └── lib/
+            ├── main.dart               
+            ├── routes/                 
+            ├── core/
+            │   ├── bloc/               
+            │   ├── config/             
+            │   ├── constants/          
+            │   ├── di/                 
+            │   ├── errors/             
+            │   ├── network/            
+            │   ├── providers/          
+            │   ├── services/           
+            │   ├── utils/              
+            │   └── widgets/            
+            └── features/
+                ├── splash/             
+                ├── auth/               
+                ├── dashboard/          
+                ├── institution/        
+                ├── admin/              
+                ├── teacher/           
+                ├── student/            
+                ├── rag_assistant/      
+                └── personal_chat/     
+
 ```
 
----
+***
 
-## ⚙️ Installation & Setup
+## 🚀 Getting Started
 
-### 1. Clone Repo
+### Prerequisites
+
+Make sure you have:
+
+- Node.js 18+
+- Python 3.10+
+- MongoDB Atlas or local MongoDB
+- Git
+
+### Clone the repository
+
 ```bash
-git clone https://github.com/vednav9/cortexa
+git clone https://github.com/vednav9/cortexa.git
 cd cortexa
 ```
 
----
+### Install dependencies
 
-### 2. Backend Setup (Node.js)
+#### AI Service
 ```bash
-cd server
+cd ../ai
+pip install -r requirements.txt
+```
+
+#### Backend
+```bash
+cd ../backend
 npm install
+```
+
+#### Frontend
+```bash
+cd frontend
+npm install
+```
+
+
+***
+
+## ⚙️ Environment Variables
+
+### Backend `.env`
+
+```env
+MONGO_URI=mongodb-url
+PORT=5000
+NODE_ENV=development
+JWT_SECRET=key
+JWT_EXPIRE=7d
+FRONTEND_URL=http://localhost:5173
+AI_API_URL=http://localhost:8000
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_S3_API=
+CLOUDFLARE_R2_BUCKET_NAME=documents
+CLOUDFLARE_R2_PUBLIC_DEVELOPMENT_URL=
+CLOUDFLARE_R2_API_TOKEN_NAME=cortexa-upload-token
+CLOUDFLARE_R2_TOKEN_VALUE=
+CLOUDFLARE_R2_ACCESS_KEY_ID=
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=
+GEMINI_API_KEY=api-key
+```
+
+### Frontend `.env`
+
+```env
+VITE_API_URL=http://localhost:5000/api
+VITE_SOCKET_URL=http://localhost:5000
+VITE_AI_URL=https://jay-10020-cortexa-ai.hf.space
+```
+
+### AI Service
+
+The AI service receives the MongoDB URI dynamically through backend headers, so you do not need a dedicated `.env` for the core DB connection if the backend is already configured correctly.
+
+***
+
+## ▶️ Run the Project
+
+Open **three terminals**.
+
+### 1. Start AI Service
+```bash
+cd ai
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 2. Start Backend
+```bash
+cd backend
 npm run dev
 ```
 
-Create **.env** file:
-```
-MONGO_URI=...
-JWT_SECRET=...
-R2_ACCESS_KEY=...
-R2_SECRET_KEY=...
-R2_BUCKET=...
-```
-
----
-
-### 3. AI Engine (FastAPI)
+### 3. Start Frontend
 ```bash
-cd rag-engine
-pip install -r requirements.txt
-uvicorn main:app --reload
+cd frontend
+npm run dev
 ```
 
----
+Then open:
 
-### 4. Frontend Setup
-```bash
-cd client
-npm install
-npm start
+```text
+http://localhost:5173
 ```
 
----
+***
 
-## 🧪 Core RAG Pipeline (Simplified)
+## 👥 User Roles
 
-### Chunking + Embeddings
-```python
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
+| Role | Main Responsibility |
+|------|----------------------|
+| Cortexa Admin | Manages the overall platform |
+| Institution Admin | Manages one institution |
+| Teacher | Uploads notes, generates MCQs, transcribes lectures |
+| Student | Uses chatbot, takes tests, joins Q&A |
 
-text = extract_text(file)
-splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=80)
-chunks = splitter.split_text(text)
+***
 
-embeddings = HuggingFaceEmbeddings().embed_documents(chunks)
-```
+## 🤖 AI Capabilities
 
-### RAG Answer Generation
-```python
-def generate_answer(query):
-    retrieved_docs = vector_store.similarity_search(query)
-    response = llm(prompt_with_docs(query, retrieved_docs))
-    return response
-```
+### 1. RAG Chatbot
+The chatbot does not answer randomly. It first searches the uploaded course materials, finds the most relevant chunks, and then generates an answer using that context.
 
----
+### 2. Document Processing
+Uploaded documents are cleaned, split into chunks, embedded into vectors, and stored for semantic retrieval.
 
-## 🔐 Security Best Practices
-- JWT authentication  
-- Signed URLs for R2  
-- Rate limiting  
-- Prompt sanitization  
-- Microservice isolation  
+### 3. MCQ Generation
+Teachers can generate quiz questions from text or uploaded notes with difficulty levels.
 
----
+### 4. MCQ Scoring
+Student answers are matched with stored correct answers and explanations.
 
-## 🧭 Roadmap
-- [ ] Voice-based chat  
-- [ ] Export MCQs to PDF  
-- [ ] Real-time collaboration  
-- [ ] Admin analytics dashboard  
-- [ ] Topic classification & auto-tagging  
-- [ ] Developer API  
+### 5. Speech-to-Text
+Audio lectures are transcribed using Whisper, formatted into readable notes, and optionally indexed for future chatbot use.
 
----
+### 6. Hybrid Search
+If document confidence is too low, the assistant can fall back to web search logic.
 
-## 👨‍💻 Author
-- **Vedant Navthale**
+***
 
-- **Jay Makwana**
+## 📡 Real-Time Features
 
-- **Varun Joshi**
+Socket.IO is used for real-time communication.
 
----
+Examples:
+- New announcements can appear instantly.
+- Notification badges can update without refreshing.
+- Query updates and Q&A interactions can be pushed live.
 
-## ⭐ Contribute
-Pull requests are welcome.  
-Create an issue for feature requests or improvements.
+***
 
----
+### Suggested deployment flow
 
-<!-- ## 📝 License
-MIT License -->
+1. Deploy **frontend** on Vercel.
+2. Deploy **backend** on Vercel.
+3. Deploy **AI service** on HuggingFace Spaces or another Python-friendly host.
+4. Update frontend and backend environment variables with production URLs.
+
+***
+
+## 🔒 Security Highlights
+
+- JWT-based authentication
+- bcrypt password hashing
+- Role-based route access
+- CORS configuration
+- Invitation token system
+- Backend-mediated AI access
+- MongoDB credentials hidden from browser
+
+***
+
+## 🧭 Future Improvements
+
+- Better analytics dashboard
+- More advanced admin insights
+- Better transcript editing workflow
+- More quiz formats beyond MCQ
+- Fine-grained permission controls
+- Better reporting and exports
+
+***
+
+## 👨‍💻 Authors
+
+- **Vedant Navthale**  
+  GitHub: https://github.com/vednav9  
+
+- **Jay Makwana**  
+  GitHub: https://github.com/lisencetoKILL  
+
+- **Varun Joshi**  
+  GitHub: https://github.com/Varun311004  
+
+
+***
+
+## ⭐ Support
+
+If you like this project, star the repository and share it.
