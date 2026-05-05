@@ -351,7 +351,7 @@ GEMINI_API_KEY=api-key
 ```env
 VITE_API_URL=http://localhost:5000/api
 VITE_SOCKET_URL=http://localhost:5000
-VITE_AI_URL=https://jay-10020-cortexa-ai.hf.space
+VITE_AI_URL=http://localhost:8000
 ```
 
 ### AI Service
