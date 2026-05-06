@@ -356,7 +356,10 @@ VITE_AI_URL=http://localhost:8000
 
 ### AI Service
 
-The AI service receives the MongoDB URI dynamically through backend headers, so you do not need a dedicated `.env` for the core DB connection if the backend is already configured correctly.
+```env
+HF_TOKEN=
+GEMINI_API_KEY=
+```
 
 ***
 
